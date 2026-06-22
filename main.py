@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import argparse
 import json
+from datetime import datetime, timezone
 from pathlib import Path
 
 import markdown
@@ -20,6 +21,7 @@ def extract_context(data: dict) -> dict:
         report.get("vulnerabilities", []),
         key=lambda v: (_SEVERITY_ORDER.get(v.get("severity"), 3), v.get("name", "")),
     )
+    now = datetime.now(timezone.utc)
     return {
         # image metadata
         "registry": report.get("registry", ""),
@@ -30,7 +32,8 @@ def extract_context(data: dict) -> dict:
         "digest": report.get("digest", ""),
         "size_mb": round(report.get("size", 0) / 1_048_576, 1),
         "created_at": report.get("created_at", ""),
-        "scan_date": report.get("created_at", "")[:10],
+        "report_date": now.strftime("%Y-%m-%d"),
+        "report_datetime": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
         "cvedb_version": report.get("cvedb_version", ""),
         "cvedb_create_time": report.get("cvedb_create_time", ""),
         # vulnerabilities (sorted High → Medium → Low)
