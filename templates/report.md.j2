@@ -2,7 +2,7 @@
 <p class="cover-brand">SUSE Security</p>
 <p class="cover-title">Image Scan Report</p>
 <div class="cover-rule"></div>
-<p class="cover-sub">{{ scan_date }}</p>
+<p class="cover-sub">{{ report_date }}</p>
 </div>
 
 # Image Scan Report
@@ -18,7 +18,8 @@
 | Base OS | {{ base_os }} |
 | Size | {{ size_mb }} MB |
 | Digest | {{ digest }} |
-| Scanned At | {{ created_at }} |
+| Image Created At | {{ created_at }} |
+| Report Generated At | {{ report_datetime }} |
 | CVE DB Version | {{ cvedb_version }} (updated: {{ cvedb_create_time }}) |
 
 ## Summary
