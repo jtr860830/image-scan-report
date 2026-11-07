@@ -28,3 +28,12 @@
     t(strings, "status_other") + " (" + key + ")"
   }
 }
+
+// Allow identifiers to wrap at punctuation without adding visible hyphens.
+#let breakable-id(s) = {
+  let result = s
+  for separator in ("/", ":", ".", "-", "+", "_", "@") {
+    result = result.replace(separator, separator + "\u{200B}")
+  }
+  result
+}

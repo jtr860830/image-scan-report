@@ -1,3 +1,4 @@
+#import "parts/inventory.typ": inventory
 #import "parts/remediation.typ": remediation
 #import "parts/summary.typ": summary
 #import "lib/fmt.typ": t
@@ -30,3 +31,5 @@
 #summary(data)
 
 #remediation(data)
+
+#inventory(data)
