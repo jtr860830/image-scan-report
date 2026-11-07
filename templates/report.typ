@@ -1,3 +1,4 @@
+#import "parts/images.typ": images
 #import "parts/inventory.typ": inventory
 #import "parts/remediation.typ": remediation
 #import "parts/summary.typ": summary
@@ -26,6 +27,7 @@
 #set par(justify: false)
 #set heading(numbering: none)
 #show heading.where(level: 1): it => block(below: 12pt)[#text(size: 22pt, weight: "bold", it.body)]
+#show heading.where(level: 2): it => block(above: 6pt, sticky: true)[#text(weight: "semibold", it.body)]
 #page(header: none, footer: none)[#cover(data)]
 
 #summary(data)
@@ -33,3 +35,5 @@
 #remediation(data)
 
 #inventory(data)
+
+#images(data)

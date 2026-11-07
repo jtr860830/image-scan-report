@@ -1,34 +1,18 @@
 use image_scan_report::{
-    config::ReportConfig,
     model::{Language, Report},
-    pipeline::assemble_report,
     render::{
         engine::Renderer,
         model::{self, RenderData, RenderOptions},
         strings, theme,
     },
-    source::{ScanSource, trivy_file::TrivyFileSource},
 };
+#[path = "support/data.rs"]
+mod data;
 #[path = "support/pdf.rs"]
 mod pdf;
 
 fn fixture(language: Language) -> (Report, RenderOptions, RenderData) {
-    let report = assemble_report(
-        TrivyFileSource {
-            dir: "fixtures/trivy".into(),
-        }
-        .fetch()
-        .unwrap(),
-        &ReportConfig {
-            language: language.clone(),
-            organization: "Example Organisation".into(),
-            logo: None,
-            stale_after_days: 30,
-            json: false,
-            pdf: true,
-        },
-        "2026-11-08T00:00:00Z".parse().unwrap(),
-    );
+    let report = data::fixture_report(3);
     let opts = RenderOptions {
         language: language.clone(),
         stale_after_days: 30,
@@ -37,12 +21,7 @@ fn fixture(language: Language) -> (Report, RenderOptions, RenderData) {
         top_images: 10,
         top_findings: 15,
     };
-    let data = model::build(
-        &report,
-        &opts,
-        strings::load(language),
-        theme::default_theme().to_render_value(),
-    );
+    let data = data::fixture_data(language, 3);
     (report, opts, data)
 }
 

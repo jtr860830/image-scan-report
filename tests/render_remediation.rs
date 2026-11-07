@@ -1,34 +1,17 @@
 use image_scan_report::{
-    config::ReportConfig,
     model::{Language, Report},
-    pipeline::assemble_report,
     render::{
         engine::Renderer,
-        model::{self, RenderData, RenderOptions},
-        strings, theme,
+        model::{RenderData, RenderOptions},
     },
-    source::{ScanSource, trivy_file::TrivyFileSource},
 };
+#[path = "support/data.rs"]
+mod data;
 #[path = "support/pdf.rs"]
 mod pdf;
 
 fn fixture(language: Language) -> (Report, RenderOptions, RenderData) {
-    let report = assemble_report(
-        TrivyFileSource {
-            dir: "fixtures/trivy".into(),
-        }
-        .fetch()
-        .unwrap(),
-        &ReportConfig {
-            language: language.clone(),
-            organization: "Example Organisation".into(),
-            logo: None,
-            stale_after_days: 30,
-            json: false,
-            pdf: true,
-        },
-        "2026-11-08T00:00:00Z".parse().unwrap(),
-    );
+    let report = data::fixture_report(3);
     let opts = RenderOptions {
         language: language.clone(),
         stale_after_days: 30,
@@ -37,12 +20,7 @@ fn fixture(language: Language) -> (Report, RenderOptions, RenderData) {
         top_images: 10,
         top_findings: 15,
     };
-    let data = model::build(
-        &report,
-        &opts,
-        strings::load(language),
-        theme::default_theme().to_render_value(),
-    );
+    let data = data::fixture_data(language, 3);
     (report, opts, data)
 }
 
@@ -64,7 +42,12 @@ fn remediation_lists_groups_in_rank_order() {
     let (_, text) = chapter(&bytes, &data.strings["ch_remediation"]);
     let first = &data.remediation.groups[0];
     let second = &data.remediation.groups[1];
-    assert!(text.find(&first.package).unwrap() < text.find(&second.package).unwrap());
+    // A package can have multiple ranked upgrade targets.
+    let compact: String = text.chars().filter(|c| !c.is_whitespace()).collect();
+    let target = |row: &image_scan_report::render::model::RemediationRow| {
+        format!("{}→{}", row.package, row.fixed_version)
+    };
+    assert!(compact.find(&target(first)).unwrap() < compact.find(&target(second)).unwrap());
     assert!(text.contains(&first.fixed_version), "{text}");
     assert!(text.contains(&first.images[0]), "{text}");
 }
