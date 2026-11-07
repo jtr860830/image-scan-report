@@ -74,6 +74,9 @@ and cannot run in this milestone.
 | `report.organization` | Nonblank string | Required |
 | `report.logo` | Optional file path | `null` |
 | `report.stale_after_days` | Unsigned 32-bit integer | `30` |
+| `report.describe_severities` | List of lowercase severities: `critical`, `high`, `medium`, `low`, `unrated`; `[]` disables descriptions | `[critical, high]` |
+| `report.description_chars` | Description character limit (at least 50), followed by an ellipsis when truncated | `600` |
+| `report.remediation_cards` | Number of remediation groups shown as cards; remaining groups use a table; `0` means table only | `30` |
 | `report.json` | Boolean | `false` |
 | `report.pdf` | Boolean | `true` |
 

@@ -13,7 +13,7 @@
   if r.groups.len() == 0 {
     secondary(theme, tr("no_findings"))
   }
-  for (i, group) in r.groups.slice(0, calc.min(30, r.groups.len())).enumerate() {
+  for (i, group) in r.groups.slice(0, calc.min(r.cards, r.groups.len())).enumerate() {
     if i > 0 { v(6pt) }
     card(theme, breakable: group.images.len() > 40)[
       #text(size: 10pt, weight: "semibold")[#mono(theme, group.package) → #mono(theme, group.fixed_version)]
@@ -28,15 +28,15 @@
       ]
     ]
   }
-  if r.groups.len() > 30 {
+  if r.groups.len() > r.cards {
     section-title(theme, tr("remediation_more_title"))
-    secondary(theme, tr("remediation_more_lede", count: num(r.groups.len() - 30)))
+    secondary(theme, tr("remediation_more_lede", count: num(r.groups.len() - r.cards)))
     v(6pt)
     hairline-table(theme,
       columns: (1fr, 1fr, auto, auto, auto, auto, auto),
       align: (left, left, right, right, right, right, right),
       table.header(..("col_package", "col_fixed", "tile_critical", "tile_high", "tile_medium", "tile_low", "col_images").map(key => header(theme, tr(key)))),
-      ..r.groups.slice(30).map(group => (
+      ..r.groups.slice(r.cards).map(group => (
         mono(theme, breakable-id(group.package)), mono(theme, group.fixed_version),
         num(group.resolves.critical), num(group.resolves.high),
         num(group.resolves.medium), num(group.resolves.low), num(group.images.len()),

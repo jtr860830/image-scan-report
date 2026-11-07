@@ -255,3 +255,48 @@ fn unknown_harbor_source_key_is_parse_error() {
     let yaml = include_str!("../examples/config.yaml");
     assert_unknown_key_is_parse_error(&yaml.replace("type: harbor", "type: harbor\n  typo: true"));
 }
+
+#[test]
+fn report_length_settings() {
+    use image_scan_report::model::Severity;
+    let defaults = minimal();
+    assert_eq!(
+        defaults.report.describe_severities,
+        vec![Severity::Critical, Severity::High]
+    );
+    assert_eq!(defaults.report.description_chars, 600);
+    assert_eq!(defaults.report.remediation_cards, 30);
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("config.yaml");
+    let yaml = include_str!("data/config/trivy-files.yaml");
+    for (settings, expected) in [
+        ("describe_severities: [critical, high, medium]", "ok"),
+        ("description_chars: 10", "invalid"),
+        ("describe_severities: [unknown]", "parse"),
+        (
+            "describe_severities: []\n  remediation_cards: 0\n  description_chars: 50",
+            "empty",
+        ),
+    ] {
+        std::fs::write(
+            &path,
+            yaml.replace("report:", &format!("report:\n  {settings}")),
+        )
+        .unwrap();
+        match (expected, config::load(&path)) {
+            ("ok", Ok(cfg)) => assert_eq!(
+                cfg.report.describe_severities,
+                vec![Severity::Critical, Severity::High, Severity::Medium]
+            ),
+            ("empty", Ok(cfg)) => {
+                assert!(cfg.report.describe_severities.is_empty());
+                assert_eq!(cfg.report.remediation_cards, 0);
+            }
+            ("invalid", Err(ConfigError::Invalid(message))) => {
+                assert!(message.contains("description_chars"))
+            }
+            ("parse", Err(ConfigError::Parse(_))) => (),
+            (_, result) => panic!("unexpected result: {result:?}"),
+        }
+    }
+}

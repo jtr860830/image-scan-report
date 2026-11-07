@@ -2,10 +2,9 @@
 
 Carried out of the execution ledger when plan 2 (rendering) finished on 2026-11-08. Later plans' pre-flight should read this; items are fixed when a task touches the file, not before.
 
-## Decisions that need the user's confirmation
+## Maintainer decisions
 
-- Report length: descriptions are shown only for Critical and High findings (600 chars); Medium/Low have no description anywhere; remediation shows cards for the top 30 groups and a compact table for the rest. With the 11 fixture images this took the PDF from 705 to 429 pages. The spec left description placement to the builder; the user has not yet confirmed.
-- Logos: the customer's `report.logo` is on the cover; the theme logo sits beside the generated-by line in the appendix (spec §11).
+Decided by the maintainer on 2026-11-08: defaults kept (descriptions for Critical/High at 600 chars; 30 remediation cards), configurable via report.describe_severities, report.description_chars, report.remediation_cards; logo placement confirmed as implemented.
 
 ## Performance follow-ups (plan 4, before sizing the container)
 

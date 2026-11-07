@@ -230,6 +230,12 @@ fn v2_only_scores_rank_and_display() {
     v2.image = report.images[0].reference.clone();
     report.findings = vec![v2];
     let opts = image_scan_report::render::model::RenderOptions {
+        describe_severities: vec![
+            image_scan_report::model::Severity::Critical,
+            image_scan_report::model::Severity::High,
+        ],
+        description_chars: 600,
+        remediation_cards: 30,
         customer_logo: None,
         language: image_scan_report::model::Language::En,
         stale_after_days: 30,

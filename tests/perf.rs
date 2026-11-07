@@ -27,6 +27,12 @@ fn budget(minimum: usize, seconds: f64) {
         repetition += 1;
     }
     let opts = RenderOptions {
+        describe_severities: vec![
+            image_scan_report::model::Severity::Critical,
+            image_scan_report::model::Severity::High,
+        ],
+        description_chars: 600,
+        remediation_cards: 30,
         customer_logo: None,
         language: Language::ZhTw,
         stale_after_days: 30,

@@ -13,6 +13,12 @@ mod pdf;
 fn fixture(language: Language) -> (Report, RenderOptions, RenderData) {
     let report = data::fixture_report(3);
     let opts = RenderOptions {
+        describe_severities: vec![
+            image_scan_report::model::Severity::Critical,
+            image_scan_report::model::Severity::High,
+        ],
+        description_chars: 600,
+        remediation_cards: 30,
         customer_logo: None,
         language: language.clone(),
         stale_after_days: 30,
@@ -150,6 +156,33 @@ fn further_groups_use_compact_table() {
         .filter(|c| !c.is_whitespace())
         .collect();
     assert!(tail.contains("package-30"), "{tail}");
+}
+
+#[test]
+fn configured_card_limit_uses_compact_table() {
+    let (report, _, mut data) = fixture(Language::En);
+    data.remediation.cards = 2;
+    let prototype = data.remediation.groups[0].clone();
+    data.remediation.groups = (0..5)
+        .map(|i| {
+            let mut row = prototype.clone();
+            row.package = format!("package-{i:02}");
+            row
+        })
+        .collect();
+    let bytes = Renderer::new()
+        .render_pdf(&data, None, None, report.generated_at)
+        .unwrap();
+    let (_, text) = chapter(&bytes, &data.strings["ch_remediation"]);
+    let text = text.replace('\u{200b}', "");
+    let split = text.find(&data.strings["remediation_more_title"]).unwrap();
+    assert!(text[..split].contains("package-00"));
+    assert!(!text[..split].contains("package-02"));
+    let tail: String = text[split..]
+        .chars()
+        .filter(|c| !c.is_whitespace())
+        .collect();
+    assert!(tail.contains("package-02"), "{tail}");
 }
 
 #[test]

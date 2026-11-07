@@ -8,6 +8,12 @@ use image_scan_report::{
 use std::collections::BTreeMap;
 fn opts() -> RenderOptions {
     RenderOptions {
+        describe_severities: vec![
+            image_scan_report::model::Severity::Critical,
+            image_scan_report::model::Severity::High,
+        ],
+        description_chars: 600,
+        remediation_cards: 30,
         customer_logo: None,
         language: Language::En,
         stale_after_days: 30,
@@ -27,6 +33,12 @@ fn report() -> Report {
         set,
         &ReportConfig {
             language: Language::En,
+            describe_severities: vec![
+                image_scan_report::model::Severity::Critical,
+                image_scan_report::model::Severity::High,
+            ],
+            description_chars: 600,
+            remediation_cards: 30,
             organization: "Example".into(),
             logo: None,
             stale_after_days: 30,
@@ -320,4 +332,39 @@ fn description_visibility_follows_severity() {
             matches!(severity, Severity::Critical | Severity::High)
         );
     }
+}
+
+#[test]
+fn configurable_descriptions_and_card_limit() {
+    let mut r = report();
+    r.images.truncate(1);
+    r.findings = [
+        Severity::Critical,
+        Severity::High,
+        Severity::Medium,
+        Severity::Low,
+        Severity::Unrated,
+    ]
+    .into_iter()
+    .map(|severity| {
+        let mut f = finding();
+        f.image = r.images[0].reference.clone();
+        f.severity = severity;
+        f.description = "é".repeat(101);
+        f
+    })
+    .collect();
+    let mut options = opts();
+    options.describe_severities = vec![Severity::Medium];
+    options.description_chars = 100;
+    options.remediation_cards = 2;
+    let d = build(&r, &options, BTreeMap::new(), serde_json::Value::Null);
+    assert_eq!(d.remediation.cards, 2);
+    for row in &d.images[0].findings {
+        assert_eq!(row.show_description, row.severity_key == "medium");
+        assert_eq!(row.description, format!("{}…", "é".repeat(100)));
+    }
+    options.describe_severities.clear();
+    let d = build(&r, &options, BTreeMap::new(), serde_json::Value::Null);
+    assert!(d.images[0].findings.iter().all(|row| !row.show_description));
 }

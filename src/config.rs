@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
 
-use crate::model::Language;
+use crate::model::{Language, Severity};
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -45,6 +45,12 @@ pub enum SourceConfig {
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ReportConfig {
+    #[serde(default = "default_describe_severities")]
+    pub describe_severities: Vec<Severity>,
+    #[serde(default = "default_description_chars")]
+    pub description_chars: usize,
+    #[serde(default = "default_remediation_cards")]
+    pub remediation_cards: usize,
     pub language: Language,
     pub organization: String,
     pub logo: Option<PathBuf>,
@@ -94,6 +100,18 @@ pub enum ConfigError {
     MissingEnv(String),
     #[error("{0}")]
     Invalid(String),
+}
+
+fn default_describe_severities() -> Vec<Severity> {
+    vec![Severity::Critical, Severity::High]
+}
+
+fn default_description_chars() -> usize {
+    600
+}
+
+fn default_remediation_cards() -> usize {
+    30
 }
 
 fn default_stale() -> u32 {
@@ -165,6 +183,11 @@ pub fn secret_from_env(name: &str) -> Result<String, ConfigError> {
 
 impl Config {
     pub fn validate(&self) -> Result<(), ConfigError> {
+        if self.report.description_chars < 50 {
+            return Err(ConfigError::Invalid(
+                "report.description_chars must be at least 50".into(),
+            ));
+        }
         if self.output.is_empty() {
             return Err(ConfigError::Invalid("output must not be empty".into()));
         }

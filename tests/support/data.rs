@@ -18,6 +18,12 @@ pub fn fixture_report(max_images: usize) -> Report {
         .unwrap(),
         &ReportConfig {
             language: Language::En,
+            describe_severities: vec![
+                image_scan_report::model::Severity::Critical,
+                image_scan_report::model::Severity::High,
+            ],
+            description_chars: 600,
+            remediation_cards: 30,
             organization: "Example Organisation".into(),
             logo: None,
             stale_after_days: 30,
@@ -39,6 +45,12 @@ pub fn fixture_report(max_images: usize) -> Report {
 pub fn fixture_data(language: Language, max_images: usize) -> RenderData {
     let report = fixture_report(max_images);
     let opts = RenderOptions {
+        describe_severities: vec![
+            image_scan_report::model::Severity::Critical,
+            image_scan_report::model::Severity::High,
+        ],
+        description_chars: 600,
+        remediation_cards: 30,
         customer_logo: None,
         language: language.clone(),
         stale_after_days: 30,

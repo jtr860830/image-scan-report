@@ -31,5 +31,8 @@ table headers 7.5 pt muted, sub-rows 7–7.5 pt, mono metadata 8 pt, and chips 7
 Image headings are 13 pt; TOC image entries are 8.5 pt mono. Summary tile counts
 are 30 pt bold. Identifiers may wrap at punctuation without visible hyphens.
 
-Descriptions appear only for Critical/High findings and are capped at 600
-characters. Remediation shows 30 cards, then a compact table for remaining groups.
+By default, descriptions appear for Critical/High findings and are capped at 600
+characters; configure these with `report.describe_severities` (`[]` disables descriptions)
+and `report.description_chars` (at least 50). Remediation defaults to 30 cards, then
+a compact table for remaining groups; `report.remediation_cards` changes the cutoff
+and accepts `0` for table only.

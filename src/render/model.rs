@@ -9,6 +9,9 @@ use std::collections::{BTreeMap, HashMap};
 pub const PLACEHOLDER: &str = "—";
 #[derive(Clone, Debug)]
 pub struct RenderOptions {
+    pub describe_severities: Vec<Severity>,
+    pub description_chars: usize,
+    pub remediation_cards: usize,
     pub customer_logo: Option<super::theme::Logo>,
     pub language: Language,
     pub stale_after_days: u32,
@@ -85,6 +88,7 @@ pub struct UniqueRow {
 }
 #[derive(Serialize, Debug, Clone, PartialEq)]
 pub struct Remediation {
+    pub cards: usize,
     pub groups: Vec<RemediationRow>,
     pub unfixable_total: usize,
     pub unfixable_by_status: Vec<(String, usize)>,
@@ -200,10 +204,14 @@ fn frequencies(values: impl Iterator<Item = String>) -> Vec<(String, usize)> {
     result.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
     result
 }
-fn finding_row(f: &Finding) -> FindingRow {
+fn finding_row(f: &Finding, opts: &RenderOptions) -> FindingRow {
     let mut description = sanitize(&f.description);
-    if description.chars().count() > 600 {
-        description = description.chars().take(600).chain(['…']).collect();
+    if description.chars().count() > opts.description_chars {
+        description = description
+            .chars()
+            .take(opts.description_chars)
+            .chain(['…'])
+            .collect();
     }
     FindingRow {
         id: sanitize(&f.id),
@@ -223,7 +231,7 @@ fn finding_row(f: &Finding) -> FindingRow {
         }
         .into(),
         description,
-        show_description: matches!(f.severity, Severity::Critical | Severity::High),
+        show_description: opts.describe_severities.contains(&f.severity),
     }
 }
 pub fn build(
@@ -263,7 +271,7 @@ pub fn build(
             .entry(image.reference.as_str())
             .or_insert(image);
     }
-    let images = image_details(&summaries, &images_by_reference, &grouped);
+    let images = image_details(&summaries, &images_by_reference, &grouped, opts);
     RenderData {
         meta: Meta {
             product_name: sanitize(&opts.product_name),
@@ -290,7 +298,7 @@ pub fn build(
         },
         scope: sanitize(&report.scope),
         summary: summary(report, opts, &summaries, &inventory),
-        remediation: remediation(report, &grouped),
+        remediation: remediation(report, &grouped, opts),
         inventory,
         images,
         appendix: appendix(report, opts, &grouped),
@@ -352,10 +360,15 @@ fn summary(
     }
 }
 
-fn remediation(report: &Report, grouped: &HashMap<&str, Vec<&Finding>>) -> Remediation {
+fn remediation(
+    report: &Report,
+    grouped: &HashMap<&str, Vec<&Finding>>,
+    opts: &RenderOptions,
+) -> Remediation {
     let rows = report.findings.len();
     let fixable = views::fixable(&report.findings);
     Remediation {
+        cards: opts.remediation_cards,
         groups: views::remediation_groups(&report.findings)
             .into_iter()
             .map(|g| RemediationRow {
@@ -445,6 +458,7 @@ fn image_details(
     summaries: &[views::ImageSummary],
     images_by_reference: &HashMap<&str, &Image>,
     grouped: &HashMap<&str, Vec<&Finding>>,
+    opts: &RenderOptions,
 ) -> Vec<ImageDetail> {
     summaries
         .iter()
@@ -484,7 +498,7 @@ fn image_details(
                 scan_error: display(image.scan.error.as_deref()),
                 scanner_version: display(image.scan.scanner_version.as_deref()),
                 counts: s.counts.clone(),
-                findings: findings.into_iter().map(finding_row).collect(),
+                findings: findings.into_iter().map(|f| finding_row(f, opts)).collect(),
             })
         })
         .collect()

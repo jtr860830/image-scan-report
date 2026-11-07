@@ -70,6 +70,12 @@ fn oversized_description_is_contained() {
     let data = model::build(
         &report,
         &RenderOptions {
+            describe_severities: vec![
+                image_scan_report::model::Severity::Critical,
+                image_scan_report::model::Severity::High,
+            ],
+            description_chars: 600,
+            remediation_cards: 30,
             customer_logo: None,
             language: Language::En,
             stale_after_days: 30,
@@ -113,6 +119,12 @@ fn optional_facts_show_placeholder() {
     let data = model::build(
         &report,
         &RenderOptions {
+            describe_severities: vec![
+                image_scan_report::model::Severity::Critical,
+                image_scan_report::model::Severity::High,
+            ],
+            description_chars: 600,
+            remediation_cards: 30,
             customer_logo: None,
             language: Language::En,
             stale_after_days: 30,

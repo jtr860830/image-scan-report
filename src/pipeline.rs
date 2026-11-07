@@ -81,6 +81,9 @@ fn render_options(
     product: &ProductInfo,
 ) -> crate::render::model::RenderOptions {
     crate::render::model::RenderOptions {
+        describe_severities: cfg.describe_severities.clone(),
+        description_chars: cfg.description_chars,
+        remediation_cards: cfg.remediation_cards,
         customer_logo: None,
         language: cfg.language.clone(),
         stale_after_days: cfg.stale_after_days,
