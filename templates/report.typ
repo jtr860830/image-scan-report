@@ -1,3 +1,4 @@
+#import "parts/summary.typ": summary
 #import "lib/fmt.typ": t
 #import "parts/cover.typ": cover
 #let data = json("data.json")
@@ -22,3 +23,5 @@
 )
 #set par(justify: false)
 #page(header: none, footer: none)[#cover(data)]
+
+#summary(data)

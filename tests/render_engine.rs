@@ -47,12 +47,12 @@ fn fixture(language: Language) -> (Report, RenderOptions, RenderData) {
 }
 
 #[test]
-fn renders_cover_only_document() {
+fn renders_cover_and_summary_document() {
     let (report, opts, _) = fixture(Language::En);
     let bytes =
         image_scan_report::render::render_pdf(&report, &opts, &theme::default_theme()).unwrap();
     assert!(bytes.starts_with(b"%PDF"));
-    assert_eq!(pdf::page_count(&bytes), 1);
+    assert!(pdf::page_count(&bytes) >= 2);
     let text = pdf::text(&bytes);
     assert!(
         text.split_whitespace()
@@ -117,6 +117,7 @@ fn body_frame_and_template_helpers_work() {
         "{}\n#import \"lib/theme.typ\": chip, mono\n#text(\"Body marker\")\n#chip(data.theme, \"High\", \"high\")\n#mono(data.theme, \"literal #text[test]\")\n#num(1234567)\n#pagebreak()\nSecond body page",
         include_str!("../templates/report.typ")
             .replace("\"lib/fmt.typ\": t", "\"lib/fmt.typ\": t, num")
+            .replace("#summary(data)", "")
     );
     let renderer = Renderer::with_sources(&[("report.typ", source)]);
     let bytes = renderer
@@ -140,7 +141,7 @@ fn logo_is_passed_through_public_entry_point() {
         bytes: br##"<svg xmlns="http://www.w3.org/2000/svg" width="80" height="40"><rect width="80" height="40" fill="#4263eb"/></svg>"##.to_vec(),
     });
     let bytes = image_scan_report::render::render_pdf(&report, &opts, &theme).unwrap();
-    assert_eq!(pdf::page_count(&bytes), 1);
+    assert!(pdf::page_count(&bytes) >= 2);
     let data = model::build(
         &report,
         &opts,
@@ -172,7 +173,7 @@ fn empty_scan_range_and_external_text_are_safe() {
 fn preview_rejects_invalid_page_and_resolution() {
     let (_, _, data) = fixture(Language::En);
     let renderer = Renderer::new();
-    for page in [0, 2] {
+    for page in [0, 999] {
         assert!(matches!(
             renderer.render_png(&data, None, page, 72.0),
             Err(RenderError::Data(_))

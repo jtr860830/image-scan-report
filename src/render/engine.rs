@@ -11,6 +11,10 @@ use typst_layout::PagedDocument;
 use typst_pdf::{PdfOptions, Timestamp};
 
 const SOURCES: &[(&str, &str)] = &[
+    (
+        "parts/summary.typ",
+        include_str!("../../templates/parts/summary.typ"),
+    ),
     ("report.typ", include_str!("../../templates/report.typ")),
     (
         "lib/theme.typ",
