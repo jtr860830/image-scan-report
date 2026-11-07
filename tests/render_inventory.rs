@@ -32,7 +32,7 @@ fn compact_inventory(text: &str) -> String {
 
 fn chapter(bytes: &[u8], title: &str) -> (u32, String) {
     let doc = lopdf::Document::load_mem(bytes).unwrap();
-    let page = (1..=pdf::page_count(bytes) as u32)
+    let page = (3..=pdf::page_count(bytes) as u32)
         .find(|page| doc.extract_text(&[*page]).unwrap().contains(title))
         .expect("inventory chapter page");
     let pages: Vec<_> = (page..=pdf::page_count(bytes) as u32).collect();

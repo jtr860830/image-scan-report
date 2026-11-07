@@ -25,3 +25,12 @@ pub fn page_sizes(pdf: &[u8]) -> Vec<(f64, f64)> {
         })
         .collect()
 }
+
+#[allow(dead_code)]
+pub fn page_texts(pdf: &[u8]) -> Vec<String> {
+    let doc = lopdf::Document::load_mem(pdf).unwrap();
+    doc.get_pages()
+        .keys()
+        .map(|page| doc.extract_text(&[*page]).unwrap())
+        .collect()
+}

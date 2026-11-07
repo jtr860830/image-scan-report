@@ -1,3 +1,4 @@
+#import "parts/appendix.typ": appendix
 #import "parts/images.typ": images
 #import "parts/inventory.typ": inventory
 #import "parts/remediation.typ": remediation
@@ -30,6 +31,15 @@
 #show heading.where(level: 2): it => block(above: 6pt, sticky: true)[#text(weight: "semibold", it.body)]
 #page(header: none, footer: none)[#cover(data)]
 
+#page[
+  #heading(level: 1, outlined: false, t(data.strings, "toc_title"))
+  #show outline.entry.where(level: 2): it => {
+    set text(font: data.theme.fonts.mono)
+    it
+  }
+  #outline(title: none, depth: 2, indent: 1.2em)
+]
+
 #summary(data)
 
 #remediation(data)
@@ -37,3 +47,5 @@
 #inventory(data)
 
 #images(data)
+
+#appendix(data)

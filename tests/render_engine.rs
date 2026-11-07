@@ -100,16 +100,17 @@ fn body_frame_and_template_helpers_work() {
             .replace("#remediation(data)", "")
             .replace("#inventory(data)", "")
             .replace("#images(data)", "")
+            .replace("#appendix(data)", "")
     );
     let renderer = Renderer::with_sources(&[("report.typ", source)]);
     let bytes = renderer
         .render_pdf(&data, None, report.generated_at)
         .unwrap();
-    assert_eq!(pdf::page_count(&bytes), 3);
+    assert_eq!(pdf::page_count(&bytes), 4);
     let text = pdf::text(&bytes);
-    assert!(text.contains("2 / 3"), "{text}");
-    assert!(text.contains("3 / 3"), "{text}");
-    assert!(!text.contains("1 / 3"), "cover must have no footer: {text}");
+    assert!(text.contains("2 / 4"), "{text}");
+    assert!(text.contains("4 / 4"), "{text}");
+    assert!(!text.contains("1 / 4"), "cover must have no footer: {text}");
     assert!(text.contains("1,234,567"), "{text}");
     assert!(text.contains("literal #text[test]"), "{text}");
 }

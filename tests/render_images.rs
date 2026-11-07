@@ -19,7 +19,7 @@ fn render(data: &RenderData) -> Vec<u8> {
 
 fn chapter(bytes: &[u8], title: &str) -> (usize, String) {
     let doc = lopdf::Document::load_mem(bytes).unwrap();
-    let page = (2..=pdf::page_count(bytes) as u32)
+    let page = (3..=pdf::page_count(bytes) as u32)
         .find(|p| doc.extract_text(&[*p]).unwrap().contains(title))
         .unwrap();
     let pages: Vec<_> = (page..=pdf::page_count(bytes) as u32).collect();

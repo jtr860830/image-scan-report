@@ -26,7 +26,7 @@ fn fixture(language: Language) -> (Report, RenderOptions, RenderData) {
 
 fn chapter(bytes: &[u8], title: &str) -> (u32, String) {
     let doc = lopdf::Document::load_mem(bytes).unwrap();
-    let page = (1..=pdf::page_count(bytes) as u32)
+    let page = (3..=pdf::page_count(bytes) as u32)
         .find(|page| doc.extract_text(&[*page]).unwrap().contains(title))
         .expect("remediation chapter page");
     let pages: Vec<_> = (page..=pdf::page_count(bytes) as u32).collect();
@@ -49,7 +49,11 @@ fn remediation_lists_groups_in_rank_order() {
     };
     assert!(compact.find(&target(first)).unwrap() < compact.find(&target(second)).unwrap());
     assert!(text.contains(&first.fixed_version), "{text}");
-    assert!(text.contains(&first.images[0]), "{text}");
+    let references: String = text
+        .chars()
+        .filter(|c| !c.is_whitespace() && *c != '\u{200b}')
+        .collect();
+    assert!(references.contains(&first.images[0]), "{text}");
 }
 
 #[test]

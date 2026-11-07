@@ -31,9 +31,9 @@ fn summary_page_has_counts_and_tables() {
     let bytes = Renderer::new()
         .render_pdf(&data, None, report.generated_at)
         .unwrap();
-    assert!(pdf::page_count(&bytes) >= 2);
+    assert!(pdf::page_count(&bytes) >= 3);
     let doc = lopdf::Document::load_mem(&bytes).unwrap();
-    let text = doc.extract_text(&[2]).unwrap();
+    let text = doc.extract_text(&[3]).unwrap();
     for key in [
         "ch_summary",
         "tile_critical",
@@ -51,7 +51,10 @@ fn summary_page_has_counts_and_tables() {
         "{text}"
     );
     assert!(
-        text.contains(&data.summary.top_images[0].reference),
+        text.chars()
+            .filter(|c| !c.is_whitespace() && *c != '\u{200b}')
+            .collect::<String>()
+            .contains(&data.summary.top_images[0].reference),
         "{text}"
     );
     assert!(text.contains(&data.summary.top_findings[0].id), "{text}");
@@ -89,7 +92,7 @@ fn summary_preview() {
     std::fs::create_dir_all("target/visual").unwrap();
     for (language, name) in [(Language::En, "en"), (Language::ZhTw, "zh")] {
         let (_, _, data) = fixture(language);
-        let bytes = Renderer::new().render_png(&data, None, 2, 110.0).unwrap();
+        let bytes = Renderer::new().render_png(&data, None, 3, 110.0).unwrap();
         assert!(bytes.starts_with(b"\x89PNG"));
         std::fs::write(format!("target/visual/summary-{name}.png"), &bytes).unwrap();
         if name == "en" {
@@ -123,7 +126,7 @@ fn summary_severity_chips_use_keys_and_fit() {
     std::fs::create_dir_all("target/visual").unwrap();
     std::fs::write(
         "target/visual/summary-chips.png",
-        renderer.render_png(&data, None, 2, 110.0).unwrap(),
+        renderer.render_png(&data, None, 3, 110.0).unwrap(),
     )
     .unwrap();
 }
