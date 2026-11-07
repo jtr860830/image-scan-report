@@ -93,17 +93,18 @@ fn render_is_deterministic() {
 #[test]
 fn compile_error_names_file_and_line() {
     let (report, _, data) = fixture(Language::En);
-    let renderer = Renderer::with_sources(&[("report.typ", "#let broken =\n#missing()".into())]);
+    let renderer =
+        Renderer::with_sources(&[("report.typ", "// Valid first line\n#missing()".into())]);
     let err = renderer
         .render_pdf(&data, None, report.generated_at)
         .unwrap_err();
     assert!(matches!(err, RenderError::Compile(_)));
-    assert!(err.to_string().contains("report.typ:"), "{err}");
+    assert!(err.to_string().contains("report.typ:2"), "{err}");
 }
 #[test]
 fn preview_png_is_written() {
     let (_, _, data) = fixture(Language::En);
-    let bytes = Renderer::new().render_png(&data, 1, 72.0).unwrap();
+    let bytes = Renderer::new().render_png(&data, None, 1, 72.0).unwrap();
     assert!(bytes.starts_with(b"\x89PNG\r\n\x1a\n"));
     std::fs::create_dir_all("target/visual").unwrap();
     std::fs::write("target/visual/cover.png", bytes).unwrap();
@@ -140,6 +141,18 @@ fn logo_is_passed_through_public_entry_point() {
     });
     let bytes = image_scan_report::render::render_pdf(&report, &opts, &theme).unwrap();
     assert_eq!(pdf::page_count(&bytes), 1);
+    let data = model::build(
+        &report,
+        &opts,
+        strings::load(Language::En),
+        theme.to_render_value(),
+    );
+    assert!(
+        Renderer::new()
+            .render_png(&data, theme.logo.as_ref(), 1, 72.0)
+            .unwrap()
+            .starts_with(b"\x89PNG")
+    );
 }
 
 #[test]
@@ -161,14 +174,31 @@ fn preview_rejects_invalid_page_and_resolution() {
     let renderer = Renderer::new();
     for page in [0, 2] {
         assert!(matches!(
-            renderer.render_png(&data, page, 72.0),
+            renderer.render_png(&data, None, page, 72.0),
             Err(RenderError::Data(_))
         ));
     }
     for ppi in [0.0, -1.0, f32::NAN, f32::INFINITY] {
         assert!(matches!(
-            renderer.render_png(&data, 1, ppi),
+            renderer.render_png(&data, None, 1, ppi),
             Err(RenderError::Data(_))
         ));
     }
+}
+
+#[test]
+fn missing_translation_names_key() {
+    let (report, _, data) = fixture(Language::En);
+    let renderer = Renderer::with_sources(&[(
+        "report.typ",
+        "#import \"lib/fmt.typ\": t\n#t((:), \"absent_key\")".into(),
+    )]);
+    let err = renderer
+        .render_pdf(&data, None, report.generated_at)
+        .unwrap_err();
+    assert!(
+        err.to_string().contains("missing string key: absent_key"),
+        "{err}"
+    );
+    assert!(!err.to_string().contains("(span"));
 }

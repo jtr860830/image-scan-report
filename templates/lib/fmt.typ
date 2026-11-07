@@ -1,5 +1,6 @@
 #let t(strings, key, ..named) = {
-  let result = strings.at(key)
+  let result = strings.at(key, default: none)
+  if result == none { panic("missing string key: " + key) }
   for (name, value) in named.named() {
     result = result.replace("{" + name + "}", str(value))
   }

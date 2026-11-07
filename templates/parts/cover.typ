@@ -1,11 +1,12 @@
 #import "../lib/fmt.typ": num
+#let muted(theme, body) = text(fill: rgb(theme.colors.muted), body)
 #let cover(data) = {
   let colors = data.theme.colors
   let strings = data.strings
   let dates = data.images.map(i => i.scanned_at).filter(d => d != "—").sorted()
   let scan-range = if dates.len() > 0 { dates.first() + " – " + dates.last() } else { "—" }
   v(18mm)
-  text(fill: rgb(colors.muted), tracking: 1pt, data.meta.organisation)
+  muted(data.theme, text(tracking: 1pt, data.meta.organisation))
   if data.theme.logo != none {
     v(8mm)
     image("/" + data.theme.logo, height: 14mm)
@@ -17,10 +18,10 @@
   v(14mm)
   grid(
     columns: (30mm, 1fr), column-gutter: 8mm, row-gutter: 6mm,
-    text(fill: rgb(colors.muted), strings.cover_scope), [#data.scope],
-    text(fill: rgb(colors.muted), strings.cover_source), [#data.source.display_name],
-    text(fill: rgb(colors.muted), strings.cover_images), [#num(data.summary.images_total)],
-    text(fill: rgb(colors.muted), strings.cover_scan_range), [#scan-range],
-    text(fill: rgb(colors.muted), strings.cover_generated), [#data.meta.generated_date],
+    muted(data.theme, strings.cover_scope), [#data.scope],
+    muted(data.theme, strings.cover_source), [#data.source.display_name],
+    muted(data.theme, strings.cover_images), [#num(data.summary.images_total)],
+    muted(data.theme, strings.cover_scan_range), [#scan-range],
+    muted(data.theme, strings.cover_generated), [#data.meta.generated_date],
   )
 }

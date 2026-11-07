@@ -96,11 +96,12 @@ impl Renderer {
                         let line = text[..range.start].bytes().filter(|b| *b == b'\n').count() + 1;
                         Some(format!("{name}:{line}"))
                     })
-                    .unwrap_or_else(|| "report.typ:1".into());
-                format!(
-                    "{location}: {} (span {:?})",
-                    diagnostic.message, diagnostic.span
-                )
+                    .unwrap_or_else(|| "<unknown>".into());
+                let mut message = format!("{location}: {}", diagnostic.message);
+                for hint in &diagnostic.hints {
+                    message.push_str(&format!("\n  hint: {}", hint.v));
+                }
+                message
             })
             .collect::<Vec<_>>()
             .join("\n")
@@ -138,7 +139,7 @@ impl Renderer {
                 TypstAsLibError::TypstSource(diagnostics) => {
                     RenderError::Compile(self.diagnostics(&diagnostics))
                 }
-                other => RenderError::Compile(format!("report.typ:1: {other}")),
+                other => RenderError::Compile(format!("<unknown>: {other}")),
             })
     }
 
@@ -180,6 +181,7 @@ impl Renderer {
     pub fn render_png(
         &self,
         data: &RenderData,
+        logo: Option<&Logo>,
         page: usize,
         ppi: f32,
     ) -> Result<Vec<u8>, RenderError> {
@@ -188,7 +190,7 @@ impl Renderer {
                 "preview ppi must be finite and positive".into(),
             ));
         }
-        let doc = self.compile(data, None)?;
+        let doc = self.compile(data, logo)?;
         let page = page
             .checked_sub(1)
             .and_then(|i| doc.pages().get(i))
