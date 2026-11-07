@@ -1,5 +1,7 @@
 //! Scanner input sources and shared file parsing errors.
 pub mod files;
+pub mod neuvector;
+pub mod neuvector_file;
 pub mod trivy_file;
 
 use crate::model::ScanSet;
