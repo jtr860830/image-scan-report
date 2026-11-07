@@ -12,6 +12,9 @@ rust-version = "1.99.1"
 name = "image_scan_report"
 path = "src/lib.rs"
 
+[features]
+preview = ["dep:typst-render"]
+
 [dependencies]
 clap = { version = "4", features = ["derive"] }
 serde = { version = "1", features = ["derive"] }
@@ -24,15 +27,17 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 walkdir = "2"
 
 typst = "0.15"
+typst-layout = "0.15"
 typst-as-lib = { version = "0.17", default-features = false }
 typst-pdf = "0.15"
+typst-render = { version = "0.15", optional = true }
 rayon = "1"
 toml = "1"
 
 [dev-dependencies]
 lopdf = "0.47"
 pdf-extract = "0.12"
-typst-render = "0.15"
+image_scan_report = { package = "judex", path = ".", features = ["preview"] }
 assert_cmd = "2"
 insta = { version = "1", features = ["json"] }
 rstest = "0.28"
