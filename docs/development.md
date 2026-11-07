@@ -60,7 +60,7 @@ normalised model directly for JSON. API sources and HTTP upload remain future wo
 
 `templates/report.typ` is the entry point, `templates/lib/` contains shared
 formatting and layout helpers, and `templates/parts/` contains report chapters.
-Use the README's design iteration commands with Typst CLI 0.15.1 and bundled fonts.
+Use the [design iteration guide](design/README.md) with Typst CLI 0.15.1 and bundled fonts.
 
 `src/render/strings.rs` defines the canonical string keys and is the source of truth.
 To add a locale, add a complete translation JSON file under `strings/`,
@@ -89,8 +89,8 @@ fixture input keeps debug rendering fast. Snapshots cover normalized extracted
 text from pages 1, 2, 3 and the last page, replacing the generated date with
 `<DATE>`, plus both page counts (currently 7 each). Review intentional changes
 with `INSTA_UPDATE=always cargo test --offline --test golden`, then rerun without
-that variable. Existing chapter preview tests write PNGs under `target/visual/`
-for visual inspection; text snapshots do not detect every visual layout change.
+that variable. `cargo test --offline --test previews` regenerates all chapter PNGs at 110 ppi
+under `target/visual/` for visual inspection; text snapshots do not detect every visual layout change.
 
 Run the opt-in release budgets with:
 
@@ -112,9 +112,10 @@ compiled, used a single test run:
 
 The 50,000-finding target (52,416 rows) rendered in **14.9 seconds**, producing
 **3,703 pages**. Peak RSS, from `/usr/bin/time -l`'s maximum resident set size,
-was **5.1 GB (5,090,951,168 bytes)**. Memory grows roughly 100 MB per 1,000
+was **5.1 GB (5,090,951,168 bytes)**. Extrapolating from this single measurement, memory grows roughly 100 MB per 1,000
 findings with the full template, so a container running the largest realistic
-reports needs about 5 GiB; plan 4 sizes the deployment accordingly.
+reports needs about 5 GiB; size the container accordingly. The CI perf job runs both tests concurrently, so its
+peak memory differs from this single-run figure.
 
 The complete 11-image, 4,368-finding English report produced by
 `cargo run --offline -- run --config examples/config-trivy-files.yaml` decreased

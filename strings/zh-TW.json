@@ -18,8 +18,8 @@
   "tile_medium": "Medium",
   "tile_low": "Low",
   "tile_unrated": "Unrated",
-  "fact_fixable": "{fixable}（{percent}%）個弱點已有修補版本",
-  "fact_high_or_worse": "{count} / {total} 個映像檔含 Critical 或 High",
+  "fact_fixable": "{fixable} 個弱點（{percent}%）已有修補版本",
+  "fact_high_or_worse": "{count} / {total} 個映像檔含 Critical 或 High 等級弱點",
   "sec_top_images": "優先處理的映像檔",
   "sec_top_findings": "優先處理的弱點",
   "col_image": "映像檔",
@@ -50,7 +50,7 @@
   "status_other": "其他",
   "inventory_lede": "共 {count} 個不重複弱點。",
   "inventory_affected": "受影響的映像檔",
-  "image_meta_digest": "摘要值",
+  "image_meta_digest": "Digest",
   "image_meta_platform": "平台",
   "image_meta_os": "作業系統",
   "image_meta_size": "大小",
@@ -65,7 +65,7 @@
   "appendix_db": "弱點資料庫",
   "appendix_tool": "報告工具",
   "appendix_rule_title": "嚴重等級判定規則",
-  "appendix_rule_text": "嚴重等級由本工具依 CVSS v3 分數判定，不採用掃描工具的標籤；無 v3 分數時退回 v2，再無則採用工具標籤並標註。",
+  "appendix_rule_text": "嚴重等級由本工具依 CVSS v3 分數判定，不採用掃描工具的標籤；若無 v3 分數則改用 v2，仍無則採用掃描工具標籤並加註說明。",
   "appendix_sources_title": "資料來源與範圍",
   "appendix_scope_text": "本報告涵蓋倉庫中存放的映像檔，不代表叢集內實際執行中的工作負載。",
   "appendix_failed_title": "掃描失敗的映像檔",
@@ -86,5 +86,6 @@
   "basis_none": "無嚴重等級依據",
   "scan_state_ok": "掃描成功",
   "scan_state_failed": "掃描失敗",
-  "scan_state_not_scanned": "尚未掃描"
+  "scan_state_not_scanned": "尚未掃描",
+  "col_source": "來源"
 }

@@ -71,7 +71,7 @@
   "appendix_failed_title": "Images with Failed Scans",
   "appendix_stale_title": "Images Not Scanned in Over {days} Days",
   "appendix_limitations_title": "Limitations",
-  "limit_recomputed": "Recomputed severity may differ from the scanner interface.",
+  "limit_recomputed": "Recomputed severity may differ from the scanner's interface.",
   "limit_sources_differ": "Scores for the same vulnerability may differ between scanners due to different data sources.",
   "limit_filled_scores": "NeuVector fills in scores for some older vulnerabilities, which may affect severity classification.",
   "limit_coverage": "Vulnerability coverage depends on the scanner and its database.",
@@ -83,8 +83,9 @@
   "basis_cvss3": "Based on CVSS v3",
   "basis_cvss2": "Based on CVSS v2",
   "basis_scanner_label": "Based on Scanner Label",
-  "basis_none": "No Severity Basis",
+  "basis_none": "No severity source",
   "scan_state_ok": "Scan Succeeded",
   "scan_state_failed": "Scan Failed",
-  "scan_state_not_scanned": "Not Scanned"
+  "scan_state_not_scanned": "Not Scanned",
+  "col_source": "Source"
 }

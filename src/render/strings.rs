@@ -38,6 +38,7 @@ pub const KEYS: &[&str] = &[
     "col_fixed",
     "col_images",
     "col_count",
+    "col_source",
     "col_status",
     "col_scanned_at",
     "col_error",

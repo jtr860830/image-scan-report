@@ -1,3 +1,4 @@
+#import "lib/theme.typ": muted
 #import "parts/appendix.typ": appendix
 #import "parts/images.typ": images
 #import "parts/inventory.typ": inventory
@@ -6,17 +7,17 @@
 #import "lib/fmt.typ": t
 #import "parts/cover.typ": cover
 #let data = json("data.json")
-#set document(title: data.strings.report_title, date: none)
+#set document(title: t(data.strings, "report_title"), date: none)
 #set page(
   paper: "a4",
   margin: (x: 16mm, top: 22mm, bottom: 20mm),
-  header: text(size: 8pt, fill: rgb(data.theme.colors.muted))[
-    #data.strings.report_title #h(1fr) #data.meta.organisation
-  ],
-  footer: context text(size: 8pt, fill: rgb(data.theme.colors.muted))[
+  header: text(size: 8pt, muted(data.theme)[
+    #t(data.strings, "report_title") #h(1fr) #data.meta.organisation
+  ]),
+  footer: context text(size: 8pt, muted(data.theme)[
     #data.meta.generated_date #h(1fr)
     #t(data.strings, "page_of", page: counter(page).get().first(), total: counter(page).final().first())
-  ],
+  ]),
 )
 #set text(
   font: data.theme.fonts.text,
@@ -34,7 +35,7 @@
 #page[
   #heading(level: 1, outlined: false, t(data.strings, "toc_title"))
   #show outline.entry.where(level: 2): it => {
-    set text(font: data.theme.fonts.mono)
+    show text: set text(font: data.theme.fonts.mono, size: 8.5pt)
     it
   }
   #outline(title: none, depth: 2, indent: 1.2em)

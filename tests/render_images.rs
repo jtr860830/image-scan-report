@@ -128,19 +128,6 @@ fn optional_facts_show_placeholder() {
     assert!(text.contains(&data.strings["no_findings"]));
 }
 #[test]
-fn images_preview() {
-    std::fs::create_dir_all("target/visual").unwrap();
-    for (lang, name) in [(Language::En, "en"), (Language::ZhTw, "zh")] {
-        let data = data::fixture_data(lang, 3);
-        let (page, _) = chapter(&render(&data), &data.strings["ch_images"]);
-        let png = Renderer::new()
-            .render_png(&data, None, page, 110.0)
-            .unwrap();
-        std::fs::write(format!("target/visual/images-{name}.png"), png).unwrap();
-    }
-}
-
-#[test]
 fn medium_description_is_not_rendered() {
     let mut data = data::fixture_data(Language::En, 3);
     let row = &mut data.images[0].findings[0];

@@ -93,23 +93,6 @@ fn long_identifiers_stay_inside_the_page() {
 }
 
 #[test]
-fn inventory_preview() {
-    std::fs::create_dir_all("target/visual").unwrap();
-    for (language, name) in [(Language::En, "en"), (Language::ZhTw, "zh")] {
-        let (report, _, data) = fixture(language);
-        let renderer = Renderer::new();
-        let bytes = renderer
-            .render_pdf(&data, None, report.generated_at)
-            .unwrap();
-        let (page, _) = chapter(&bytes, &data.strings["ch_inventory"]);
-        let png = renderer
-            .render_png(&data, None, page as usize, 110.0)
-            .unwrap();
-        std::fs::write(format!("target/visual/inventory-{name}.png"), png).unwrap();
-    }
-}
-
-#[test]
 fn inventory_caps_images_and_handles_empty_inventory() {
     let (report, _, mut data) = fixture(Language::En);
     data.inventory.truncate(1);

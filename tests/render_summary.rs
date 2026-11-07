@@ -88,20 +88,6 @@ fn summary_handles_zero_findings() {
 }
 
 #[test]
-fn summary_preview() {
-    std::fs::create_dir_all("target/visual").unwrap();
-    for (language, name) in [(Language::En, "en"), (Language::ZhTw, "zh")] {
-        let (_, _, data) = fixture(language);
-        let bytes = Renderer::new().render_png(&data, None, 3, 110.0).unwrap();
-        assert!(bytes.starts_with(b"\x89PNG"));
-        std::fs::write(format!("target/visual/summary-{name}.png"), &bytes).unwrap();
-        if name == "en" {
-            std::fs::write("target/visual/summary.png", bytes).unwrap();
-        }
-    }
-}
-
-#[test]
 fn summary_severity_chips_use_keys_and_fit() {
     let (report, _, mut data) = fixture(Language::En);
     // Labels are display data, never color lookup keys.

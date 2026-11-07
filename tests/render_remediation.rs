@@ -69,24 +69,6 @@ fn remediation_unfixable_table_present() {
 }
 
 #[test]
-fn remediation_preview() {
-    std::fs::create_dir_all("target/visual").unwrap();
-    for (language, name) in [(Language::En, "en"), (Language::ZhTw, "zh")] {
-        let (report, _, data) = fixture(language);
-        let renderer = Renderer::new();
-        let bytes = renderer
-            .render_pdf(&data, None, report.generated_at)
-            .unwrap();
-        let (page, _) = chapter(&bytes, &data.strings["ch_remediation"]);
-        let png = renderer
-            .render_png(&data, None, page as usize, 110.0)
-            .unwrap();
-        assert!(png.starts_with(b"\x89PNG"));
-        std::fs::write(format!("target/visual/remediation-{name}.png"), png).unwrap();
-    }
-}
-
-#[test]
 fn remediation_handles_empty_groups_and_status_fallbacks() {
     let (report, _, mut data) = fixture(Language::En);
     data.remediation.groups.clear();

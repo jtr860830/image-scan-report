@@ -101,17 +101,3 @@ fn stale_and_failed_tables_render() {
         }
     }
 }
-#[test]
-fn appendix_and_toc_previews() {
-    std::fs::create_dir_all("target/visual").unwrap();
-    for (lang, name) in [(Language::En, "en"), (Language::ZhTw, "zh")] {
-        let data = data::fixture_data(lang, 3);
-        let pages = pdf::page_texts(&render(&data));
-        for (label, page) in [("toc", 2), ("appendix", pages.len())] {
-            let png = Renderer::new()
-                .render_png(&data, None, page, 110.0)
-                .unwrap();
-            std::fs::write(format!("target/visual/{label}-{name}.png"), png).unwrap();
-        }
-    }
-}

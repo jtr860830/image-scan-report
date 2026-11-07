@@ -1,3 +1,4 @@
+#import "fmt.typ": breakable-id
 #let sev-color(theme, key) = rgb(theme.colors.at(key))
 #let sev-tint(theme, key) = rgb(theme.colors.at("tint_" + key))
 #let chip(theme, label, key) = box(
@@ -6,6 +7,10 @@
   #box(circle(radius: 2pt, fill: sev-color(theme, key), stroke: none))#h(2.5pt)#label
 ])]
 #let mono(theme, body) = text(font: theme.fonts.mono, body)
+#let identifier(theme, body) = text(hyphenate: false, mono(theme, breakable-id(body)))
+#let secondary(theme, body) = text(fill: rgb(theme.colors.secondary), body)
+#let muted(theme, body) = text(fill: rgb(theme.colors.muted), body)
+#let header(theme, body) = text(size: 7.5pt, hyphenate: false, muted(theme, body))
 
 #let section-title(theme, body) = block(above: 14pt, below: 6pt, sticky: true)[
   #text(size: 11pt, weight: "semibold", fill: rgb(theme.colors.ink), body)
@@ -20,10 +25,10 @@
 #let tile(theme, label, key, count) = block(
   width: 100%, fill: sev-tint(theme, key), radius: 6pt, inset: 10pt,
 )[
-  #text(size: 30pt, weight: "bold", number-type: "lining", number-width: "tabular", str(count))
-  #v(4pt)
-  #box(circle(radius: 3.5pt, fill: sev-color(theme, key), stroke: none))
-  #text(size: 8pt, fill: rgb(theme.colors.secondary), label)
+  #stack(dir: ttb, spacing: 4pt,
+    text(size: 30pt, weight: "bold", number-type: "lining", number-width: "tabular", str(count)),
+    box[#box(circle(radius: 3.5pt, fill: sev-color(theme, key), stroke: none))#h(3pt)#text(size: 8pt, secondary(theme, label))],
+  )
 ]
 #let fact-box(theme, number, sentence) = block(
   width: 100%, stroke: 0.4pt + rgb(theme.colors.rule), radius: 6pt, inset: 10pt,
