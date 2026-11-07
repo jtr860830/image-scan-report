@@ -124,6 +124,7 @@ pub struct FindingRow {
     pub scanner_severity: String,
     pub basis: String,
     pub description: String,
+    pub show_description: bool,
     pub links: Vec<String>,
 }
 #[derive(Serialize, Debug, Clone, PartialEq)]
@@ -196,8 +197,8 @@ fn frequencies(values: impl Iterator<Item = String>) -> Vec<(String, usize)> {
 }
 fn finding_row(f: &Finding) -> FindingRow {
     let mut description = sanitize(&f.description);
-    if description.chars().count() > 1200 {
-        description = description.chars().take(1200).chain(['…']).collect();
+    if description.chars().count() > 600 {
+        description = description.chars().take(600).chain(['…']).collect();
     }
     FindingRow {
         id: sanitize(&f.id),
@@ -217,6 +218,7 @@ fn finding_row(f: &Finding) -> FindingRow {
         }
         .into(),
         description,
+        show_description: matches!(f.severity, Severity::Critical | Severity::High),
         links: f.links.iter().map(|s| sanitize(s)).collect(),
     }
 }

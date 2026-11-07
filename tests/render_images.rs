@@ -64,6 +64,7 @@ fn failed_image_shows_error_callout() {
 #[test]
 fn oversized_description_is_contained() {
     let mut report = data::fixture_report(3);
+    report.findings[0].severity = image_scan_report::model::Severity::Critical;
     report.findings[0].description =
         format!("Unicode 😀 𪚥\u{200b} {}", "long description ".repeat(400));
     let data = model::build(
@@ -85,7 +86,7 @@ fn oversized_description_is_contained() {
         .flat_map(|i| &i.findings)
         .find(|r| r.description.starts_with("Unicode"))
         .unwrap();
-    assert_eq!(row.description.chars().count(), 1201);
+    assert_eq!(row.description.chars().count(), 601);
     assert!(row.description.ends_with('…'));
     let bytes = render(&data);
     assert!(pdf::text(&bytes).contains("Unicode"));
@@ -137,4 +138,15 @@ fn images_preview() {
             .unwrap();
         std::fs::write(format!("target/visual/images-{name}.png"), png).unwrap();
     }
+}
+
+#[test]
+fn medium_description_is_not_rendered() {
+    let mut data = data::fixture_data(Language::En, 3);
+    let row = &mut data.images[0].findings[0];
+    row.severity_key = "medium".into();
+    row.severity_label = "Medium".into();
+    row.show_description = false;
+    row.description = "MEDIUM-DESCRIPTION-SENTINEL".into();
+    assert!(!pdf::text(&render(&data)).contains("MEDIUM-DESCRIPTION-SENTINEL"));
 }

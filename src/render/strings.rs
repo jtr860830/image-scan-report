@@ -42,6 +42,8 @@ pub const KEYS: &[&str] = &[
     "col_scanned_at",
     "col_error",
     "remediation_lede",
+    "remediation_more_title",
+    "remediation_more_lede",
     "remediation_resolves",
     "remediation_affects",
     "remediation_unfixable_title",

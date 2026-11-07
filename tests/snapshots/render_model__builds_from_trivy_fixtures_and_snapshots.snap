@@ -1,6 +1,6 @@
 ---
 source: tests/render_model.rs
-expression: "Snapshot\n{\n    meta: &d.meta, summary: &d.summary, groups:\n    &d.remediation.groups[..d.remediation.groups.len().min(3)], inventory:\n    &d.inventory[..d.inventory.len().min(3)], reference:\n    &d.images[0].reference, appendix: &d.appendix\n}"
+expression: "Snapshot\n{\n    meta: &d.meta, summary: &d.summary, groups:\n    &d.remediation.groups[..d.remediation.groups.len().min(3)], inventory:\n    &d.inventory[..d.inventory.len().min(3)], reference:\n    &d.images[0].reference, finding: &d.images[0].findings[0], appendix:\n    &d.appendix\n}"
 ---
 {
   "meta": {
@@ -430,6 +430,33 @@ expression: "Snapshot\n{\n    meta: &d.meta, summary: &d.summary, groups:\n    &
     }
   ],
   "reference": "centos:7",
+  "finding": {
+    "id": "CVE-2014-5044",
+    "severity_label": "Critical",
+    "severity_key": "critical",
+    "score": "9.8",
+    "package": "libgcc",
+    "installed_version": "4.8.5-44.el7",
+    "fixed_version": "—",
+    "fix_status": "will_not_fix",
+    "scanner_severity": "MEDIUM",
+    "basis": "cvss3",
+    "description": "Multiple integer overflows in libgfortran might allow remote attackers to execute arbitrary code or cause a denial of service (Fortran application crash) via vectors related to array allocation.",
+    "show_description": true,
+    "links": [
+      "https://avd.aquasec.com/nvd/cve-2014-5044",
+      "http://www.openwall.com/lists/oss-security/2014/07/23/7",
+      "http://www.openwall.com/lists/oss-security/2014/07/24/1",
+      "http://www.openwall.com/lists/oss-security/2014/07/31/6",
+      "https://access.redhat.com/security/cve/CVE-2014-5044",
+      "https://bugzilla.redhat.com/show_bug.cgi?id=1122812",
+      "https://exchange.xforce.ibmcloud.com/vulnerabilities/94849",
+      "https://gcc.gnu.org/viewcvs/gcc/trunk/libgfortran/ChangeLog?limit_changes=0&view=markup&pathrev=211721",
+      "https://gcc.gnu.org/viewcvs/gcc?limit_changes=0&view=revision&revision=211721",
+      "https://nvd.nist.gov/vuln/detail/CVE-2014-5044",
+      "https://www.cve.org/CVERecord?id=CVE-2014-5044"
+    ]
+  },
   "appendix": {
     "failed_images": [],
     "stale_images": [],

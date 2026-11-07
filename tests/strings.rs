@@ -49,7 +49,10 @@ fn placeholders_match_between_locales() {
             "fact_fixable" => vec!["fixable", "percent"],
             "fact_high_or_worse" => vec!["count", "total"],
             "remediation_resolves" => vec!["critical", "high", "medium", "low"],
-            "remediation_affects" | "remediation_unfixable_lede" | "inventory_lede" => {
+            "remediation_more_lede"
+            | "remediation_affects"
+            | "remediation_unfixable_lede"
+            | "inventory_lede" => {
                 vec!["count"]
             }
             "image_scan_failed" => vec!["error"],

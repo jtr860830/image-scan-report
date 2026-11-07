@@ -49,7 +49,7 @@
             identifier(row.id), chip(theme, row.severity_label, row.severity_key),
             row.score, text(hyphenate: false, breakable-id(row.package)),
             identifier(row.installed_version), identifier(row.fixed_version),
-          ) + if row.description == "" { () } else {
+          ) + if not row.show_description or row.description == "" { () } else {
             (table.cell(colspan: 6, text(size: 7.5pt, fill: rgb(theme.colors.secondary), hyphenate: true, row.description)),)
           }).flatten())
       }

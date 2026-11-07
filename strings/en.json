@@ -34,6 +34,8 @@
   "col_status": "Status",
   "col_scanned_at": "Scanned At",
   "col_error": "Error",
+  "remediation_more_title": "Further fixes",
+  "remediation_more_lede": "{count} further fixes are listed below.",
   "remediation_lede": "Prioritize updating the following packages to fixed versions to reduce vulnerability risk.",
   "remediation_resolves": "Resolves {critical} Critical, {high} High, {medium} Medium, and {low} Low vulnerabilities.",
   "remediation_affects": "Affects {count} images.",

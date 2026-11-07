@@ -34,6 +34,8 @@
   "col_status": "狀態",
   "col_scanned_at": "掃描時間",
   "col_error": "錯誤",
+  "remediation_more_title": "其餘修補項目",
+  "remediation_more_lede": "另有 {count} 個修補項目列於下表。",
   "remediation_lede": "優先更新下列套件至修補版本，以降低弱點風險。",
   "remediation_resolves": "可修補 Critical {critical}、High {high}、Medium {medium}、Low {low} 個弱點。",
   "remediation_affects": "影響 {count} 個映像檔。",

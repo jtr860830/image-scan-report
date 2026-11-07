@@ -140,3 +140,29 @@ fn remediation_caps_images_and_formats_counts() {
     let affects = data.strings["remediation_affects"].replace("{count}", "41");
     assert!(text.contains(&affects), "{text}");
 }
+
+#[test]
+fn further_groups_use_compact_table() {
+    let (report, _, mut data) = fixture(Language::En);
+    let prototype = data.remediation.groups[0].clone();
+    data.remediation.groups = (0..35)
+        .map(|i| {
+            let mut row = prototype.clone();
+            row.package = format!("package-{i:02}");
+            row
+        })
+        .collect();
+    let bytes = Renderer::new()
+        .render_pdf(&data, None, report.generated_at)
+        .unwrap();
+    let (_, text) = chapter(&bytes, &data.strings["ch_remediation"]);
+    let text = text.replace('\u{200b}', "");
+    let split = text.find(&data.strings["remediation_more_title"]).unwrap();
+    assert!(text[..split].contains("package-00"));
+    assert!(!text[..split].contains("package-30"));
+    let tail: String = text[split..]
+        .chars()
+        .filter(|c| !c.is_whitespace())
+        .collect();
+    assert!(tail.contains("package-30"), "{tail}");
+}

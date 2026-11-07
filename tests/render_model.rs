@@ -67,6 +67,7 @@ fn builds_from_trivy_fixtures_and_snapshots() {
         groups: &'a [RemediationRow],
         inventory: &'a [UniqueRow],
         reference: &'a str,
+        finding: &'a FindingRow,
         appendix: &'a Appendix,
     }
     insta::assert_json_snapshot!(Snapshot {
@@ -75,6 +76,7 @@ fn builds_from_trivy_fixtures_and_snapshots() {
         groups: &d.remediation.groups[..d.remediation.groups.len().min(3)],
         inventory: &d.inventory[..d.inventory.len().min(3)],
         reference: &d.images[0].reference,
+        finding: &d.images[0].findings[0],
         appendix: &d.appendix
     });
 }
@@ -139,7 +141,7 @@ fn description_is_truncated() {
         .unwrap()
         .findings[0]
         .description;
-    assert_eq!(s.chars().count(), 1201);
+    assert_eq!(s.chars().count(), 601);
     assert!(s.ends_with('…'));
     r.findings[0].description = "é".repeat(1300);
     let d = render(&r);
@@ -150,8 +152,8 @@ fn description_is_truncated() {
         .unwrap()
         .findings[0]
         .description;
-    assert_eq!(s.chars().count(), 1201);
-    assert_eq!(s, &format!("{}…", "é".repeat(1200)));
+    assert_eq!(s.chars().count(), 601);
+    assert_eq!(s, &format!("{}…", "é".repeat(600)));
 }
 #[test]
 fn format_size_cases() {
@@ -293,4 +295,28 @@ fn build_sanitizes_every_external_string() {
     assert_eq!(data.appendix.score_sources, vec![("abc".into(), 2)]);
     assert_eq!(data.images.len(), 2);
     assert_eq!(data.images[0].findings.len(), 2);
+}
+
+#[test]
+fn description_visibility_follows_severity() {
+    let mut report = report();
+    let image = report.images[0].reference.clone();
+    for severity in [
+        Severity::Critical,
+        Severity::High,
+        Severity::Medium,
+        Severity::Low,
+        Severity::Unrated,
+    ] {
+        let mut row = finding();
+        row.image = image.clone();
+        row.severity = severity;
+        report.findings = vec![row];
+        let data = render(&report);
+        let row = data.images.iter().flat_map(|i| &i.findings).next().unwrap();
+        assert_eq!(
+            row.show_description,
+            matches!(severity, Severity::Critical | Severity::High)
+        );
+    }
 }
