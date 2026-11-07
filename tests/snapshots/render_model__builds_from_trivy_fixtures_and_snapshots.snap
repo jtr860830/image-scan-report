@@ -1,0 +1,463 @@
+---
+source: tests/render_model.rs
+expression: "Snapshot\n{\n    meta: &d.meta, summary: &d.summary, groups:\n    &d.remediation.groups[..d.remediation.groups.len().min(3)], inventory:\n    &d.inventory[..d.inventory.len().min(3)], reference:\n    &d.images[0].reference, appendix: &d.appendix\n}"
+---
+{
+  "meta": {
+    "product_name": "judex",
+    "product_version": "0.1.0",
+    "generated_at": "2026-11-08T00:00:00+00:00",
+    "generated_date": "2026-11-08",
+    "language": "en",
+    "organisation": "Example",
+    "logo": null
+  },
+  "summary": {
+    "images_total": 11,
+    "findings_total": 4368,
+    "unique_total": 1864,
+    "counts": {
+      "critical": 257,
+      "high": 1632,
+      "medium": 2031,
+      "low": 405,
+      "unrated": 43
+    },
+    "fixable": 2170,
+    "fixable_percent": 50,
+    "images_with_high_or_worse": 8,
+    "bar": [
+      {
+        "severity_label": "Critical",
+        "percent": 5.8836994
+      },
+      {
+        "severity_label": "High",
+        "percent": 37.362637
+      },
+      {
+        "severity_label": "Medium",
+        "percent": 46.497253
+      },
+      {
+        "severity_label": "Low",
+        "percent": 9.271978
+      },
+      {
+        "severity_label": "Unrated",
+        "percent": 0.9844322
+      }
+    ],
+    "top_images": [
+      {
+        "reference": "centos:7",
+        "counts": {
+          "critical": 97,
+          "high": 653,
+          "medium": 819,
+          "low": 119,
+          "unrated": 0
+        }
+      },
+      {
+        "reference": "postgres:12.4",
+        "counts": {
+          "critical": 37,
+          "high": 257,
+          "medium": 226,
+          "low": 20,
+          "unrated": 8
+        }
+      },
+      {
+        "reference": "python:3.6-slim",
+        "counts": {
+          "critical": 33,
+          "high": 240,
+          "medium": 358,
+          "low": 51,
+          "unrated": 9
+        }
+      },
+      {
+        "reference": "nginx:1.21.0",
+        "counts": {
+          "critical": 27,
+          "high": 142,
+          "medium": 193,
+          "low": 23,
+          "unrated": 9
+        }
+      },
+      {
+        "reference": "httpd:2.4.49",
+        "counts": {
+          "critical": 23,
+          "high": 102,
+          "medium": 109,
+          "low": 17,
+          "unrated": 9
+        }
+      },
+      {
+        "reference": "redis:6.0.5",
+        "counts": {
+          "critical": 22,
+          "high": 153,
+          "medium": 154,
+          "low": 15,
+          "unrated": 8
+        }
+      },
+      {
+        "reference": "ghcr.io/christophetd/log4shell-vulnerable-app:latest",
+        "counts": {
+          "critical": 17,
+          "high": 85,
+          "medium": 171,
+          "low": 160,
+          "unrated": 0
+        }
+      },
+      {
+        "reference": "alpine:3.12",
+        "counts": {
+          "critical": 1,
+          "high": 0,
+          "medium": 0,
+          "low": 0,
+          "unrated": 0
+        }
+      },
+      {
+        "reference": "alpine:3.22",
+        "counts": {
+          "critical": 0,
+          "high": 0,
+          "medium": 1,
+          "low": 0,
+          "unrated": 0
+        }
+      },
+      {
+        "reference": "busybox:1.37",
+        "counts": {
+          "critical": 0,
+          "high": 0,
+          "medium": 0,
+          "low": 0,
+          "unrated": 0
+        }
+      }
+    ],
+    "top_findings": [
+      {
+        "id": "CVE-2021-44228",
+        "severity_label": "Critical",
+        "score": "10.0",
+        "packages": "org.apache.logging.log4j:log4j-core",
+        "fixed_versions": "2.15.0, 2.3.1, 2.12.2",
+        "images": [
+          "ghcr.io/christophetd/log4shell-vulnerable-app:latest"
+        ],
+        "image_count": 1
+      },
+      {
+        "id": "CVE-2025-68121",
+        "severity_label": "Critical",
+        "score": "10.0",
+        "packages": "stdlib",
+        "fixed_versions": "1.24.13, 1.25.7, 1.26.0-rc.3",
+        "images": [
+          "postgres:12.4",
+          "redis:6.0.5"
+        ],
+        "image_count": 2
+      },
+      {
+        "id": "CVE-2014-5044",
+        "severity_label": "Critical",
+        "score": "9.8",
+        "packages": "libgcc, libstdc++",
+        "fixed_versions": "—",
+        "images": [
+          "centos:7"
+        ],
+        "image_count": 1
+      },
+      {
+        "id": "CVE-2014-9939",
+        "severity_label": "Critical",
+        "score": "9.8",
+        "packages": "binutils",
+        "fixed_versions": "—",
+        "images": [
+          "centos:7"
+        ],
+        "image_count": 1
+      },
+      {
+        "id": "CVE-2015-4042",
+        "severity_label": "Critical",
+        "score": "9.8",
+        "packages": "coreutils",
+        "fixed_versions": "—",
+        "images": [
+          "centos:7"
+        ],
+        "image_count": 1
+      },
+      {
+        "id": "CVE-2015-8386",
+        "severity_label": "Critical",
+        "score": "9.8",
+        "packages": "glib2",
+        "fixed_versions": "—",
+        "images": [
+          "centos:7"
+        ],
+        "image_count": 1
+      },
+      {
+        "id": "CVE-2015-8391",
+        "severity_label": "Critical",
+        "score": "9.8",
+        "packages": "glib2",
+        "fixed_versions": "—",
+        "images": [
+          "centos:7"
+        ],
+        "image_count": 1
+      },
+      {
+        "id": "CVE-2016-1000027",
+        "severity_label": "Critical",
+        "score": "9.8",
+        "packages": "org.springframework:spring-web",
+        "fixed_versions": "6.0.0",
+        "images": [
+          "ghcr.io/christophetd/log4shell-vulnerable-app:latest"
+        ],
+        "image_count": 1
+      },
+      {
+        "id": "CVE-2016-4658",
+        "severity_label": "Critical",
+        "score": "9.8",
+        "packages": "libxml2, libxml2-python",
+        "fixed_versions": "2.9.1-6.el7_9.6",
+        "images": [
+          "centos:7"
+        ],
+        "image_count": 1
+      },
+      {
+        "id": "CVE-2016-8618",
+        "severity_label": "Critical",
+        "score": "9.8",
+        "packages": "curl, libcurl",
+        "fixed_versions": "—",
+        "images": [
+          "centos:7"
+        ],
+        "image_count": 1
+      },
+      {
+        "id": "CVE-2016-8619",
+        "severity_label": "Critical",
+        "score": "9.8",
+        "packages": "curl, libcurl",
+        "fixed_versions": "—",
+        "images": [
+          "centos:7"
+        ],
+        "image_count": 1
+      },
+      {
+        "id": "CVE-2016-8622",
+        "severity_label": "Critical",
+        "score": "9.8",
+        "packages": "curl, libcurl",
+        "fixed_versions": "—",
+        "images": [
+          "centos:7"
+        ],
+        "image_count": 1
+      },
+      {
+        "id": "CVE-2016-9063",
+        "severity_label": "Critical",
+        "score": "9.8",
+        "packages": "expat",
+        "fixed_versions": "—",
+        "images": [
+          "centos:7"
+        ],
+        "image_count": 1
+      },
+      {
+        "id": "CVE-2017-1000158",
+        "severity_label": "Critical",
+        "score": "9.8",
+        "packages": "python, python-libs",
+        "fixed_versions": "—",
+        "images": [
+          "centos:7"
+        ],
+        "image_count": 1
+      },
+      {
+        "id": "CVE-2017-10684",
+        "severity_label": "Critical",
+        "score": "9.8",
+        "packages": "ncurses, ncurses-base, ncurses-libs",
+        "fixed_versions": "—",
+        "images": [
+          "centos:7"
+        ],
+        "image_count": 1
+      }
+    ]
+  },
+  "groups": [
+    {
+      "package": "libc-bin",
+      "fixed_version": "2.28-10+deb10u2",
+      "resolves": {
+        "critical": 16,
+        "high": 16,
+        "medium": 16,
+        "low": 8,
+        "unrated": 0
+      },
+      "images": [
+        "httpd:2.4.49",
+        "nginx:1.21.0",
+        "postgres:12.4",
+        "redis:6.0.5"
+      ]
+    },
+    {
+      "package": "libc6",
+      "fixed_version": "2.28-10+deb10u2",
+      "resolves": {
+        "critical": 16,
+        "high": 16,
+        "medium": 16,
+        "low": 8,
+        "unrated": 0
+      },
+      "images": [
+        "httpd:2.4.49",
+        "nginx:1.21.0",
+        "postgres:12.4",
+        "redis:6.0.5"
+      ]
+    },
+    {
+      "package": "libexpat1",
+      "fixed_version": "2.2.6-2+deb10u2",
+      "resolves": {
+        "critical": 8,
+        "high": 12,
+        "medium": 0,
+        "low": 0,
+        "unrated": 0
+      },
+      "images": [
+        "httpd:2.4.49",
+        "nginx:1.21.0"
+      ]
+    }
+  ],
+  "inventory": [
+    {
+      "id": "CVE-2021-44228",
+      "severity_label": "Critical",
+      "score": "10.0",
+      "packages": "org.apache.logging.log4j:log4j-core",
+      "fixed_versions": "2.15.0, 2.3.1, 2.12.2",
+      "images": [
+        "ghcr.io/christophetd/log4shell-vulnerable-app:latest"
+      ],
+      "image_count": 1
+    },
+    {
+      "id": "CVE-2025-68121",
+      "severity_label": "Critical",
+      "score": "10.0",
+      "packages": "stdlib",
+      "fixed_versions": "1.24.13, 1.25.7, 1.26.0-rc.3",
+      "images": [
+        "postgres:12.4",
+        "redis:6.0.5"
+      ],
+      "image_count": 2
+    },
+    {
+      "id": "CVE-2014-5044",
+      "severity_label": "Critical",
+      "score": "9.8",
+      "packages": "libgcc, libstdc++",
+      "fixed_versions": "—",
+      "images": [
+        "centos:7"
+      ],
+      "image_count": 1
+    }
+  ],
+  "reference": "centos:7",
+  "appendix": {
+    "failed_images": [],
+    "stale_images": [],
+    "stale_after_days": 30,
+    "severity_rule": [
+      [
+        "Critical",
+        "≥ 9.0"
+      ],
+      [
+        "High",
+        "7.0 – 8.9"
+      ],
+      [
+        "Medium",
+        "4.0 – 6.9"
+      ],
+      [
+        "Low",
+        "0.1 – 3.9"
+      ]
+    ],
+    "score_sources": [
+      [
+        "nvd",
+        3214
+      ],
+      [
+        "redhat",
+        1092
+      ],
+      [
+        "none",
+        56
+      ],
+      [
+        "bitnami",
+        5
+      ],
+      [
+        "ghsa",
+        1
+      ]
+    ],
+    "limitations": [
+      "limit_recomputed",
+      "limit_sources_differ",
+      "limit_filled_scores",
+      "limit_coverage",
+      "limit_registry_scope",
+      "limit_no_history"
+    ]
+  }
+}
