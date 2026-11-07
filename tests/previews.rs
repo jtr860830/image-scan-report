@@ -13,7 +13,7 @@ fn all_chapter_previews() {
     for (language, suffix) in [(Language::En, "en"), (Language::ZhTw, "zh")] {
         let mut data = data::fixture_data(language, 3);
         let bytes = renderer
-            .render_pdf(&data, None, "2026-11-08T00:00:00Z".parse().unwrap())
+            .render_pdf(&data, None, None, "2026-11-08T00:00:00Z".parse().unwrap())
             .unwrap();
         let pages = pdf::page_texts(&bytes);
         for (name, key) in [
@@ -39,7 +39,7 @@ fn all_chapter_previews() {
                     .0
                     + 1
             };
-            let png = renderer.render_png(&data, None, page, 110.0).unwrap();
+            let png = renderer.render_png(&data, None, None, page, 110.0).unwrap();
             std::fs::write(format!("target/visual/{name}-{suffix}.png"), png).unwrap();
         }
         if suffix == "zh" {
@@ -52,7 +52,7 @@ fn all_chapter_previews() {
                 })
                 .collect();
             let bytes = renderer
-                .render_pdf(&data, None, "2026-11-08T00:00:00Z".parse().unwrap())
+                .render_pdf(&data, None, None, "2026-11-08T00:00:00Z".parse().unwrap())
                 .unwrap();
             let pages = pdf::page_texts(&bytes);
             let page = pages
@@ -65,9 +65,44 @@ fn all_chapter_previews() {
                 + 1;
             std::fs::write(
                 "target/visual/remediation-table-zh.png",
-                renderer.render_png(&data, None, page, 110.0).unwrap(),
+                renderer.render_png(&data, None, None, page, 110.0).unwrap(),
             )
             .unwrap();
         }
+    }
+}
+
+#[test]
+fn theme_branding_previews() {
+    use image_scan_report::render::theme;
+    let mut data = data::fixture_data(Language::En, 3);
+    let logo = theme::Logo {
+        file_name: "logo.png".into(),
+        bytes: pdf::LOGO_PNG.to_vec(),
+    };
+    let mut theme = theme::default_theme();
+    theme.logo = Some(logo.clone());
+    data.theme = theme.to_render_value();
+    let renderer = Renderer::new();
+    let bytes = renderer
+        .render_pdf(
+            &data,
+            Some(&logo),
+            None,
+            "2026-11-08T00:00:00Z".parse().unwrap(),
+        )
+        .unwrap();
+    let last = pdf::page_count(&bytes);
+    assert_eq!(pdf::image_count(&bytes, 1), 0);
+    assert!(pdf::image_count(&bytes, last as u32) > 0);
+    std::fs::create_dir_all("target/visual").unwrap();
+    for (name, page) in [("cover-theme", 1), ("appendix-theme", last)] {
+        std::fs::write(
+            format!("target/visual/{name}.png"),
+            renderer
+                .render_png(&data, Some(&logo), None, page, 110.0)
+                .unwrap(),
+        )
+        .unwrap();
     }
 }

@@ -13,6 +13,7 @@ mod pdf;
 fn fixture(language: Language) -> (Report, RenderOptions, RenderData) {
     let report = data::fixture_report(3);
     let opts = RenderOptions {
+        customer_logo: None,
         language: language.clone(),
         stale_after_days: 30,
         product_name: "judex".into(),
@@ -44,7 +45,7 @@ fn inventory_lists_every_unique_vulnerability() {
     let (report, _, mut data) = fixture(Language::En);
     let renderer = Renderer::new();
     let bytes = renderer
-        .render_pdf(&data, None, report.generated_at)
+        .render_pdf(&data, None, None, report.generated_at)
         .unwrap();
     chapter(&bytes, &data.strings["ch_inventory"]);
     assert!(pdf::text(&bytes).contains(&data.strings["ch_inventory"]));
@@ -58,7 +59,7 @@ fn inventory_lists_every_unique_vulnerability() {
     let removed_id = data.inventory[1].id.clone();
     data.inventory.truncate(1);
     let small = renderer
-        .render_pdf(&data, None, report.generated_at)
+        .render_pdf(&data, None, None, report.generated_at)
         .unwrap();
     let (_, text) = chapter(&small, &data.strings["ch_inventory"]);
     let inventory_text = text.split(&data.strings["ch_images"]).next().unwrap();
@@ -83,7 +84,7 @@ fn long_identifiers_stay_inside_the_page() {
     data.images[0].findings.truncate(1);
     data.images[0].findings[0].fixed_version = version;
     let bytes = Renderer::new()
-        .render_pdf(&data, None, report.generated_at)
+        .render_pdf(&data, None, None, report.generated_at)
         .unwrap();
     for (width, height) in pdf::page_sizes(&bytes) {
         assert!((width - 595.276).abs() < 0.5, "width {width}");
@@ -100,7 +101,7 @@ fn inventory_caps_images_and_handles_empty_inventory() {
     data.inventory[0].image_count = 25;
     let renderer = Renderer::new();
     let bytes = renderer
-        .render_pdf(&data, None, report.generated_at)
+        .render_pdf(&data, None, None, report.generated_at)
         .unwrap();
     let (_, text) = chapter(&bytes, &data.strings["ch_inventory"]);
     assert!(text.contains("affected19"));
@@ -108,7 +109,7 @@ fn inventory_caps_images_and_handles_empty_inventory() {
     assert!(text.contains("+5"));
     data.inventory.clear();
     let bytes = renderer
-        .render_pdf(&data, None, report.generated_at)
+        .render_pdf(&data, None, None, report.generated_at)
         .unwrap();
     let (_, text) = chapter(&bytes, &data.strings["ch_inventory"]);
     assert!(text.contains(&data.strings["no_findings"]));

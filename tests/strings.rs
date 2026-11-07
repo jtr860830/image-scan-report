@@ -31,7 +31,7 @@ fn both_locales_have_exactly_the_key_set() {
 fn zh_tw_uses_taiwanese_terms() {
     let strings = load(Language::ZhTw);
     let values = strings.values().cloned().collect::<Vec<_>>().join(" ");
-    for term in ["映像檔", "弱點", "套件", "修補版本", "稽核"] {
+    for term in ["映像檔", "弱點", "套件", "修補版本"] {
         assert!(values.contains(term), "missing {term}");
     }
     for term in ["镜像", "漏洞", "软件包", "鏡像", "軟體包"] {
@@ -46,8 +46,8 @@ fn placeholders_match_between_locales() {
     for key in KEYS {
         let expected: BTreeSet<_> = match *key {
             "summary_lede" => vec!["images", "unique"],
-            "fact_fixable" => vec!["fixable", "percent"],
-            "fact_high_or_worse" => vec!["count", "total"],
+            "fact_fixable" => vec!["percent"],
+            "fact_high_or_worse" => vec!["total"],
             "remediation_resolves" => vec!["critical", "high", "medium", "low"],
             "remediation_more_lede"
             | "remediation_affects"

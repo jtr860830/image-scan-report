@@ -9,6 +9,7 @@ use std::collections::{BTreeMap, HashMap};
 pub const PLACEHOLDER: &str = "—";
 #[derive(Clone, Debug)]
 pub struct RenderOptions {
+    pub customer_logo: Option<super::theme::Logo>,
     pub language: Language,
     pub stale_after_days: u32,
     pub product_name: String,
@@ -98,7 +99,6 @@ pub struct RemediationRow {
 #[derive(Serialize, Debug, Clone, PartialEq)]
 pub struct ImageDetail {
     pub reference: String,
-    pub tags: Vec<String>,
     pub digest: String,
     pub platform: String,
     pub os: String,
@@ -125,11 +125,16 @@ pub struct FindingRow {
     pub basis: String,
     pub description: String,
     pub show_description: bool,
-    pub links: Vec<String>,
+}
+#[derive(Serialize, Debug, Clone, PartialEq)]
+pub struct FailedImage {
+    pub reference: String,
+    pub state: String,
+    pub error: String,
 }
 #[derive(Serialize, Debug, Clone, PartialEq)]
 pub struct Appendix {
-    pub failed_images: Vec<(String, String)>,
+    pub failed_images: Vec<FailedImage>,
     pub stale_images: Vec<(String, String)>,
     pub stale_after_days: u32,
     pub severity_rule: Vec<(String, String)>,
@@ -219,7 +224,6 @@ fn finding_row(f: &Finding) -> FindingRow {
         .into(),
         description,
         show_description: matches!(f.severity, Severity::Critical | Severity::High),
-        links: f.links.iter().map(|s| sanitize(s)).collect(),
     }
 }
 pub fn build(
@@ -235,7 +239,7 @@ pub fn build(
             id: sanitize(&v.id),
             severity_label: v.severity.label().into(),
             severity_key: v.severity.label().to_lowercase(),
-            score: score(v.score_v3),
+            score: score(v.score),
             packages: sanitize(&v.packages.join(", ")),
             fixed_versions: if v.fixed_versions.is_empty() {
                 PLACEHOLDER.into()
@@ -272,7 +276,10 @@ pub fn build(
             }
             .into(),
             organisation: sanitize(&report.organisation),
-            logo: None,
+            logo: opts
+                .customer_logo
+                .as_ref()
+                .map(|logo| logo.report_file_name()),
         },
         source: SourceFacts {
             display_name: sanitize(&report.source.display_name),
@@ -384,7 +391,16 @@ fn appendix(
             .images
             .iter()
             .filter(|i| i.scan.state != ScanState::Ok)
-            .map(|i| (sanitize(&i.reference), display(i.scan.error.as_deref())))
+            .map(|i| FailedImage {
+                reference: sanitize(&i.reference),
+                state: if i.scan.state == ScanState::Failed {
+                    "failed"
+                } else {
+                    "not_scanned"
+                }
+                .into(),
+                error: display(i.scan.error.as_deref()),
+            })
             .collect(),
         stale_images: views::stale_images(
             &report.images,
@@ -400,6 +416,7 @@ fn appendix(
             ("High", "7.0 – 8.9"),
             ("Medium", "4.0 – 6.9"),
             ("Low", "0.1 – 3.9"),
+            ("Unrated", "—"),
         ]
         .into_iter()
         .map(|(a, b)| (a.into(), b.into()))
@@ -452,7 +469,6 @@ fn image_details(
             });
             Some(ImageDetail {
                 reference: sanitize(&image.reference),
-                tags: sanitized_strings(&image.tags),
                 digest: display(image.digest.as_deref()),
                 platform: display(image.platform.as_deref()),
                 os: display(image.os.as_deref()),

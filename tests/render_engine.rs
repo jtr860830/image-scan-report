@@ -14,6 +14,7 @@ mod pdf;
 fn fixture(language: Language) -> (Report, RenderOptions, RenderData) {
     let report = data::fixture_report(3);
     let opts = RenderOptions {
+        customer_logo: None,
         language: language.clone(),
         stale_after_days: 30,
         product_name: "judex".into(),
@@ -51,7 +52,7 @@ fn renders_cover_and_summary_document() {
 fn zh_tw_cover_uses_cjk_font() {
     let (report, _, data) = fixture(Language::ZhTw);
     let bytes = Renderer::new()
-        .render_pdf(&data, None, report.generated_at)
+        .render_pdf(&data, None, None, report.generated_at)
         .unwrap();
     assert!(pdf::text(&bytes).contains("容器映像檔弱點掃描報告"));
     assert!(String::from_utf8_lossy(&bytes).contains("NotoSansTC"));
@@ -62,10 +63,10 @@ fn render_is_deterministic() {
     let renderer = Renderer::new();
     assert_eq!(
         renderer
-            .render_pdf(&data, None, report.generated_at)
+            .render_pdf(&data, None, None, report.generated_at)
             .unwrap(),
         renderer
-            .render_pdf(&data, None, report.generated_at)
+            .render_pdf(&data, None, None, report.generated_at)
             .unwrap()
     );
 }
@@ -75,7 +76,7 @@ fn compile_error_names_file_and_line() {
     let renderer =
         Renderer::with_sources(&[("report.typ", "// Valid first line\n#missing()".into())]);
     let err = renderer
-        .render_pdf(&data, None, report.generated_at)
+        .render_pdf(&data, None, None, report.generated_at)
         .unwrap_err();
     assert!(matches!(err, RenderError::Compile(_)));
     assert!(err.to_string().contains("report.typ:2"), "{err}");
@@ -83,7 +84,9 @@ fn compile_error_names_file_and_line() {
 #[test]
 fn preview_png_is_written() {
     let (_, _, data) = fixture(Language::En);
-    let bytes = Renderer::new().render_png(&data, None, 1, 72.0).unwrap();
+    let bytes = Renderer::new()
+        .render_png(&data, None, None, 1, 72.0)
+        .unwrap();
     assert!(bytes.starts_with(b"\x89PNG\r\n\x1a\n"));
     std::fs::create_dir_all("target/visual").unwrap();
     std::fs::write("target/visual/cover.png", bytes).unwrap();
@@ -104,7 +107,7 @@ fn body_frame_and_template_helpers_work() {
     );
     let renderer = Renderer::with_sources(&[("report.typ", source)]);
     let bytes = renderer
-        .render_pdf(&data, None, report.generated_at)
+        .render_pdf(&data, None, None, report.generated_at)
         .unwrap();
     assert_eq!(pdf::page_count(&bytes), 4);
     let text = pdf::text(&bytes);
@@ -119,12 +122,19 @@ fn body_frame_and_template_helpers_work() {
 fn logo_is_passed_through_public_entry_point() {
     let (report, opts, _) = fixture(Language::En);
     let mut theme = theme::default_theme();
+    theme.product.name = "Theme Product".into();
+    theme.product.url = Some("https://example.test".into());
     theme.logo = Some(theme::Logo {
-        file_name: "logo.svg".into(),
-        bytes: br##"<svg xmlns="http://www.w3.org/2000/svg" width="80" height="40"><rect width="80" height="40" fill="#4263eb"/></svg>"##.to_vec(),
+        file_name: "logo.png".into(),
+        bytes: pdf::LOGO_PNG.to_vec(),
     });
     let bytes = image_scan_report::render::render_pdf(&report, &opts, &theme).unwrap();
     assert!(pdf::page_count(&bytes) >= 2);
+    let pages = pdf::page_texts(&bytes);
+    assert!(pages.last().unwrap().contains("Theme Product"));
+    assert!(pages.last().unwrap().contains("https://example.test"));
+    assert_eq!(pdf::image_count(&bytes, 1), 0);
+    assert!(pdf::image_count(&bytes, pdf::page_count(&bytes) as u32) > 0);
     let data = model::build(
         &report,
         &opts,
@@ -133,7 +143,7 @@ fn logo_is_passed_through_public_entry_point() {
     );
     assert!(
         Renderer::new()
-            .render_png(&data, theme.logo.as_ref(), 1, 72.0)
+            .render_png(&data, theme.logo.as_ref(), None, 1, 72.0)
             .unwrap()
             .starts_with(b"\x89PNG")
     );
@@ -145,7 +155,7 @@ fn empty_scan_range_and_external_text_are_safe() {
     data.images.clear();
     data.scope = "#panic(\"must remain literal\")".into();
     let bytes = Renderer::new()
-        .render_pdf(&data, None, report.generated_at)
+        .render_pdf(&data, None, None, report.generated_at)
         .unwrap();
     let text = pdf::text(&bytes);
     assert!(text.contains("#panic(\"must remain literal\")"), "{text}");
@@ -158,13 +168,13 @@ fn preview_rejects_invalid_page_and_resolution() {
     let renderer = Renderer::new();
     for page in [0, 999] {
         assert!(matches!(
-            renderer.render_png(&data, None, page, 72.0),
+            renderer.render_png(&data, None, None, page, 72.0),
             Err(RenderError::Data(_))
         ));
     }
     for ppi in [0.0, -1.0, f32::NAN, f32::INFINITY] {
         assert!(matches!(
-            renderer.render_png(&data, None, 1, ppi),
+            renderer.render_png(&data, None, None, 1, ppi),
             Err(RenderError::Data(_))
         ));
     }
@@ -178,7 +188,7 @@ fn missing_translation_names_key() {
         "#import \"lib/fmt.typ\": t\n#t((:), \"absent_key\")".into(),
     )]);
     let err = renderer
-        .render_pdf(&data, None, report.generated_at)
+        .render_pdf(&data, None, None, report.generated_at)
         .unwrap_err();
     assert!(
         err.to_string().contains("missing string key: absent_key"),

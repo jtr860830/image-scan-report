@@ -14,6 +14,7 @@ mod pdf;
 fn fixture(language: Language) -> (Report, RenderOptions, RenderData) {
     let report = data::fixture_report(3);
     let opts = RenderOptions {
+        customer_logo: None,
         language: language.clone(),
         stale_after_days: 30,
         product_name: "judex".into(),
@@ -29,7 +30,7 @@ fn fixture(language: Language) -> (Report, RenderOptions, RenderData) {
 fn summary_page_has_counts_and_tables() {
     let (report, _, data) = fixture(Language::En);
     let bytes = Renderer::new()
-        .render_pdf(&data, None, report.generated_at)
+        .render_pdf(&data, None, None, report.generated_at)
         .unwrap();
     assert!(pdf::page_count(&bytes) >= 3);
     let doc = lopdf::Document::load_mem(&bytes).unwrap();
@@ -75,15 +76,13 @@ fn summary_handles_zero_findings() {
         theme::default_theme().to_render_value(),
     );
     let bytes = Renderer::new()
-        .render_pdf(&data, None, report.generated_at)
+        .render_pdf(&data, None, None, report.generated_at)
         .unwrap();
     let text = pdf::text(&bytes);
     assert!(text.contains(&data.strings["no_findings"]), "{text}");
     assert!(text.contains(&data.strings["sec_top_images"]));
     assert!(!text.contains(&data.strings["sec_top_findings"]));
-    let fact = data.strings["fact_fixable"]
-        .replace("{fixable}", "0")
-        .replace("{percent}", "0");
+    let fact = data.strings["fact_fixable"].replace("{percent}", "0");
     assert!(!text.contains(&fact), "{text}");
 }
 
@@ -104,7 +103,7 @@ fn summary_severity_chips_use_keys_and_fit() {
     }
     let renderer = Renderer::new();
     let bytes = renderer
-        .render_pdf(&data, None, report.generated_at)
+        .render_pdf(&data, None, None, report.generated_at)
         .unwrap();
     let text = pdf::text(&bytes);
     assert!(text.contains("Critical"));
@@ -112,7 +111,7 @@ fn summary_severity_chips_use_keys_and_fit() {
     std::fs::create_dir_all("target/visual").unwrap();
     std::fs::write(
         "target/visual/summary-chips.png",
-        renderer.render_png(&data, None, 3, 110.0).unwrap(),
+        renderer.render_png(&data, None, None, 3, 110.0).unwrap(),
     )
     .unwrap();
 }

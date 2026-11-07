@@ -7,7 +7,6 @@ use crate::model::Language;
 /// Every supported translation key, in report order.
 pub const KEYS: &[&str] = &[
     "report_title",
-    "cover_subtitle",
     "cover_scope",
     "cover_source",
     "cover_images",
@@ -85,7 +84,6 @@ pub const KEYS: &[&str] = &[
     "limit_coverage",
     "limit_registry_scope",
     "limit_no_history",
-    "placeholder",
     "generated_by",
     "page_of",
     "basis_cvss3",

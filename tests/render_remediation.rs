@@ -13,6 +13,7 @@ mod pdf;
 fn fixture(language: Language) -> (Report, RenderOptions, RenderData) {
     let report = data::fixture_report(3);
     let opts = RenderOptions {
+        customer_logo: None,
         language: language.clone(),
         stale_after_days: 30,
         product_name: "judex".into(),
@@ -37,7 +38,7 @@ fn chapter(bytes: &[u8], title: &str) -> (u32, String) {
 fn remediation_lists_groups_in_rank_order() {
     let (report, _, data) = fixture(Language::En);
     let bytes = Renderer::new()
-        .render_pdf(&data, None, report.generated_at)
+        .render_pdf(&data, None, None, report.generated_at)
         .unwrap();
     let (_, text) = chapter(&bytes, &data.strings["ch_remediation"]);
     let first = &data.remediation.groups[0];
@@ -58,9 +59,11 @@ fn remediation_lists_groups_in_rank_order() {
 
 #[test]
 fn remediation_unfixable_table_present() {
-    let (report, _, data) = fixture(Language::En);
+    let (report, _, mut data) = fixture(Language::En);
+    data.remediation.unfixable_total = 1;
+    data.remediation.unfixable_by_status = vec![("affected".into(), 1)];
     let bytes = Renderer::new()
-        .render_pdf(&data, None, report.generated_at)
+        .render_pdf(&data, None, None, report.generated_at)
         .unwrap();
     let (_, text) = chapter(&bytes, &data.strings["ch_remediation"]);
     assert!(text.contains(&data.strings["remediation_unfixable_title"]));
@@ -85,7 +88,7 @@ fn remediation_handles_empty_groups_and_status_fallbacks() {
     data.remediation.unfixable_by_status = keys.iter().map(|key| ((*key).into(), 1234)).collect();
     data.remediation.unfixable_total = 9872;
     let bytes = Renderer::new()
-        .render_pdf(&data, None, report.generated_at)
+        .render_pdf(&data, None, None, report.generated_at)
         .unwrap();
     let (_, text) = chapter(&bytes, &data.strings["ch_remediation"]);
     assert!(text.contains(&data.strings["no_findings"]));
@@ -112,7 +115,7 @@ fn remediation_caps_images_and_formats_counts() {
     group.images = (0..41).map(|i| format!("unique-image-{i:02}")).collect();
     group.resolves.critical = 1234;
     let bytes = Renderer::new()
-        .render_pdf(&data, None, report.generated_at)
+        .render_pdf(&data, None, None, report.generated_at)
         .unwrap();
     let (_, text) = chapter(&bytes, &data.strings["ch_remediation"]);
     assert!(text.contains("unique-image-11"));
@@ -135,7 +138,7 @@ fn further_groups_use_compact_table() {
         })
         .collect();
     let bytes = Renderer::new()
-        .render_pdf(&data, None, report.generated_at)
+        .render_pdf(&data, None, None, report.generated_at)
         .unwrap();
     let (_, text) = chapter(&bytes, &data.strings["ch_remediation"]);
     let text = text.replace('\u{200b}', "");
@@ -147,4 +150,23 @@ fn further_groups_use_compact_table() {
         .filter(|c| !c.is_whitespace())
         .collect();
     assert!(tail.contains("package-30"), "{tail}");
+}
+
+#[test]
+fn empty_unfixable_statuses_show_dash_without_headers() {
+    let (report, _, mut data) = fixture(Language::En);
+    data.remediation.groups.clear();
+    data.remediation.unfixable_total = 0;
+    data.remediation.unfixable_by_status.clear();
+    let bytes = Renderer::new()
+        .render_pdf(&data, None, None, report.generated_at)
+        .unwrap();
+    let (_, text) = chapter(&bytes, &data.strings["ch_remediation"]);
+    let tail = text
+        .split(&data.strings["remediation_unfixable_title"])
+        .nth(1)
+        .unwrap();
+    let tail = tail.split(&data.strings["ch_inventory"]).next().unwrap();
+    assert!(tail.contains('—'), "{tail}");
+    assert!(!tail.contains(&data.strings["col_status"]), "{tail}");
 }

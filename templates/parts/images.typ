@@ -13,7 +13,7 @@
     #heading(level: 2, text(size: 13pt, identifier(theme, image.reference)))
     #text(size: 8pt)[
       #grid(
-        columns: (3.6cm, 1fr), row-gutter: 2pt,
+        columns: (3.6cm, 1fr), row-gutter: 3.5pt,
         ..(
           ("image_meta_digest", identifier(theme, image.digest)),
           ("image_meta_platform", image.platform),
@@ -34,7 +34,7 @@
     if image.scan_state != "ok" {
       v(6pt)
       block(fill: rgb(theme.colors.tint_high), radius: 6pt)[
-        #card(theme)[#text(fill: rgb(theme.colors.high), tr("image_scan_failed", error: image.scan_error))]
+        #card(theme)[#text(fill: rgb(theme.colors.high), if image.scan_state == "not_scanned" { tr("scan_state_not_scanned") } else { tr("image_scan_failed", error: image.scan_error) })]
       ]
     } else {
       section-title(theme, tr("image_findings_title"))
@@ -47,7 +47,11 @@
           table.header(..("col_id", "col_severity", "col_cvss", "col_package", "col_installed", "col_fixed").map(key => header(theme, tr(key)))),
           ..image.findings.map(row => (
             identifier(theme, row.id), chip(theme, row.severity_label, row.severity_key),
-            row.score, text(hyphenate: false, breakable-id(row.package)),
+            [#{row.score}#if row.basis == "cvss2" {
+              text(size: 6.5pt, fill: rgb(theme.colors.muted), " " + tr("basis_cvss2"))
+            } else if row.basis == "scanner_label" {
+              text(size: 6.5pt, fill: rgb(theme.colors.muted), " " + tr("basis_scanner_label") + ": " + row.scanner_severity)
+            }], text(hyphenate: false, breakable-id(row.package)),
             identifier(theme, row.installed_version), identifier(theme, row.fixed_version),
           ).map(cell => table.cell(stroke: if row.show_description and row.description != "" { (bottom: none) } else { (bottom: 0.4pt + rgb(theme.colors.rule)) }, cell)) + if not row.show_description or row.description == "" { () } else {
             (table.cell(colspan: 6, text(size: 7.5pt, fill: rgb(theme.colors.secondary), hyphenate: true, row.description)),)

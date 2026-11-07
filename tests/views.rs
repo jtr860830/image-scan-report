@@ -88,6 +88,7 @@ fn unique_vulnerabilities_merge_images_and_take_max_severity() {
             id: "CVE-1".into(),
             severity: Critical,
             score_v3: Some(9.1),
+            score: Some(9.1),
             packages: vec!["a".into(), "z".into()],
             fixed_versions: vec!["2".into(), "3".into()],
             images: vec!["img-a".into(), "img-b".into()]
@@ -215,3 +216,37 @@ fn stale_images_by_threshold_and_missing_time() {
     );
     assert!(stale_images(&[], now, 7).is_empty());
 }
+
+#[test]
+fn v2_only_scores_rank_and_display() {
+    let mut v2 = f("v2", "a", High, None, "p", None);
+    v2.score_v2 = Some(8.8);
+    let findings = vec![f("v3", "a", High, Some(7.5), "p", None), v2.clone()];
+    let rows = unique_vulnerabilities(&findings);
+    assert_eq!(rows[0].id, "v2");
+    assert_eq!(rows[0].score, Some(8.8));
+    assert_eq!(rows[0].score_v3, None);
+    let mut report = data::fixture_report(1);
+    v2.image = report.images[0].reference.clone();
+    report.findings = vec![v2];
+    let opts = image_scan_report::render::model::RenderOptions {
+        customer_logo: None,
+        language: image_scan_report::model::Language::En,
+        stale_after_days: 30,
+        product_name: "judex".into(),
+        product_version: "test".into(),
+        top_images: 10,
+        top_findings: 15,
+    };
+    let rendered = image_scan_report::render::model::build(
+        &report,
+        &opts,
+        Default::default(),
+        serde_json::Value::Null,
+    );
+    assert_eq!(rendered.inventory[0].score, "8.8");
+    assert_eq!(rendered.summary.top_findings[0].score, "8.8");
+}
+#[allow(dead_code)]
+#[path = "support/data.rs"]
+mod data;

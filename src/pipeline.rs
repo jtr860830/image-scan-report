@@ -81,6 +81,7 @@ fn render_options(
     product: &ProductInfo,
 ) -> crate::render::model::RenderOptions {
     crate::render::model::RenderOptions {
+        customer_logo: None,
         language: cfg.language.clone(),
         stale_after_days: cfg.stale_after_days,
         product_name: product.name.clone(),
@@ -92,6 +93,7 @@ fn render_options(
 
 struct Inputs {
     theme: crate::render::theme::Theme,
+    customer_logo: Option<crate::render::theme::Logo>,
     source_description: String,
     report: Report,
     sinks: Vec<Box<dyn ReportSink>>,
@@ -101,11 +103,19 @@ struct Inputs {
 /// theme -> sinks -> source error order for every pipeline entry point.
 fn load_inputs(cfg: &Config, now: DateTime<Utc>) -> Result<Inputs, RunError> {
     let theme = crate::render::theme::load(cfg.theme.path.as_deref()).map_err(ConfigError::from)?;
+    let customer_logo = cfg
+        .report
+        .logo
+        .as_deref()
+        .map(crate::render::theme::Logo::load)
+        .transpose()
+        .map_err(ConfigError::from)?;
     let sinks = build_sinks(&cfg.output)?;
     let source = build_source(&cfg.source)?;
     let source_description = source.describe();
     let report = assemble_report(source.fetch()?, &cfg.report, now);
     Ok(Inputs {
+        customer_logo,
         theme,
         source_description,
         report,
@@ -144,8 +154,14 @@ pub fn render_data(
     now: DateTime<Utc>,
     product: &ProductInfo,
 ) -> Result<crate::render::model::RenderData, RunError> {
-    let Inputs { theme, report, .. } = load_inputs(cfg, now)?;
-    let opts = render_options(&cfg.report, product);
+    let Inputs {
+        theme,
+        report,
+        customer_logo,
+        ..
+    } = load_inputs(cfg, now)?;
+    let mut opts = render_options(&cfg.report, product);
+    opts.customer_logo = customer_logo;
     Ok(crate::render::model::build(
         &report,
         &opts,
@@ -160,6 +176,7 @@ pub fn run(
     product: &ProductInfo,
 ) -> Result<RunSummary, RunError> {
     let Inputs {
+        customer_logo,
         theme,
         report,
         sinks,
@@ -178,7 +195,8 @@ pub fn run(
         });
     }
     if cfg.report.pdf {
-        let opts = render_options(&cfg.report, product);
+        let mut opts = render_options(&cfg.report, product);
+        opts.customer_logo = customer_logo;
         let bytes = crate::render::render_pdf(&report, &opts, &theme)
             .map_err(|err| RunError::Render(err.to_string()))?;
         artifacts.push(Artifact {

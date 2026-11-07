@@ -27,6 +27,7 @@ fn budget(minimum: usize, seconds: f64) {
         repetition += 1;
     }
     let opts = RenderOptions {
+        customer_logo: None,
         language: Language::ZhTw,
         stale_after_days: 30,
         product_name: "judex".into(),

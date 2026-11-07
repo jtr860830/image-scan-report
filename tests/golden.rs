@@ -19,7 +19,7 @@ fn golden(language: Language) -> &'static (String, usize) {
 fn render_golden(language: Language) -> (String, usize) {
     let data = data::fixture_data(language, 3);
     let bytes = Renderer::new()
-        .render_pdf(&data, None, "2026-11-08T00:00:00Z".parse().unwrap())
+        .render_pdf(&data, None, None, "2026-11-08T00:00:00Z".parse().unwrap())
         .unwrap();
     let pages = pdf::page_texts(&bytes);
     let text = [0, 1, 2, pages.len() - 1]

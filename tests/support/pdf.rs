@@ -34,3 +34,16 @@ pub fn page_texts(pdf: &[u8]) -> Vec<String> {
         .map(|page| doc.extract_text(&[*page]).unwrap())
         .collect()
 }
+
+#[allow(dead_code)]
+pub const LOGO_PNG: &[u8] = &[
+    137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 1, 0, 0, 0, 1, 8, 0, 0,
+    0, 0, 58, 126, 155, 85, 0, 0, 0, 10, 73, 68, 65, 84, 120, 156, 99, 96, 0, 0, 0, 2, 0, 1, 72,
+    175, 164, 113, 0, 0, 0, 0, 73, 69, 78, 68, 174, 66, 96, 130,
+];
+
+#[allow(dead_code)]
+pub fn image_count(bytes: &[u8], page: u32) -> usize {
+    let doc = lopdf::Document::load_mem(bytes).unwrap();
+    doc.get_page_images(doc.get_pages()[&page]).unwrap().len()
+}

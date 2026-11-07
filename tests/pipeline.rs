@@ -260,3 +260,33 @@ fn write_render_data_returns_summary() {
     assert_eq!(data["summary"]["images_total"], summary.images);
     assert_eq!(data["summary"]["findings_total"], summary.findings);
 }
+
+#[test]
+fn customer_logo_renders_on_cover_and_gif_exits_2() {
+    let input = reduced_fixtures::input();
+    let output = tempfile::tempdir().unwrap();
+    let assets = tempfile::tempdir().unwrap();
+    let logo = assets.path().join("customer.png");
+    std::fs::write(&logo, pdf::LOGO_PNG).unwrap();
+    let mut cfg = config(input.path(), output.path());
+    cfg.report.pdf = true;
+    cfg.report.json = false;
+    cfg.report.logo = Some(logo);
+    run(&cfg, now(), &product()).unwrap();
+    let path = std::fs::read_dir(output.path())
+        .unwrap()
+        .next()
+        .unwrap()
+        .unwrap()
+        .path();
+    let bytes = std::fs::read(path).unwrap();
+    assert!(pdf::image_count(&bytes, 1) > 0);
+    let data = image_scan_report::pipeline::render_data(&cfg, now(), &product()).unwrap();
+    assert_eq!(data.meta.logo.as_deref(), Some("report-logo.png"));
+    let gif = assets.path().join("customer.gif");
+    std::fs::write(&gif, b"GIF89a").unwrap();
+    cfg.report.logo = Some(gif);
+    let err = run(&cfg, now(), &product()).unwrap_err();
+    assert_eq!(err.exit_code(), 2);
+    assert!(matches!(err, RunError::Config(_)));
+}

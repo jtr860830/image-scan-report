@@ -5,8 +5,8 @@ It normalises Trivy and NeuVector scanner JSON into a shared model without scann
 
 This milestone supports file sources and PDF and JSON output to the filesystem.
 Harbor and NeuVector API sources, and HTTP upload are in progress; see the
-[product specification](docs/superpowers/specs/2026-11-07-product-redesign-design.md)
-and [core pipeline plan](docs/superpowers/plans/2026-11-07-core-pipeline.md).
+[design document](docs/superpowers/specs/2026-11-07-product-redesign-design.md)
+and [implementation plans](docs/superpowers/plans/2026-11-07-core-pipeline.md).
 
 ## Quick start
 
@@ -150,3 +150,5 @@ the template root with the filename recorded in the data.
 
 See [development notes](docs/development.md) for checks, snapshots and module layout.
 Licensed under [Apache-2.0](LICENSE).
+
+Set `report.logo` to a local PNG or SVG file to place the customer logo on the cover. Theme logos appear beside the product credit in the appendix.

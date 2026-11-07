@@ -28,4 +28,4 @@ jobs:
       - name: Install Rust toolchain
         run: rustup toolchain install
       - uses: Swatinem/rust-cache@v2
-      - run: cargo test --release --test perf -- --ignored --nocapture
+      - run: cargo test --release --test perf -- --ignored --nocapture --test-threads=1

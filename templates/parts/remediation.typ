@@ -1,5 +1,5 @@
 #import "../lib/fmt.typ": t, num, status-label, breakable-id
-#import "../lib/theme.typ": mono, section-title, hairline-table, card, secondary, header
+#import "../lib/theme.typ": mono, section-title, hairline-table, card, secondary, header, muted
 
 #let remediation(data) = {
   pagebreak(weak: true)
@@ -45,8 +45,12 @@
   section-title(theme, tr("remediation_unfixable_title"))
   secondary(theme, tr("remediation_unfixable_lede", count: num(r.unfixable_total)))
   v(6pt)
+  if r.unfixable_by_status.len() == 0 {
+    muted(theme, "—")
+  } else {
   hairline-table(theme,
     columns: (1fr, auto), align: (left, right),
     table.header(header(theme, tr("col_status")), header(theme, tr("col_count"))),
     ..r.unfixable_by_status.map(row => (status-label(data.strings, row.at(0)), num(row.at(1)))).flatten())
+  }
 }

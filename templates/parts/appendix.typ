@@ -39,9 +39,9 @@
     muted(theme, "—")
   } else {
     hairline-table(theme,
-      columns: (1fr, 1fr),
-      table.header(header(theme, tr("col_image")), header(theme, tr("col_error"))),
-      ..a.failed_images.map(row => (identifier(theme, row.at(0)), row.at(1))).flatten())
+      columns: (1fr, auto, 1fr),
+      table.header(header(theme, tr("col_image")), header(theme, tr("col_status")), header(theme, tr("col_error"))),
+      ..a.failed_images.map(row => (identifier(theme, row.reference), tr("scan_state_" + row.state), row.error)).flatten())
   }
   section-title(theme, tr("appendix_stale_title", days: a.stale_after_days))
   if a.stale_images.len() == 0 {
@@ -55,5 +55,11 @@
   section-title(theme, tr("appendix_limitations_title"))
   enum(..a.limitations.map(key => tr(key)))
   v(8pt)
-  text(size: 8pt, fill: rgb(theme.colors.muted), tr("generated_by", product: data.meta.product_name, version: data.meta.product_version))
+  let credit = tr("generated_by", product: theme.product.name, version: data.meta.product_version)
+  if theme.product.url != none and theme.product.url != "" {
+    credit += " · " + theme.product.url
+  }
+  grid(columns: (auto, 1fr), column-gutter: 6pt, align: horizon,
+    if theme.logo != none { image("/" + theme.logo, height: 6mm) },
+    text(size: 8pt, fill: rgb(theme.colors.muted), credit))
 }

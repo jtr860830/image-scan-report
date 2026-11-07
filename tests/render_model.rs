@@ -8,6 +8,7 @@ use image_scan_report::{
 use std::collections::BTreeMap;
 fn opts() -> RenderOptions {
     RenderOptions {
+        customer_logo: None,
         language: Language::En,
         stale_after_days: 30,
         product_name: "judex".into(),

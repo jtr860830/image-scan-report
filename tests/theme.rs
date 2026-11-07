@@ -172,3 +172,17 @@ fn render_value_and_config_errors() {
     );
     assert!(serde_yaml_ng::from_str::<Config>(&yaml).is_err());
 }
+
+#[test]
+fn unbundled_font_is_invalid() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(
+        dir.path().join("theme.toml"),
+        include_str!("../themes/default/theme.toml").replace("Inter", "Helvetica"),
+    )
+    .unwrap();
+    assert!(
+        matches!(theme::load(Some(dir.path())), Err(ThemeError::Invalid(_, m))
+        if m.contains("Helvetica") && m.contains("Inter"))
+    );
+}

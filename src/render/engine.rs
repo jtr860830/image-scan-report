@@ -65,9 +65,12 @@ impl Renderer {
     pub fn new() -> Self {
         static POOL: Once = Once::new();
         POOL.call_once(|| {
-            let _ = rayon::ThreadPoolBuilder::new()
+            if let Err(error) = rayon::ThreadPoolBuilder::new()
                 .num_threads(1)
-                .build_global();
+                .build_global()
+            {
+                tracing::warn!(%error, "could not configure the global rendering thread pool");
+            }
         });
         Self {
             sources: SOURCES
@@ -131,11 +134,16 @@ impl Renderer {
         &self,
         data: &RenderData,
         logo: Option<&Logo>,
+        customer_logo: Option<&Logo>,
     ) -> Result<PagedDocument, RenderError> {
         let bytes = serde_json::to_vec(data).map_err(|e| RenderError::Data(e.to_string()))?;
         let mut files = vec![("data.json", bytes.as_slice())];
         if let Some(logo) = logo {
             files.push((&logo.file_name, &logo.bytes));
+        }
+        let customer_name = customer_logo.map(Logo::report_file_name);
+        if let Some(logo) = customer_logo {
+            files.push((customer_name.as_deref().unwrap(), &logo.bytes));
         }
         let main = self
             .sources
@@ -167,9 +175,10 @@ impl Renderer {
         &self,
         data: &RenderData,
         logo: Option<&Logo>,
+        customer_logo: Option<&Logo>,
         generated_at: DateTime<Utc>,
     ) -> Result<Vec<u8>, RenderError> {
-        let doc = self.compile(data, logo)?;
+        let doc = self.compile(data, logo, customer_logo)?;
         let date = Datetime::from_ymd_hms(
             generated_at.year(),
             generated_at.month() as u8,
@@ -202,6 +211,7 @@ impl Renderer {
         &self,
         data: &RenderData,
         logo: Option<&Logo>,
+        customer_logo: Option<&Logo>,
         page: usize,
         ppi: f32,
     ) -> Result<Vec<u8>, RenderError> {
@@ -210,7 +220,7 @@ impl Renderer {
                 "preview ppi must be finite and positive".into(),
             ));
         }
-        let doc = self.compile(data, logo)?;
+        let doc = self.compile(data, logo, customer_logo)?;
         let page = page
             .checked_sub(1)
             .and_then(|i| doc.pages().get(i))

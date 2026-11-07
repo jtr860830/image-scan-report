@@ -7,9 +7,9 @@
   let scan-range = if dates.len() > 0 { dates.first() + " – " + dates.last() } else { "—" }
   v(18mm)
   muted(data.theme, text(tracking: 1pt, data.meta.organisation))
-  if data.theme.logo != none {
+  if data.meta.logo != none {
     v(8mm)
-    image("/" + data.theme.logo, height: 14mm)
+    image("/" + data.meta.logo, height: 14mm)
   }
   v(20mm)
   block(width: 100%)[#text(size: 26pt, weight: "bold", t(strings, "report_title"))]

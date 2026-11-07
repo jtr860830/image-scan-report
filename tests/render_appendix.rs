@@ -10,7 +10,7 @@ mod pdf;
 
 fn render(data: &RenderData) -> Vec<u8> {
     Renderer::new()
-        .render_pdf(data, None, "2026-11-08T00:00:00Z".parse().unwrap())
+        .render_pdf(data, None, None, "2026-11-08T00:00:00Z".parse().unwrap())
         .unwrap()
 }
 fn compact(s: &str) -> String {
@@ -26,6 +26,8 @@ fn appendix_has_rule_and_limitations() {
         let text = compact(pages.last().unwrap());
         assert!(text.contains(&compact(&data.strings["appendix_rule_title"])));
         assert!(text.contains("9.0"));
+        assert!(text.contains("Unrated—"));
+        assert!(text.contains(&compact(&data.strings["appendix_sources_title"])));
         for key in &data.appendix.limitations {
             assert!(text.contains(&compact(&data.strings[key])), "{key}");
         }
@@ -83,10 +85,11 @@ fn footer_shows_page_of_total() {
 fn stale_and_failed_tables_render() {
     for lang in [Language::En, Language::ZhTw] {
         let mut data = data::fixture_data(lang, 3);
-        data.appendix.failed_images = vec![(
-            "registry.example/failed:latest".into(),
-            "manifest unknown".into(),
-        )];
+        data.appendix.failed_images = vec![image_scan_report::render::model::FailedImage {
+            reference: "registry.example/failed:latest".into(),
+            state: "failed".into(),
+            error: "manifest unknown".into(),
+        }];
         data.appendix.stale_images =
             vec![("registry.example/stale:old".into(), "2026-01-01".into())];
         let pages = pdf::page_texts(&render(&data));

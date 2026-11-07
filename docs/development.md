@@ -95,7 +95,7 @@ under `target/visual/` for visual inspection; text snapshots do not detect every
 Run the opt-in release budgets with:
 
 ```sh
-/usr/bin/time -l cargo test --offline --release --test perf -- --ignored --nocapture
+/usr/bin/time -l cargo test --offline --release --test perf -- --ignored --nocapture --test-threads=1
 ```
 
 The tests replicate all 11 fixture images with unique reference suffixes until
@@ -103,8 +103,8 @@ at least 30,000 or 50,000 findings are present. They time the complete zh-TW
 `render::render_pdf` call, enforce 90/150 seconds respectively, and require more
 than 400 pages. PDF page counting is outside the timed interval. The CI perf job
 runs on manual dispatch and Mondays at 03:00 UTC, separately from push checks.
-Controller measurement on an Apple-silicon Mac, with the release binary already
-compiled, used a single test run:
+Measured on an Apple-silicon laptop with the release binary already
+compiled, using a single test run:
 
 ```sh
 /usr/bin/time -l cargo test --offline --release --test perf -- --ignored --nocapture --test-threads=1 fifty
@@ -114,11 +114,10 @@ The 50,000-finding target (52,416 rows) rendered in **14.9 seconds**, producing
 **3,703 pages**. Peak RSS, from `/usr/bin/time -l`'s maximum resident set size,
 was **5.1 GB (5,090,951,168 bytes)**. Extrapolating from this single measurement, memory grows roughly 100 MB per 1,000
 findings with the full template, so a container running the largest realistic
-reports needs about 5 GiB; size the container accordingly. The CI perf job runs both tests concurrently, so its
-peak memory differs from this single-run figure.
+reports needs about 5 GiB; size the container accordingly. The CI perf job runs the tests one at a time; the 50k peak of 5.1 GB fits the 7 GB runner.
 
 The complete 11-image, 4,368-finding English report produced by
 `cargo run --offline -- run --config examples/config-trivy-files.yaml` decreased
-from the controller's 705-page baseline to 429 pages. Descriptions are capped at
+from the previous layout's 705 pages to 429 pages. Descriptions are capped at
 600 characters and rendered only for Critical/High findings; remediation uses
 30 cards followed by a compact table.

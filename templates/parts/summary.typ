@@ -35,8 +35,8 @@
     ]
     v(10pt)
     grid(columns: (1fr, 1fr), gutter: 8pt,
-      fact-box(theme, num(s.fixable), tr("fact_fixable", fixable: num(s.fixable), percent: s.fixable_percent)),
-      fact-box(theme, num(s.images_with_high_or_worse), tr("fact_high_or_worse", count: num(s.images_with_high_or_worse), total: num(s.images_total))))
+      fact-box(theme, num(s.fixable), tr("fact_fixable", percent: s.fixable_percent)),
+      fact-box(theme, num(s.images_with_high_or_worse), tr("fact_high_or_worse", total: num(s.images_total))))
   }
   section-title(theme, tr("sec_top_images"))
   hairline-table(theme,

@@ -13,7 +13,7 @@ mod pdf;
 
 fn render(data: &RenderData) -> Vec<u8> {
     Renderer::new()
-        .render_pdf(data, None, "2026-11-08T00:00:00Z".parse().unwrap())
+        .render_pdf(data, None, None, "2026-11-08T00:00:00Z".parse().unwrap())
         .unwrap()
 }
 
@@ -70,6 +70,7 @@ fn oversized_description_is_contained() {
     let data = model::build(
         &report,
         &RenderOptions {
+            customer_logo: None,
             language: Language::En,
             stale_after_days: 30,
             product_name: "judex".into(),
@@ -112,6 +113,7 @@ fn optional_facts_show_placeholder() {
     let data = model::build(
         &report,
         &RenderOptions {
+            customer_logo: None,
             language: Language::En,
             stale_after_days: 30,
             product_name: "judex".into(),
@@ -136,4 +138,33 @@ fn medium_description_is_not_rendered() {
     row.show_description = false;
     row.description = "MEDIUM-DESCRIPTION-SENTINEL".into();
     assert!(!pdf::text(&render(&data)).contains("MEDIUM-DESCRIPTION-SENTINEL"));
+}
+
+#[test]
+fn scores_show_their_basis() {
+    let mut data = data::fixture_data(Language::En, 3);
+    let prototype = data.images[0].findings[0].clone();
+    data.images[0].findings = vec![prototype.clone(), prototype];
+    data.images[0].findings[0].basis = "cvss2".into();
+    data.images[0].findings[0].score = "6.4".into();
+    data.images[0].findings[1].basis = "scanner_label".into();
+    data.images[0].findings[1].scanner_severity = "High".into();
+    let (_, text) = chapter(&render(&data), &data.strings["ch_images"]);
+    let text = compact(&text);
+    assert!(text.contains("6.4v2"), "{text}");
+    assert!(text.contains("label:High"), "{text}");
+}
+
+#[test]
+fn not_scanned_has_its_own_callout() {
+    let mut data = data::fixture_data(Language::En, 3);
+    data.images.truncate(1);
+    data.images[0].scan_state = "not_scanned".into();
+    let (_, text) = chapter(&render(&data), &data.strings["ch_images"]);
+    let image_text = text.split(&data.strings["ch_appendix"]).next().unwrap();
+    assert!(compact(image_text).contains(&compact(&data.strings["scan_state_not_scanned"])));
+    assert!(
+        !image_text.to_lowercase().contains("failed"),
+        "{image_text}"
+    );
 }

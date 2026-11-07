@@ -54,6 +54,41 @@ pub struct Logo {
     pub bytes: Vec<u8>,
 }
 
+impl Logo {
+    pub fn load(path: &Path) -> Result<Self, ThemeError> {
+        let bytes = fs::read(path).map_err(|err| ThemeError::Read(path.to_owned(), err))?;
+        Self::from_bytes(path, bytes)
+    }
+
+    fn from_bytes(path: &Path, bytes: Vec<u8>) -> Result<Self, ThemeError> {
+        let valid = match path.extension().and_then(|ext| ext.to_str()) {
+            Some("png") => bytes.starts_with(b"\x89PNG\r\n\x1a\n"),
+            Some("svg") => std::str::from_utf8(&bytes).is_ok_and(|text| {
+                let text = text.trim_start_matches('\u{feff}').trim_start();
+                text.starts_with("<svg") || text.starts_with("<?xml")
+            }),
+            _ => false,
+        };
+        if !valid {
+            return Err(ThemeError::UnsupportedLogo(path.to_owned()));
+        }
+        Ok(Self {
+            file_name: path.file_name().unwrap().to_string_lossy().into_owned(),
+            bytes,
+        })
+    }
+
+    pub fn report_file_name(&self) -> String {
+        format!(
+            "report-logo.{}",
+            Path::new(&self.file_name)
+                .extension()
+                .unwrap_or_default()
+                .to_string_lossy()
+        )
+    }
+}
+
 #[derive(thiserror::Error, Debug)]
 pub enum ThemeError {
     #[error("cannot read {0}: {1}")]
@@ -111,6 +146,14 @@ impl Theme {
             if list.is_empty() {
                 return Err(invalid(format!("fonts.{key} must not be empty")));
             }
+            for family in list {
+                if !super::fonts::FAMILIES.contains(&family.as_str()) {
+                    return Err(invalid(format!(
+                        "fonts.{key}: unsupported family {family}; bundled families: {}",
+                        super::fonts::FAMILIES.join(", ")
+                    )));
+                }
+            }
         }
         Ok(())
     }
@@ -142,21 +185,7 @@ pub fn load(dir: Option<&Path>) -> Result<Theme, ThemeError> {
             Err(err) if err.kind() == io::ErrorKind::NotFound => continue,
             Err(err) => return Err(ThemeError::Read(path, err)),
         };
-        let valid = if name == "logo.png" {
-            bytes.starts_with(b"\x89PNG\r\n\x1a\n")
-        } else {
-            std::str::from_utf8(&bytes).is_ok_and(|text| {
-                let text = text.trim_start_matches('\u{feff}').trim_start();
-                text.starts_with("<svg") || text.starts_with("<?xml")
-            })
-        };
-        if !valid {
-            return Err(ThemeError::UnsupportedLogo(path));
-        }
-        theme.logo = Some(Logo {
-            file_name: name.into(),
-            bytes,
-        });
+        theme.logo = Some(Logo::from_bytes(&path, bytes)?);
         return Ok(theme);
     }
     let mut entries = fs::read_dir(dir)

@@ -12,7 +12,7 @@ The corresponding licence texts are included beside the fonts.
 
 ## SHA-256
 
-Verified using `shasum -a 256` against the controller-provided manifest on 2026-11-08; all eight match.
+Verified using `shasum -a 256` against the checksums below on 2026-11-08; all eight match.
 
 ```text
 288316099b1e0a47a4716d159098005eef7c0066921f34e3200393dbdb01947f  Inter-Bold.ttf

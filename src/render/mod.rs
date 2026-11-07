@@ -20,6 +20,7 @@ pub fn render_pdf(
     RENDERER.get_or_init(engine::Renderer::new).render_pdf(
         &data,
         theme.logo.as_ref(),
+        opts.customer_logo.as_ref(),
         report.generated_at,
     )
 }
