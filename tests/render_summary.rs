@@ -76,6 +76,9 @@ fn summary_page_has_counts_and_tables() {
         "{text}"
     );
     assert!(text.contains(&data.summary.top_findings[0].id), "{text}");
+    for count in [data.summary.counts.critical, data.summary.counts.high] {
+        assert!(text.replace(',', "").contains(&count.to_string()), "{text}");
+    }
 }
 
 #[test]
@@ -96,6 +99,10 @@ fn summary_handles_zero_findings() {
     assert!(text.contains(&data.strings["no_findings"]), "{text}");
     assert!(text.contains(&data.strings["sec_top_images"]));
     assert!(!text.contains(&data.strings["sec_top_findings"]));
+    let fact = data.strings["fact_fixable"]
+        .replace("{fixable}", "0")
+        .replace("{percent}", "0");
+    assert!(!text.contains(&fact), "{text}");
 }
 
 #[test]
@@ -110,4 +117,34 @@ fn summary_preview() {
             std::fs::write("target/visual/summary.png", bytes).unwrap();
         }
     }
+}
+
+#[test]
+fn summary_severity_chips_use_keys_and_fit() {
+    let (report, _, mut data) = fixture(Language::En);
+    // Labels are display data, never color lookup keys.
+    data.summary.bar[0].severity_label = "Display label".into();
+    data.summary.top_findings.truncate(2);
+    for (row, key) in data
+        .summary
+        .top_findings
+        .iter_mut()
+        .zip(["critical", "unrated"])
+    {
+        row.severity_key = key.into();
+        row.severity_label = "Display label".into();
+    }
+    let renderer = Renderer::new();
+    let bytes = renderer
+        .render_pdf(&data, None, report.generated_at)
+        .unwrap();
+    let text = pdf::text(&bytes);
+    assert!(text.contains("Critical"));
+    assert!(text.contains("Unrated"));
+    std::fs::create_dir_all("target/visual").unwrap();
+    std::fs::write(
+        "target/visual/summary-chips.png",
+        renderer.render_png(&data, None, 2, 110.0).unwrap(),
+    )
+    .unwrap();
 }

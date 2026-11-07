@@ -25,7 +25,7 @@
   "col_image": "Image",
   "col_id": "Vulnerability ID",
   "col_severity": "Severity",
-  "col_cvss": "CVSS Score",
+  "col_cvss": "CVSS",
   "col_package": "Package",
   "col_installed": "Installed Version",
   "col_fixed": "Fixed Version",

@@ -22,6 +22,8 @@
   region: if data.meta.language == "zh-TW" { "TW" } else { none },
 )
 #set par(justify: false)
+#set heading(numbering: none)
+#show heading.where(level: 1): it => block(below: 12pt)[#text(size: 22pt, weight: "bold", it.body)]
 #page(header: none, footer: none)[#cover(data)]
 
 #summary(data)

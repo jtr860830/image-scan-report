@@ -28,22 +28,27 @@ expression: "Snapshot\n{\n    meta: &d.meta, summary: &d.summary, groups:\n    &
     "images_with_high_or_worse": 8,
     "bar": [
       {
+        "severity_key": "critical",
         "severity_label": "Critical",
         "percent": 5.8836994
       },
       {
+        "severity_key": "high",
         "severity_label": "High",
         "percent": 37.362637
       },
       {
+        "severity_key": "medium",
         "severity_label": "Medium",
         "percent": 46.497253
       },
       {
+        "severity_key": "low",
         "severity_label": "Low",
         "percent": 9.271978
       },
       {
+        "severity_key": "unrated",
         "severity_label": "Unrated",
         "percent": 0.9844322
       }
@@ -152,6 +157,7 @@ expression: "Snapshot\n{\n    meta: &d.meta, summary: &d.summary, groups:\n    &
     ],
     "top_findings": [
       {
+        "severity_key": "critical",
         "id": "CVE-2021-44228",
         "severity_label": "Critical",
         "score": "10.0",
@@ -163,6 +169,7 @@ expression: "Snapshot\n{\n    meta: &d.meta, summary: &d.summary, groups:\n    &
         "image_count": 1
       },
       {
+        "severity_key": "critical",
         "id": "CVE-2025-68121",
         "severity_label": "Critical",
         "score": "10.0",
@@ -175,6 +182,7 @@ expression: "Snapshot\n{\n    meta: &d.meta, summary: &d.summary, groups:\n    &
         "image_count": 2
       },
       {
+        "severity_key": "critical",
         "id": "CVE-2014-5044",
         "severity_label": "Critical",
         "score": "9.8",
@@ -186,6 +194,7 @@ expression: "Snapshot\n{\n    meta: &d.meta, summary: &d.summary, groups:\n    &
         "image_count": 1
       },
       {
+        "severity_key": "critical",
         "id": "CVE-2014-9939",
         "severity_label": "Critical",
         "score": "9.8",
@@ -197,6 +206,7 @@ expression: "Snapshot\n{\n    meta: &d.meta, summary: &d.summary, groups:\n    &
         "image_count": 1
       },
       {
+        "severity_key": "critical",
         "id": "CVE-2015-4042",
         "severity_label": "Critical",
         "score": "9.8",
@@ -208,6 +218,7 @@ expression: "Snapshot\n{\n    meta: &d.meta, summary: &d.summary, groups:\n    &
         "image_count": 1
       },
       {
+        "severity_key": "critical",
         "id": "CVE-2015-8386",
         "severity_label": "Critical",
         "score": "9.8",
@@ -219,6 +230,7 @@ expression: "Snapshot\n{\n    meta: &d.meta, summary: &d.summary, groups:\n    &
         "image_count": 1
       },
       {
+        "severity_key": "critical",
         "id": "CVE-2015-8391",
         "severity_label": "Critical",
         "score": "9.8",
@@ -230,6 +242,7 @@ expression: "Snapshot\n{\n    meta: &d.meta, summary: &d.summary, groups:\n    &
         "image_count": 1
       },
       {
+        "severity_key": "critical",
         "id": "CVE-2016-1000027",
         "severity_label": "Critical",
         "score": "9.8",
@@ -241,6 +254,7 @@ expression: "Snapshot\n{\n    meta: &d.meta, summary: &d.summary, groups:\n    &
         "image_count": 1
       },
       {
+        "severity_key": "critical",
         "id": "CVE-2016-4658",
         "severity_label": "Critical",
         "score": "9.8",
@@ -252,6 +266,7 @@ expression: "Snapshot\n{\n    meta: &d.meta, summary: &d.summary, groups:\n    &
         "image_count": 1
       },
       {
+        "severity_key": "critical",
         "id": "CVE-2016-8618",
         "severity_label": "Critical",
         "score": "9.8",
@@ -263,6 +278,7 @@ expression: "Snapshot\n{\n    meta: &d.meta, summary: &d.summary, groups:\n    &
         "image_count": 1
       },
       {
+        "severity_key": "critical",
         "id": "CVE-2016-8619",
         "severity_label": "Critical",
         "score": "9.8",
@@ -274,6 +290,7 @@ expression: "Snapshot\n{\n    meta: &d.meta, summary: &d.summary, groups:\n    &
         "image_count": 1
       },
       {
+        "severity_key": "critical",
         "id": "CVE-2016-8622",
         "severity_label": "Critical",
         "score": "9.8",
@@ -285,6 +302,7 @@ expression: "Snapshot\n{\n    meta: &d.meta, summary: &d.summary, groups:\n    &
         "image_count": 1
       },
       {
+        "severity_key": "critical",
         "id": "CVE-2016-9063",
         "severity_label": "Critical",
         "score": "9.8",
@@ -296,6 +314,7 @@ expression: "Snapshot\n{\n    meta: &d.meta, summary: &d.summary, groups:\n    &
         "image_count": 1
       },
       {
+        "severity_key": "critical",
         "id": "CVE-2017-1000158",
         "severity_label": "Critical",
         "score": "9.8",
@@ -307,6 +326,7 @@ expression: "Snapshot\n{\n    meta: &d.meta, summary: &d.summary, groups:\n    &
         "image_count": 1
       },
       {
+        "severity_key": "critical",
         "id": "CVE-2017-10684",
         "severity_label": "Critical",
         "score": "9.8",
@@ -372,6 +392,7 @@ expression: "Snapshot\n{\n    meta: &d.meta, summary: &d.summary, groups:\n    &
   ],
   "inventory": [
     {
+      "severity_key": "critical",
       "id": "CVE-2021-44228",
       "severity_label": "Critical",
       "score": "10.0",
@@ -383,6 +404,7 @@ expression: "Snapshot\n{\n    meta: &d.meta, summary: &d.summary, groups:\n    &
       "image_count": 1
     },
     {
+      "severity_key": "critical",
       "id": "CVE-2025-68121",
       "severity_label": "Critical",
       "score": "10.0",
@@ -395,6 +417,7 @@ expression: "Snapshot\n{\n    meta: &d.meta, summary: &d.summary, groups:\n    &
       "image_count": 2
     },
     {
+      "severity_key": "critical",
       "id": "CVE-2014-5044",
       "severity_label": "Critical",
       "score": "9.8",

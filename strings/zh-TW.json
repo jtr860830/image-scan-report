@@ -25,7 +25,7 @@
   "col_image": "映像檔",
   "col_id": "弱點編號",
   "col_severity": "嚴重等級",
-  "col_cvss": "CVSS 分數",
+  "col_cvss": "CVSS",
   "col_package": "套件",
   "col_installed": "已安裝版本",
   "col_fixed": "修補版本",

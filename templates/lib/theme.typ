@@ -1,8 +1,10 @@
 #let sev-color(theme, key) = rgb(theme.colors.at(key))
 #let sev-tint(theme, key) = rgb(theme.colors.at("tint_" + key))
 #let chip(theme, label, key) = box(
-  fill: sev-tint(theme, key), radius: 3pt, inset: (x: 5pt, y: 2pt),
-)[#box(circle(radius: 2pt, fill: sev-color(theme, key), stroke: none)) #text(fill: rgb(theme.colors.ink), label)]
+  fill: sev-tint(theme, key), radius: 3pt, inset: (x: 4pt, y: 1.5pt),
+)[#box(text(size: 7pt, fill: rgb(theme.colors.ink))[
+  #box(circle(radius: 2pt, fill: sev-color(theme, key), stroke: none))#h(2.5pt)#label
+])]
 #let mono(theme, body) = text(font: theme.fonts.mono, body)
 
 #let section-title(theme, body) = block(above: 14pt, below: 6pt, sticky: true)[
@@ -10,7 +12,7 @@
 ]
 #let hairline-table(theme, ..args) = {
   set table(
-    stroke: (x, y) => (top: none, bottom: 0.4pt + rgb(theme.colors.rule), left: none, right: none),
+    stroke: (rest: none, bottom: 0.4pt + rgb(theme.colors.rule)),
     inset: (x: 4pt, y: 6pt),
   )
   table(..args)

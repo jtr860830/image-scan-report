@@ -62,6 +62,7 @@ pub struct Summary {
 }
 #[derive(Serialize, Debug, Clone, PartialEq)]
 pub struct BarSegment {
+    pub severity_key: String,
     pub severity_label: String,
     pub percent: f32,
 }
@@ -72,6 +73,7 @@ pub struct ImageRow {
 }
 #[derive(Serialize, Debug, Clone, PartialEq)]
 pub struct UniqueRow {
+    pub severity_key: String,
     pub id: String,
     pub severity_label: String,
     pub score: String,
@@ -230,6 +232,7 @@ pub fn build(
         .map(|v| UniqueRow {
             id: sanitize(&v.id),
             severity_label: v.severity.label().into(),
+            severity_key: v.severity.label().to_lowercase(),
             score: score(v.score_v3),
             packages: sanitize(&v.packages.join(", ")),
             fixed_versions: if v.fixed_versions.is_empty() {
@@ -311,6 +314,7 @@ fn summary(
     .filter(|(_, n)| *n > 0)
     .map(|(s, n)| BarSegment {
         severity_label: s.label().into(),
+        severity_key: s.label().to_lowercase(),
         percent: n as f32 * 100.0 / rows as f32,
     })
     .collect();
