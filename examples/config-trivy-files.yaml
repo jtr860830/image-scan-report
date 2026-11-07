@@ -1,0 +1,11 @@
+source:
+  type: trivy-files
+  path: ./fixtures/trivy
+report:
+  language: en
+  organization: "Example Org"
+  json: true
+  pdf: false
+output:
+  - type: filesystem
+    path: ./out

@@ -1,0 +1,51 @@
+{
+    "error_message": "",
+    "report": {
+        "image_id": "30ecbe1509090b38ef3260f3609d64d8261230464eaa4d235901db496e9647fb",
+        "registry": "https://registry-1.docker.io",
+        "repository": "library/busybox",
+        "tag": "1.37",
+        "digest": "sha256:66a6306db78bf2dbf3487f293aa8d6990d8e506fdffab9cc43fe422becf886e4",
+        "size": 4421246,
+        "author": "",
+        "base_os": "",
+        "created_at": "2024-09-26T21:31:42Z",
+        "cvedb_version": "4.318",
+        "cvedb_create_time": "2026-11-02T20:36:35Z",
+        "layers": [],
+        "os_scan_status": "OSScanStatusUnsupported",
+        "vulnerabilities": [],
+        "checks": [
+            {
+                "test_number": "I.4.1",
+                "category": "image",
+                "type": "image",
+                "profile": "Level 1",
+                "scored": true,
+                "automated": false,
+                "description": "Ensure a user for the container has been created",
+                "remediation": "",
+                "level": "WARN",
+                "message": []
+            },
+            {
+                "test_number": "I.4.6",
+                "category": "image",
+                "type": "image",
+                "profile": "Level 1",
+                "scored": false,
+                "automated": false,
+                "description": "Ensure that HEALTHCHECK instructions have been added to container images",
+                "remediation": "",
+                "level": "WARN",
+                "message": []
+            }
+        ],
+        "cmds": [
+            "BusyBox 1.37.0 (glibc), Debian 13"
+        ],
+        "signature_data": {
+            "verification_timestamp": ""
+        }
+    }
+}

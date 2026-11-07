@@ -1,0 +1,11 @@
+source:
+  type: neuvector-files
+  path: /input
+report:
+  language: en
+  organization: Example Organization
+output:
+  - type: http
+    url: https://upload.example.test/reports
+    headers:
+      Authorization: "Bearer ${JUDEX_TEST_TOKEN}"

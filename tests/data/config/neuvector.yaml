@@ -1,0 +1,29 @@
+source:
+  type: neuvector
+  url: https://scanner.example.test
+  registry: production
+  username: report-reader
+  password_env: JUDEX_SOURCE_PASSWORD_NOT_READ_7
+  ca_file: /certs/source.pem
+report:
+  language: en
+  organization: '${JUDEX_ORGANIZATION_LITERAL_7}'
+  logo: /assets/logo.png
+  stale_after_days: 14
+  pdf: false
+  json: true
+output:
+  - type: http
+    url: 'https://upload.example.test/${JUDEX_URL_LITERAL_7}'
+    method: post
+    mode: multipart
+    ca_file: /certs/upload.pem
+    timeout_secs: 60
+  - type: http
+    url: https://second.example.test
+    headers:
+      X-Token: '${JUDEX_CONFIG_OUTPUTS_7}'
+  - type: http
+    url: https://third.example.test
+    headers:
+      X-Token: '${JUDEX_CONFIG_OUTPUTS_7}'
