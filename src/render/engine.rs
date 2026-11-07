@@ -12,6 +12,10 @@ use typst_pdf::{PdfOptions, Timestamp};
 
 const SOURCES: &[(&str, &str)] = &[
     (
+        "parts/remediation.typ",
+        include_str!("../../templates/parts/remediation.typ"),
+    ),
+    (
         "parts/summary.typ",
         include_str!("../../templates/parts/summary.typ"),
     ),

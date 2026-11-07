@@ -1,3 +1,4 @@
+#import "parts/remediation.typ": remediation
 #import "parts/summary.typ": summary
 #import "lib/fmt.typ": t
 #import "parts/cover.typ": cover
@@ -27,3 +28,5 @@
 #page(header: none, footer: none)[#cover(data)]
 
 #summary(data)
+
+#remediation(data)

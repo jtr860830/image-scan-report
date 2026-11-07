@@ -118,6 +118,7 @@ fn body_frame_and_template_helpers_work() {
         include_str!("../templates/report.typ")
             .replace("\"lib/fmt.typ\": t", "\"lib/fmt.typ\": t, num")
             .replace("#summary(data)", "")
+            .replace("#remediation(data)", "")
     );
     let renderer = Renderer::with_sources(&[("report.typ", source)]);
     let bytes = renderer

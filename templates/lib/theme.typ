@@ -32,3 +32,10 @@
   #v(4pt)
   #text(fill: rgb(theme.colors.secondary), sentence)
 ]
+
+#let card(theme, body, breakable: false) = block(
+  breakable: breakable, width: 100%, inset: 9pt, radius: 6pt,
+  above: 0pt, below: 0pt,
+  stroke: 0.4pt + rgb(theme.colors.rule),
+  body,
+)

@@ -17,3 +17,14 @@
   }
   result
 }
+
+#let status-label(strings, key) = {
+  let known = ("fixed", "affected", "will_not_fix", "end_of_life", "fix_deferred", "under_investigation")
+  if key in known {
+    t(strings, "status_" + key)
+  } else if key == "unknown" {
+    t(strings, "status_other")
+  } else {
+    t(strings, "status_other") + " (" + key + ")"
+  }
+}
