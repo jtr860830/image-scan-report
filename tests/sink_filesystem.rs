@@ -51,6 +51,28 @@ fn failed_rename_removes_temporary_file() {
         })
         .is_err()
     );
-    assert!(!dir.path().join(".report.json.tmp").exists());
+    assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 1);
     assert!(dir.path().join("report.json").is_dir());
+}
+
+#[test]
+fn temporary_file_is_not_reused() {
+    let dir = tempfile::tempdir().unwrap();
+    let stale = dir.path().join(".report.json.tmp");
+    std::fs::write(&stale, b"stale").unwrap();
+    let sink = FilesystemSink {
+        dir: dir.path().into(),
+    };
+    sink.store(&Artifact {
+        file_name: "report.json".into(),
+        media_type: "application/json",
+        bytes: b"new".to_vec(),
+    })
+    .unwrap();
+    assert_eq!(
+        std::fs::read(dir.path().join("report.json")).unwrap(),
+        b"new"
+    );
+    assert_eq!(std::fs::read(stale).unwrap(), b"stale");
+    assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 2);
 }

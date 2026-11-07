@@ -36,6 +36,13 @@ fn run_subcommand_end_to_end() {
         .unwrap();
     assert!(name.starts_with("trivy-trivy-files-"));
     assert!(String::from_utf8_lossy(&out.stdout).contains(&name));
+    let report: judex::model::Report =
+        serde_json::from_slice(&std::fs::read(dir.path().join(&name)).unwrap()).unwrap();
+    assert!(String::from_utf8_lossy(&out.stdout).contains(&format!(
+        "Report: {} images, {} findings",
+        report.images.len(),
+        report.findings.len()
+    )));
 }
 #[test]
 fn bad_config_exits_2() {
@@ -49,4 +56,26 @@ fn bad_config_exits_2() {
         .unwrap();
     assert_eq!(out.status.code(), Some(2));
     assert!(String::from_utf8_lossy(&out.stderr).contains("invalid configuration"));
+}
+
+#[test]
+fn partial_failure_is_reported_on_stderr() {
+    let dir = tempfile::tempdir().unwrap();
+    let config = write_config(dir.path());
+    let blocked = dir.path().join("blocked");
+    std::fs::write(&blocked, b"file").unwrap();
+    let mut yaml = std::fs::read_to_string(&config).unwrap();
+    yaml.push_str(&format!(
+        "  - type: filesystem\n    path: {}\n",
+        blocked.display()
+    ));
+    std::fs::write(&config, yaml).unwrap();
+    let out = cargo_bin_cmd!("judex")
+        .args(["run", "--config"])
+        .arg(config)
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    assert!(!String::from_utf8_lossy(&out.stdout).contains("failed sink:"));
+    assert!(String::from_utf8_lossy(&out.stderr).contains("failed sink:"));
 }

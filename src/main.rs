@@ -21,11 +21,15 @@ fn main() {
                 .and_then(|cfg| judex::pipeline::run(&cfg, chrono::Utc::now()));
             match result {
                 Ok(summary) => {
+                    println!(
+                        "Report: {} images, {} findings",
+                        summary.images, summary.findings
+                    );
                     for stored in summary.stored {
                         println!("{stored}");
                     }
                     for failed in summary.failed_sinks {
-                        println!("failed sink: {failed}");
+                        eprintln!("failed sink: {failed}");
                     }
                 }
                 Err(e) => fail(e),
