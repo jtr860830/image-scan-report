@@ -1,3 +1,3 @@
-//! Core library for the judex image scan reporting tool.
+//! Core library for the image scan reporting tool.
 
 pub mod cli;
