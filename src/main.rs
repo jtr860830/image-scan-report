@@ -15,9 +15,35 @@ fn main() {
 
     match Cli::parse().command {
         cli::Command::Version => println!("{PRODUCT_NAME} {PRODUCT_VERSION}"),
-        cli::Command::Run { .. } | cli::Command::Check { .. } => {
-            eprintln!("not implemented");
-            std::process::exit(1);
+        cli::Command::Run { config } => {
+            let result = judex::config::load(&config)
+                .map_err(judex::pipeline::RunError::from)
+                .and_then(|cfg| judex::pipeline::run(&cfg, chrono::Utc::now()));
+            match result {
+                Ok(summary) => {
+                    for stored in summary.stored {
+                        println!("{stored}");
+                    }
+                    for failed in summary.failed_sinks {
+                        println!("failed sink: {failed}");
+                    }
+                }
+                Err(e) => fail(e),
+            }
+        }
+        cli::Command::Check { config } => {
+            let result = judex::config::load(&config)
+                .map_err(judex::pipeline::RunError::from)
+                .and_then(|cfg| judex::pipeline::check(&cfg));
+            match result {
+                Ok(summary) => println!("{summary}"),
+                Err(e) => fail(e),
+            }
         }
     }
+}
+
+fn fail(e: judex::pipeline::RunError) -> ! {
+    eprintln!("error: {e}");
+    std::process::exit(e.exit_code());
 }
