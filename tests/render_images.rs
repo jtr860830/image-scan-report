@@ -151,7 +151,8 @@ fn scores_show_their_basis() {
     data.images[0].findings[1].scanner_severity = "High".into();
     let (_, text) = chapter(&render(&data), &data.strings["ch_images"]);
     let text = compact(&text);
-    assert!(text.contains("6.4v2"), "{text}");
+    assert!(text.contains("6.4"), "{text}");
+    assert!(text.contains("v2"), "{text}");
     assert!(text.contains("label:High"), "{text}");
 }
 

@@ -47,14 +47,20 @@
           table.header(..("col_id", "col_severity", "col_cvss", "col_package", "col_installed", "col_fixed").map(key => header(theme, tr(key)))),
           ..image.findings.map(row => (
             identifier(theme, row.id), chip(theme, row.severity_label, row.severity_key),
-            [#{row.score}#if row.basis == "cvss2" {
-              text(size: 6.5pt, fill: rgb(theme.colors.muted), " " + tr("basis_cvss2"))
-            } else if row.basis == "scanner_label" {
-              text(size: 6.5pt, fill: rgb(theme.colors.muted), " " + tr("basis_scanner_label") + ": " + row.scanner_severity)
-            }], text(hyphenate: false, breakable-id(row.package)),
+            row.score, text(hyphenate: false, breakable-id(row.package)),
             identifier(theme, row.installed_version), identifier(theme, row.fixed_version),
-          ).map(cell => table.cell(stroke: if row.show_description and row.description != "" { (bottom: none) } else { (bottom: 0.4pt + rgb(theme.colors.rule)) }, cell)) + if not row.show_description or row.description == "" { () } else {
-            (table.cell(colspan: 6, text(size: 7.5pt, fill: rgb(theme.colors.secondary), hyphenate: true, row.description)),)
+          ).map(cell => table.cell(stroke: if (row.show_description and row.description != "") or row.basis in ("cvss2", "scanner_label") { (bottom: none) } else { (bottom: 0.4pt + rgb(theme.colors.rule)) }, cell)) + if not ((row.show_description and row.description != "") or row.basis in ("cvss2", "scanner_label")) { () } else {
+            (table.cell(colspan: 6, [
+              #if row.basis in ("cvss2", "scanner_label") {
+                text(size: 6.5pt, fill: rgb(theme.colors.muted), box[
+                  #if row.basis == "cvss2" { tr("basis_cvss2") } else { tr("basis_scanner_label") + ": " + row.scanner_severity }
+                ])
+                if row.show_description and row.description != "" { " · " }
+              }
+              #if row.show_description and row.description != "" {
+                text(size: 7.5pt, fill: rgb(theme.colors.secondary), hyphenate: true, row.description)
+              }
+            ]),)
           }).flatten())
       }
     }
