@@ -1,5 +1,5 @@
 use clap::Parser;
-use scanreport::cli::{self, Cli};
+use image_scan_report::cli::{self, Cli};
 use tracing_subscriber::EnvFilter;
 
 const PRODUCT_NAME: &str = "judex";
@@ -16,9 +16,9 @@ fn main() {
     match Cli::parse().command {
         cli::Command::Version => println!("{PRODUCT_NAME} {PRODUCT_VERSION}"),
         cli::Command::Run { config } => {
-            let result = scanreport::config::load(&config)
-                .map_err(scanreport::pipeline::RunError::from)
-                .and_then(|cfg| scanreport::pipeline::run(&cfg, chrono::Utc::now()));
+            let result = image_scan_report::config::load(&config)
+                .map_err(image_scan_report::pipeline::RunError::from)
+                .and_then(|cfg| image_scan_report::pipeline::run(&cfg, chrono::Utc::now()));
             match result {
                 Ok(summary) => {
                     println!(
@@ -36,9 +36,9 @@ fn main() {
             }
         }
         cli::Command::Check { config } => {
-            let result = scanreport::config::load(&config)
-                .map_err(scanreport::pipeline::RunError::from)
-                .and_then(|cfg| scanreport::pipeline::check(&cfg));
+            let result = image_scan_report::config::load(&config)
+                .map_err(image_scan_report::pipeline::RunError::from)
+                .and_then(|cfg| image_scan_report::pipeline::check(&cfg));
             match result {
                 Ok(summary) => println!("{summary}"),
                 Err(e) => fail(e),
@@ -47,7 +47,7 @@ fn main() {
     }
 }
 
-fn fail(e: scanreport::pipeline::RunError) -> ! {
+fn fail(e: image_scan_report::pipeline::RunError) -> ! {
     eprintln!("error: {e}");
     std::process::exit(e.exit_code());
 }

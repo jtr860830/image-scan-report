@@ -1,7 +1,7 @@
 use Severity::*;
 use chrono::{Duration, TimeZone, Utc};
-use scanreport::model::{Finding, Image, ScanState, ScanStatus, Severity, SeverityBasis};
-use scanreport::views::*;
+use image_scan_report::model::{Finding, Image, ScanState, ScanStatus, Severity, SeverityBasis};
+use image_scan_report::views::*;
 
 fn f(
     id: &str,

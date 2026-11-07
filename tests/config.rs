@@ -2,8 +2,8 @@ static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
 use std::path::Path;
 
-use scanreport::config::{self, Config, ConfigError, HttpMode, OutputConfig, SourceConfig};
-use scanreport::model::Language;
+use image_scan_report::config::{self, Config, ConfigError, HttpMode, OutputConfig, SourceConfig};
+use image_scan_report::model::Language;
 
 fn minimal() -> Config {
     config::load(Path::new("tests/data/config/trivy-files.yaml")).unwrap()

@@ -65,5 +65,5 @@ The product name lives in three places: `Cargo.toml` `[package] name`, the binar
 name, and `PRODUCT_NAME` in `src/main.rs`. Cargo currently derives the binary name
 from the package name (there is no explicit `[[bin]]` override). Renaming judex
 touches exactly these three naming points, plus the literal in `tests/cli.rs` and
-README prose. The library crate stays named `scanreport` across product renames.
+README prose. The library crate stays named `image_scan_report` across product renames.
 Keep the CLI's version text and executable assertions aligned.

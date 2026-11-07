@@ -1,8 +1,8 @@
-use rstest::rstest;
-use scanreport::model::{Severity, Severity::*, SeverityBasis};
-use scanreport::severity::{
+use image_scan_report::model::{Severity, Severity::*, SeverityBasis};
+use image_scan_report::severity::{
     CvssScores, ScoreInput, band_v2, band_v3, classify, clean_score, label_to_severity,
 };
+use rstest::rstest;
 
 #[rstest]
 #[case(10.0, Critical)]

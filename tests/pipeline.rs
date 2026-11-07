@@ -1,5 +1,5 @@
 use chrono::{DateTime, NaiveDate, Utc};
-use scanreport::{
+use image_scan_report::{
     config::Config,
     model::{Report, SourceKind},
     naming::{artifact_base_name, slug},
@@ -81,7 +81,7 @@ fn partial_sink_failure_preserves_success() {
     let file = tempfile::NamedTempFile::new().unwrap();
     let mut cfg = config(&fixtures(), dir.path());
     cfg.output
-        .push(scanreport::config::OutputConfig::Filesystem {
+        .push(image_scan_report::config::OutputConfig::Filesystem {
             path: file.path().into(),
         });
     let summary = run(&cfg, now()).unwrap();
@@ -106,11 +106,11 @@ fn pdf_only_fails_with_exit_4() {
 fn check_rejects_http_output_before_fetch() {
     let dir = tempfile::tempdir().unwrap();
     let mut cfg = config(dir.path(), dir.path());
-    cfg.output = vec![scanreport::config::OutputConfig::Http {
+    cfg.output = vec![image_scan_report::config::OutputConfig::Http {
         url: "https://example.test/upload".into(),
         method: "POST".into(),
         headers: Default::default(),
-        mode: scanreport::config::HttpMode::Raw,
+        mode: image_scan_report::config::HttpMode::Raw,
         ca_file: None,
         timeout_secs: 30,
     }];

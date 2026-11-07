@@ -1,4 +1,4 @@
-use scanreport::sink::{Artifact, ReportSink, filesystem::FilesystemSink};
+use image_scan_report::sink::{Artifact, ReportSink, filesystem::FilesystemSink};
 
 #[test]
 fn writes_and_overwrites_file() {

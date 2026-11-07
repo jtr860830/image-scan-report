@@ -1,5 +1,5 @@
-use scanreport::model::{ScanState, Severity, SeverityBasis};
-use scanreport::source::{
+use image_scan_report::model::{ScanState, Severity, SeverityBasis};
+use image_scan_report::source::{
     ScanSource,
     neuvector::report::{NvVulnerability, finding_from_nv},
     neuvector_file::{NeuvectorFileSource, parse_neuvector_result},
@@ -36,7 +36,12 @@ fn finding_from_nv_uses_v3_then_v2() {
         assert_eq!(f.severity_basis, basis);
     }
 }
-fn edge(name: &str) -> (scanreport::model::Image, Vec<scanreport::model::Finding>) {
+fn edge(
+    name: &str,
+) -> (
+    image_scan_report::model::Image,
+    Vec<image_scan_report::model::Finding>,
+) {
     parse_neuvector_result(
         &std::fs::read(format!("tests/data/neuvector/{name}.json")).unwrap(),
         None,
@@ -127,7 +132,7 @@ fn maps_optional_fields_and_timestamp_precedence() {
 
 #[test]
 fn timestamp_and_shape_edges() {
-    use scanreport::source::neuvector::report::nv_timestamp;
+    use image_scan_report::source::neuvector::report::nv_timestamp;
     assert_eq!(nv_timestamp(None), None);
     assert_eq!(nv_timestamp(Some(0)), None);
     assert_eq!(nv_timestamp(Some(i64::MAX)), None);
@@ -176,7 +181,10 @@ fn fetch_skips_bad_files_and_deduplicates_latest() {
     assert_eq!(s.images[0].reference, "host/new");
     assert_eq!(s.source.db_version.as_deref(), Some("v1"));
     assert!(s.source.db_updated_at.is_some());
-    assert_eq!(s.source.kind, scanreport::model::SourceKind::NeuvectorFiles);
+    assert_eq!(
+        s.source.kind,
+        image_scan_report::model::SourceKind::NeuvectorFiles
+    );
     assert_eq!(s.source.scanner_name.as_deref(), Some("NeuVector"));
     let d = tempfile::tempdir().unwrap();
     assert!(matches!(
@@ -184,7 +192,7 @@ fn fetch_skips_bad_files_and_deduplicates_latest() {
             dir: d.path().into()
         }
         .fetch(),
-        Err(scanreport::source::SourceError::Empty(_))
+        Err(image_scan_report::source::SourceError::Empty(_))
     ));
 }
 

@@ -1,6 +1,6 @@
 use chrono::Datelike;
-use scanreport::model::{ScanState, SeverityBasis};
-use scanreport::source::{
+use image_scan_report::model::{ScanState, SeverityBasis};
+use image_scan_report::source::{
     ScanSource, SourceError,
     files::{dedupe_images, walk_json_files},
     trivy_file::{TrivyFileSource, parse_trivy_report},
@@ -30,7 +30,12 @@ fn parses_nginx_fixture() {
     assert_eq!(f.severity_basis, SeverityBasis::Cvss3);
     assert_eq!(f.score_source.as_deref(), Some("nvd"));
 }
-fn edge(name: &str) -> (scanreport::model::Image, Vec<scanreport::model::Finding>) {
+fn edge(
+    name: &str,
+) -> (
+    image_scan_report::model::Image,
+    Vec<image_scan_report::model::Finding>,
+) {
     parse_trivy_report(
         &std::fs::read(format!("tests/data/trivy/{name}.json")).unwrap(),
         None,
@@ -170,7 +175,7 @@ fn maps_optional_fields_and_preserves_first_duplicate() {
     assert_eq!(f[0].fixed_version, None);
     assert_eq!(
         f[0].fix_status,
-        Some(scanreport::model::FixStatus::WillNotFix)
+        Some(image_scan_report::model::FixStatus::WillNotFix)
     );
     assert_eq!(f[0].severity_basis, SeverityBasis::Cvss2);
     assert_eq!(f[0].score_v2, Some(7.5));
@@ -207,7 +212,7 @@ fn tags_ignore_registry_ports_and_digest_references() {
 #[test]
 fn missing_report_time_uses_file_mtime() {
     let path = std::path::Path::new("tests/data/trivy/no-report-time.json");
-    let mtime = scanreport::source::files::file_modified_at(path);
+    let mtime = image_scan_report::source::files::file_modified_at(path);
     let (image, _) = parse_trivy_report(&std::fs::read(path).unwrap(), mtime)
         .unwrap()
         .unwrap();

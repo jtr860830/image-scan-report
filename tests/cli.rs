@@ -36,7 +36,7 @@ fn run_subcommand_end_to_end() {
         .unwrap();
     assert!(name.starts_with("trivy-trivy-files-"));
     assert!(String::from_utf8_lossy(&out.stdout).contains(&name));
-    let report: scanreport::model::Report =
+    let report: image_scan_report::model::Report =
         serde_json::from_slice(&std::fs::read(dir.path().join(&name)).unwrap()).unwrap();
     assert!(String::from_utf8_lossy(&out.stdout).contains(&format!(
         "Report: {} images, {} findings",
@@ -106,7 +106,7 @@ fn scope_for_dot_is_directory_name() {
         .unwrap()
         .unwrap()
         .path();
-    let report: scanreport::model::Report =
+    let report: image_scan_report::model::Report =
         serde_json::from_slice(&std::fs::read(name).unwrap()).unwrap();
     assert_eq!(
         report.scope,
