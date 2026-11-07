@@ -6,3 +6,5 @@ pub mod model;
 pub mod severity;
 
 pub mod source;
+
+pub mod views;
