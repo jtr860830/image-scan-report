@@ -12,3 +12,5 @@ pub mod views;
 pub mod naming;
 pub mod pipeline;
 pub mod sink;
+
+pub mod render;
