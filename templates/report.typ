@@ -35,8 +35,12 @@
 #page[
   #heading(level: 1, outlined: false, t(data.strings, "toc_title"))
   #show outline.entry.where(level: 2): it => {
-    show text: set text(font: data.theme.fonts.mono, size: 8.5pt)
-    it
+    let body = {
+      show text: set text(font: data.theme.fonts.mono, size: 8.5pt)
+      it.body()
+    }
+    let fill = if it.fill != none { [ #box(width: 1fr, it.fill) ] } else { h(1fr) }
+    link(it.element.location(), it.indented(it.prefix(), body + fill + sym.wj + it.page()))
   }
   #outline(title: none, depth: 2, indent: 1.2em)
 ]
