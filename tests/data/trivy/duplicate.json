@@ -1,0 +1,1 @@
+{"SchemaVersion":2,"ArtifactName":"duplicate","Results":[{"Class":"os-pkgs","Vulnerabilities":[{"VulnerabilityID":"CVE-1","PkgName":"pkg","InstalledVersion":"1"}]},{"Class":"lang-pkgs","Vulnerabilities":[{"VulnerabilityID":"CVE-1","PkgName":"pkg","InstalledVersion":"1"}]}]}
