@@ -3,8 +3,9 @@ use crate::{
     model::*,
     views::{self, SeverityCounts},
 };
+use chrono::SecondsFormat;
 use serde::Serialize;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 pub const PLACEHOLDER: &str = "—";
 #[derive(Clone, Debug)]
 pub struct RenderOptions {
@@ -163,7 +164,7 @@ fn display(value: Option<&str>) -> String {
 }
 fn date(value: Option<chrono::DateTime<chrono::Utc>>) -> String {
     value
-        .map(|v| v.to_rfc3339())
+        .map(|v| v.to_rfc3339_opts(SecondsFormat::Secs, true))
         .unwrap_or_else(|| PLACEHOLDER.into())
 }
 fn score(value: Option<f32>) -> String {
@@ -172,7 +173,7 @@ fn score(value: Option<f32>) -> String {
         .unwrap_or_else(|| PLACEHOLDER.into())
 }
 fn status(value: &FixStatus) -> String {
-    match value {
+    sanitize(match value {
         FixStatus::Fixed => "fixed",
         FixStatus::Affected => "affected",
         FixStatus::WillNotFix => "will_not_fix",
@@ -180,8 +181,7 @@ fn status(value: &FixStatus) -> String {
         FixStatus::FixDeferred => "fix_deferred",
         FixStatus::UnderInvestigation => "under_investigation",
         FixStatus::Other(s) => s,
-    }
-    .to_owned()
+    })
 }
 fn frequencies(values: impl Iterator<Item = String>) -> Vec<(String, usize)> {
     let mut counts = BTreeMap::new();
@@ -225,9 +225,6 @@ pub fn build(
     theme: serde_json::Value,
 ) -> RenderData {
     let summaries = views::image_summaries(&report.images, &report.findings);
-    let counts = views::counts(&report.findings);
-    let rows = report.findings.len();
-    let fixable = views::fixable(&report.findings);
     let inventory: Vec<_> = views::unique_vulnerabilities(&report.findings)
         .into_iter()
         .map(|v| UniqueRow {
@@ -241,76 +238,28 @@ pub fn build(
                 sanitize(&v.fixed_versions.join(", "))
             },
             image_count: v.images.len(),
-            images: v.images,
+            images: sanitized_strings(&v.images),
         })
         .collect();
-    let images = summaries
-        .iter()
-        .map(|s| {
-            let image = report
-                .images
-                .iter()
-                .find(|i| i.reference == s.reference)
-                .expect("summary references a report image");
-            let mut findings: Vec<_> = report
-                .findings
-                .iter()
-                .filter(|f| f.image == image.reference)
-                .collect();
-            findings.sort_by(|a, b| {
-                b.severity
-                    .cmp(&a.severity)
-                    .then_with(
-                        || match (a.score_v3.or(a.score_v2), b.score_v3.or(b.score_v2)) {
-                            (Some(a), Some(b)) => b.total_cmp(&a),
-                            (Some(_), None) => std::cmp::Ordering::Less,
-                            (None, Some(_)) => std::cmp::Ordering::Greater,
-                            _ => std::cmp::Ordering::Equal,
-                        },
-                    )
-                    .then_with(|| a.id.cmp(&b.id))
-            });
-            ImageDetail {
-                reference: sanitize(&image.reference),
-                tags: image.tags.clone(),
-                digest: display(image.digest.as_deref()),
-                platform: display(image.platform.as_deref()),
-                os: display(image.os.as_deref()),
-                size: format_size(image.size_bytes),
-                created_at: date(image.created_at),
-                scanned_at: date(image.scan.scanned_at),
-                scan_state: match image.scan.state {
-                    ScanState::Ok => "ok",
-                    ScanState::Failed => "failed",
-                    ScanState::NotScanned => "not_scanned",
-                }
-                .into(),
-                scan_error: display(image.scan.error.as_deref()),
-                scanner_version: display(image.scan.scanner_version.as_deref()),
-                counts: s.counts.clone(),
-                findings: findings.into_iter().map(finding_row).collect(),
-            }
-        })
-        .collect();
-    let bar = [
-        (Severity::Critical, counts.critical),
-        (Severity::High, counts.high),
-        (Severity::Medium, counts.medium),
-        (Severity::Low, counts.low),
-        (Severity::Unrated, counts.unrated),
-    ]
-    .into_iter()
-    .filter(|(_, n)| *n > 0)
-    .map(|(s, n)| BarSegment {
-        severity_label: s.label().into(),
-        percent: n as f32 * 100.0 / rows as f32,
-    })
-    .collect();
+    let mut grouped: HashMap<&str, Vec<&Finding>> = HashMap::new();
+    for finding in &report.findings {
+        grouped
+            .entry(finding.image.as_str())
+            .or_default()
+            .push(finding);
+    }
+    let mut images_by_reference: HashMap<&str, &Image> = HashMap::new();
+    for image in &report.images {
+        images_by_reference
+            .entry(image.reference.as_str())
+            .or_insert(image);
+    }
+    let images = image_details(&summaries, &images_by_reference, &grouped);
     RenderData {
         meta: Meta {
-            product_name: opts.product_name.clone(),
-            product_version: opts.product_version.clone(),
-            generated_at: report.generated_at.to_rfc3339(),
+            product_name: sanitize(&opts.product_name),
+            product_version: sanitize(&opts.product_version),
+            generated_at: date(Some(report.generated_at)),
             generated_date: report.generated_at.format("%Y-%m-%d").to_string(),
             language: match opts.language {
                 Language::En => "en",
@@ -328,99 +277,193 @@ pub fn build(
             db_updated_at: date(report.source.db_updated_at),
         },
         scope: sanitize(&report.scope),
-        summary: Summary {
-            images_total: report.images.len(),
-            findings_total: rows,
-            unique_total: inventory.len(),
-            counts,
-            fixable,
-            fixable_percent: if rows == 0 {
-                0
-            } else {
-                ((fixable as u128 * 100 + rows as u128 / 2) / rows as u128) as usize
-            },
-            images_with_high_or_worse: views::images_with_high_or_worse(&summaries),
-            bar,
-            top_images: summaries
-                .iter()
-                .take(opts.top_images)
-                .map(|s| ImageRow {
-                    reference: s.reference.clone(),
-                    counts: s.counts.clone(),
-                })
-                .collect(),
-            top_findings: inventory.iter().take(opts.top_findings).cloned().collect(),
-        },
-        remediation: Remediation {
-            groups: views::remediation_groups(&report.findings)
-                .into_iter()
-                .map(|g| RemediationRow {
-                    package: g.package,
-                    fixed_version: g.fixed_version,
-                    resolves: g.resolves,
-                    images: g.images,
-                })
-                .collect(),
-            unfixable_total: rows - fixable,
-            unfixable_by_status: frequencies(
-                report
-                    .findings
-                    .iter()
-                    .filter(|f| f.fixed_version.is_none())
-                    .map(|f| {
-                        f.fix_status
-                            .as_ref()
-                            .map(status)
-                            .unwrap_or_else(|| "unknown".into())
-                    }),
-            ),
-        },
+        summary: summary(report, opts, &summaries, &inventory),
+        remediation: remediation(report, &grouped),
         inventory,
         images,
-        appendix: Appendix {
-            failed_images: report
-                .images
-                .iter()
-                .filter(|i| i.scan.state != ScanState::Ok)
-                .map(|i| (i.reference.clone(), display(i.scan.error.as_deref())))
-                .collect(),
-            stale_images: views::stale_images(
-                &report.images,
-                report.generated_at,
-                opts.stale_after_days,
-            )
-            .into_iter()
-            .map(|i| (i.reference.clone(), date(i.scan.scanned_at)))
-            .collect(),
-            stale_after_days: opts.stale_after_days,
-            severity_rule: [
-                ("Critical", "≥ 9.0"),
-                ("High", "7.0 – 8.9"),
-                ("Medium", "4.0 – 6.9"),
-                ("Low", "0.1 – 3.9"),
-            ]
-            .into_iter()
-            .map(|(a, b)| (a.into(), b.into()))
-            .collect(),
-            score_sources: frequencies(
-                report
-                    .findings
-                    .iter()
-                    .map(|f| f.score_source.clone().unwrap_or_else(|| "none".into())),
-            ),
-            limitations: [
-                "limit_recomputed",
-                "limit_sources_differ",
-                "limit_filled_scores",
-                "limit_coverage",
-                "limit_registry_scope",
-                "limit_no_history",
-            ]
-            .into_iter()
-            .map(String::from)
-            .collect(),
-        },
+        appendix: appendix(report, opts, &grouped),
         strings,
         theme,
     }
+}
+
+fn sanitized_strings(values: &[String]) -> Vec<String> {
+    values.iter().map(|v| sanitize(v)).collect()
+}
+
+fn summary(
+    report: &Report,
+    opts: &RenderOptions,
+    summaries: &[views::ImageSummary],
+    inventory: &[UniqueRow],
+) -> Summary {
+    let counts = views::counts(&report.findings);
+    let rows = report.findings.len();
+    let fixable = views::fixable(&report.findings);
+    let bar = [
+        (Severity::Critical, counts.critical),
+        (Severity::High, counts.high),
+        (Severity::Medium, counts.medium),
+        (Severity::Low, counts.low),
+        (Severity::Unrated, counts.unrated),
+    ]
+    .into_iter()
+    .filter(|(_, n)| *n > 0)
+    .map(|(s, n)| BarSegment {
+        severity_label: s.label().into(),
+        percent: n as f32 * 100.0 / rows as f32,
+    })
+    .collect();
+    Summary {
+        images_total: report.images.len(),
+        findings_total: rows,
+        unique_total: inventory.len(),
+        counts,
+        fixable,
+        fixable_percent: if rows == 0 {
+            0
+        } else {
+            ((fixable as u128 * 100 + rows as u128 / 2) / rows as u128) as usize
+        },
+        images_with_high_or_worse: views::images_with_high_or_worse(summaries),
+        bar,
+        top_images: summaries
+            .iter()
+            .take(opts.top_images)
+            .map(|s| ImageRow {
+                reference: sanitize(&s.reference),
+                counts: s.counts.clone(),
+            })
+            .collect(),
+        top_findings: inventory.iter().take(opts.top_findings).cloned().collect(),
+    }
+}
+
+fn remediation(report: &Report, grouped: &HashMap<&str, Vec<&Finding>>) -> Remediation {
+    let rows = report.findings.len();
+    let fixable = views::fixable(&report.findings);
+    Remediation {
+        groups: views::remediation_groups(&report.findings)
+            .into_iter()
+            .map(|g| RemediationRow {
+                package: sanitize(&g.package),
+                fixed_version: sanitize(&g.fixed_version),
+                resolves: g.resolves,
+                images: sanitized_strings(&g.images),
+            })
+            .collect(),
+        unfixable_total: rows - fixable,
+        unfixable_by_status: frequencies(
+            grouped
+                .values()
+                .flatten()
+                .filter(|f| f.fixed_version.is_none())
+                .map(|f| {
+                    f.fix_status
+                        .as_ref()
+                        .map(status)
+                        .unwrap_or_else(|| "unknown".into())
+                }),
+        ),
+    }
+}
+
+fn appendix(
+    report: &Report,
+    opts: &RenderOptions,
+    grouped: &HashMap<&str, Vec<&Finding>>,
+) -> Appendix {
+    Appendix {
+        failed_images: report
+            .images
+            .iter()
+            .filter(|i| i.scan.state != ScanState::Ok)
+            .map(|i| (sanitize(&i.reference), display(i.scan.error.as_deref())))
+            .collect(),
+        stale_images: views::stale_images(
+            &report.images,
+            report.generated_at,
+            opts.stale_after_days,
+        )
+        .into_iter()
+        .map(|i| (sanitize(&i.reference), date(i.scan.scanned_at)))
+        .collect(),
+        stale_after_days: opts.stale_after_days,
+        severity_rule: [
+            ("Critical", "≥ 9.0"),
+            ("High", "7.0 – 8.9"),
+            ("Medium", "4.0 – 6.9"),
+            ("Low", "0.1 – 3.9"),
+        ]
+        .into_iter()
+        .map(|(a, b)| (a.into(), b.into()))
+        .collect(),
+        score_sources: frequencies(
+            grouped
+                .values()
+                .flatten()
+                .map(|f| display(f.score_source.as_deref())),
+        ),
+        limitations: [
+            "limit_recomputed",
+            "limit_sources_differ",
+            "limit_filled_scores",
+            "limit_coverage",
+            "limit_registry_scope",
+            "limit_no_history",
+        ]
+        .into_iter()
+        .map(String::from)
+        .collect(),
+    }
+}
+
+fn image_details(
+    summaries: &[views::ImageSummary],
+    images_by_reference: &HashMap<&str, &Image>,
+    grouped: &HashMap<&str, Vec<&Finding>>,
+) -> Vec<ImageDetail> {
+    summaries
+        .iter()
+        .filter_map(|s| {
+            let image = images_by_reference.get(s.reference.as_str())?;
+            let mut findings = grouped
+                .get(s.reference.as_str())
+                .cloned()
+                .unwrap_or_default();
+            findings.sort_by(|a, b| {
+                b.severity
+                    .cmp(&a.severity)
+                    .then_with(
+                        || match (a.score_v3.or(a.score_v2), b.score_v3.or(b.score_v2)) {
+                            (Some(a), Some(b)) => b.total_cmp(&a),
+                            (Some(_), None) => std::cmp::Ordering::Less,
+                            (None, Some(_)) => std::cmp::Ordering::Greater,
+                            _ => std::cmp::Ordering::Equal,
+                        },
+                    )
+                    .then_with(|| a.id.cmp(&b.id))
+            });
+            Some(ImageDetail {
+                reference: sanitize(&image.reference),
+                tags: sanitized_strings(&image.tags),
+                digest: display(image.digest.as_deref()),
+                platform: display(image.platform.as_deref()),
+                os: display(image.os.as_deref()),
+                size: format_size(image.size_bytes),
+                created_at: date(image.created_at),
+                scanned_at: date(image.scan.scanned_at),
+                scan_state: match image.scan.state {
+                    ScanState::Ok => "ok",
+                    ScanState::Failed => "failed",
+                    ScanState::NotScanned => "not_scanned",
+                }
+                .into(),
+                scan_error: display(image.scan.error.as_deref()),
+                scanner_version: display(image.scan.scanner_version.as_deref()),
+                counts: s.counts.clone(),
+                findings: findings.into_iter().map(finding_row).collect(),
+            })
+        })
+        .collect()
 }

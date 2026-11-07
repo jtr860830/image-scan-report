@@ -110,6 +110,8 @@ fn placeholders_never_print_none() {
         ("—", "—", "—", "—", "none")
     );
     let i = &d.images[0];
+    assert_eq!(i.platform, "—");
+    assert_eq!(i.scanner_version, "—");
     assert_eq!(
         (&*i.digest, &*i.os, &*i.size, &*i.scanned_at),
         ("—", "—", "—", "—")
@@ -139,6 +141,17 @@ fn description_is_truncated() {
         .description;
     assert_eq!(s.chars().count(), 1201);
     assert!(s.ends_with('…'));
+    r.findings[0].description = "é".repeat(1300);
+    let d = render(&r);
+    let s = &d
+        .images
+        .iter()
+        .find(|i| !i.findings.is_empty())
+        .unwrap()
+        .findings[0]
+        .description;
+    assert_eq!(s.chars().count(), 1201);
+    assert_eq!(s, &format!("{}…", "é".repeat(1200)));
 }
 #[test]
 fn format_size_cases() {
@@ -230,6 +243,54 @@ fn ordering_status_groups_and_rounding() {
             ("custom".into(), 1)
         ]
     );
-    assert_eq!(data.appendix.score_sources, vec![("none".into(), 8)]);
+    assert_eq!(data.appendix.score_sources, vec![("—".into(), 8)]);
     assert_eq!(data.images[0].counts.total(), 8);
+}
+
+#[test]
+fn build_sanitizes_every_external_string() {
+    let mut r = report();
+    let dirty = "a\u{0}b\u{7}c";
+    r.scope = dirty.into();
+    r.organisation = dirty.into();
+    r.source.display_name = dirty.into();
+    r.source.scanner_name = Some(dirty.into());
+    r.source.scanner_version = Some(dirty.into());
+    r.source.db_version = Some(dirty.into());
+    r.images.truncate(1);
+    let i = &mut r.images[0];
+    i.reference = dirty.into();
+    i.tags = vec![dirty.into()];
+    i.digest = Some(dirty.into());
+    i.platform = Some(dirty.into());
+    i.os = Some(dirty.into());
+    i.scan.scanner_version = Some(dirty.into());
+    i.scan.error = Some(dirty.into());
+    i.scan.scanned_at = None;
+    let mut failed = i.clone();
+    failed.reference = format!("failed{dirty}");
+    failed.scan.state = ScanState::Failed;
+    r.images.push(failed);
+    let mut f = finding();
+    f.image = dirty.into();
+    f.id = dirty.into();
+    f.package = dirty.into();
+    f.installed_version = dirty.into();
+    f.fix_status = Some(FixStatus::Other("x\u{1}y".into()));
+    f.scanner_severity = Some(dirty.into());
+    f.description = dirty.into();
+    f.links = vec![dirty.into()];
+    f.score_source = Some(dirty.into());
+    let mut fixed = f.clone();
+    fixed.fixed_version = Some(dirty.into());
+    r.findings = vec![f, fixed];
+    let data = render(&r);
+    let json = serde_json::to_string(&data).unwrap();
+    for escape in ["\\u0000", "\\u0001", "\\u0007"] {
+        assert!(!json.contains(escape), "unsanitized escape: {escape}");
+    }
+    assert_eq!(data.remediation.unfixable_by_status, vec![("xy".into(), 1)]);
+    assert_eq!(data.appendix.score_sources, vec![("abc".into(), 2)]);
+    assert_eq!(data.images.len(), 2);
+    assert_eq!(data.images[0].findings.len(), 2);
 }
