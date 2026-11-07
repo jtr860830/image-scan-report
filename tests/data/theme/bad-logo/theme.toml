@@ -1,0 +1,29 @@
+# Theme contract version 1: product, colors and fonts keys are required.
+# Place an optional logo.png or logo.svg beside this file.
+version = 1
+
+[product]
+name = "judex"
+url = ""
+
+[colors]
+ink = "#212529"
+secondary = "#495057"
+muted = "#868e96"
+rule = "#e9ecef"
+surface = "#f8f9fa"
+accent = "#4263eb"
+critical = "#6741d9"
+high = "#e03131"
+medium = "#f08c00"
+low = "#1c7ed6"
+unrated = "#868e96"
+tint_critical = "#f3f0ff"
+tint_high = "#fff5f5"
+tint_medium = "#fff9db"
+tint_low = "#e7f5ff"
+tint_unrated = "#f1f3f5"
+
+[fonts]
+text = ["Inter", "Noto Sans TC"]
+mono = ["Maple Mono NL", "Noto Sans TC"]

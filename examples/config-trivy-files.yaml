@@ -9,3 +9,7 @@ report:
 output:
   - type: filesystem
     path: ./out
+
+# Optional directory containing theme.toml and a logo.
+# theme:
+#   path: ./themes/default

@@ -10,6 +10,8 @@ use crate::model::Language;
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
+    #[serde(default)]
+    pub theme: ThemeConfig,
     pub source: SourceConfig,
     pub report: ReportConfig,
     pub output: Vec<OutputConfig>,
@@ -188,4 +190,10 @@ impl Config {
         }
         Ok(())
     }
+}
+
+#[derive(Deserialize, Debug, Clone, PartialEq, Default)]
+#[serde(deny_unknown_fields)]
+pub struct ThemeConfig {
+    pub path: Option<PathBuf>,
 }
