@@ -53,7 +53,7 @@
             (table.cell(colspan: 6, [
               #if row.basis in ("cvss2", "scanner_label") {
                 text(size: 6.5pt, fill: rgb(theme.colors.muted), box[
-                  #if row.basis == "cvss2" { tr("basis_cvss2") } else { tr("basis_scanner_label") + ": " + row.scanner_severity }
+                  #if row.basis == "cvss2" { tr("basis_cvss2") } else { tr("basis_scanner_label") + row.scanner_severity }
                 ])
                 if row.show_description and row.description != "" { " · " }
               }

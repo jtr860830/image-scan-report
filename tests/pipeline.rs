@@ -288,5 +288,7 @@ fn customer_logo_renders_on_cover_and_gif_exits_2() {
     cfg.report.logo = Some(gif);
     let err = run(&cfg, now(), &product()).unwrap_err();
     assert_eq!(err.exit_code(), 2);
+    assert!(err.to_string().contains("report.logo:"), "{err}");
+    assert!(!err.to_string().contains("theme:"), "{err}");
     assert!(matches!(err, RunError::Config(_)));
 }

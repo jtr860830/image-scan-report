@@ -80,7 +80,7 @@
   "page_of": "{page} / {total}",
   "basis_cvss3": "Based on CVSS v3",
   "basis_cvss2": "v2",
-  "basis_scanner_label": "label",
+  "basis_scanner_label": "label: ",
   "basis_none": "No severity source",
   "scan_state_ok": "Scan Succeeded",
   "scan_state_failed": "Scan Failed",

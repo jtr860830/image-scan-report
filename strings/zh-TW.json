@@ -80,7 +80,7 @@
   "page_of": "{page} / {total}",
   "basis_cvss3": "依 CVSS v3 分數",
   "basis_cvss2": "v2",
-  "basis_scanner_label": "標籤",
+  "basis_scanner_label": "標籤：",
   "basis_none": "無嚴重等級依據",
   "scan_state_ok": "掃描成功",
   "scan_state_failed": "掃描失敗",

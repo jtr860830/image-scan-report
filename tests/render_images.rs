@@ -153,7 +153,13 @@ fn scores_show_their_basis() {
     let text = compact(&text);
     assert!(text.contains("6.4"), "{text}");
     assert!(text.contains("v2"), "{text}");
-    assert!(text.contains("label:High"), "{text}");
+    assert!(
+        text.contains(&compact(&format!(
+            "{}High",
+            data.strings["basis_scanner_label"]
+        ))),
+        "{text}"
+    );
 }
 
 #[test]

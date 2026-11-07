@@ -109,7 +109,7 @@ fn load_inputs(cfg: &Config, now: DateTime<Utc>) -> Result<Inputs, RunError> {
         .as_deref()
         .map(crate::render::theme::Logo::load)
         .transpose()
-        .map_err(ConfigError::from)?;
+        .map_err(|err| ConfigError::Invalid(format!("report.logo: {err}")))?;
     let sinks = build_sinks(&cfg.output)?;
     let source = build_source(&cfg.source)?;
     let source_description = source.describe();

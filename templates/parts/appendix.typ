@@ -17,7 +17,7 @@
     columns: (3.6cm, 1fr),
     muted(theme, tr("appendix_scanner")), present((data.source.display_name, data.source.scanner_name, data.source.scanner_version)),
     muted(theme, tr("appendix_db")), present((data.source.db_version, data.source.db_updated_at)),
-    muted(theme, tr("appendix_tool")), data.meta.product_name + " " + data.meta.product_version,
+    muted(theme, tr("appendix_tool")), data.theme.product.name + " " + data.meta.product_version,
   )
   section-title(theme, tr("appendix_rule_title"))
   tr("appendix_rule_text")
