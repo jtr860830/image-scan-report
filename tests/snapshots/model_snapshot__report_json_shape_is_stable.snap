@@ -1,0 +1,75 @@
+---
+source: tests/model_snapshot.rs
+expression: report
+---
+{
+  "generated_at": "2026-11-07T00:00:00Z",
+  "language": "zh-TW",
+  "organisation": "Example Organisation",
+  "source": {
+    "kind": "trivy-files",
+    "display_name": "Fixture scans",
+    "scanner_name": "Trivy",
+    "scanner_version": "1.0",
+    "db_version": "2",
+    "db_updated_at": "2026-11-07T00:00:00Z"
+  },
+  "scope": "Production",
+  "images": [
+    {
+      "reference": "example/app:latest",
+      "tags": [
+        "latest"
+      ],
+      "digest": "sha256:abc",
+      "platform": "linux/amd64",
+      "os": "alpine",
+      "size_bytes": 1024,
+      "created_at": "2026-11-07T00:00:00Z",
+      "scan": {
+        "state": "ok",
+        "scanned_at": "2026-11-07T00:00:00Z",
+        "scanner_version": "1.0",
+        "error": null
+      }
+    }
+  ],
+  "findings": [
+    {
+      "id": "CVE-2026-0001",
+      "image": "example/app:latest",
+      "severity": "critical",
+      "severity_basis": "cvss3",
+      "score_v3": 9.8,
+      "score_v2": 7.5,
+      "score_source": "NVD",
+      "scanner_severity": "CRITICAL",
+      "package": "openssl",
+      "installed_version": "1.0",
+      "fixed_version": "1.1",
+      "fix_status": "fixed",
+      "description": "Example vulnerability",
+      "links": [
+        "https://example.com/CVE-2026-0001"
+      ],
+      "published_at": "2026-11-07T00:00:00Z"
+    },
+    {
+      "id": "CVE-2026-0002",
+      "image": "example/app:latest",
+      "severity": "unrated",
+      "severity_basis": "none",
+      "score_v3": null,
+      "score_v2": null,
+      "score_source": null,
+      "scanner_severity": null,
+      "package": "libexample",
+      "installed_version": "2.0",
+      "fixed_version": null,
+      "fix_status": "pending review",
+      "description": "Unscored vulnerability",
+      "links": [],
+      "published_at": null
+    }
+  ]
+}
