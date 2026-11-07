@@ -3,12 +3,13 @@ use crate::{
     config::{Config, ConfigError, ReportConfig, SourceConfig},
     model::{Report, ScanSet},
     naming::artifact_base_name,
-    sink::{Artifact, build_sinks},
+    sink::{Artifact, ReportSink, build_sinks},
     source::{
         ScanSource, SourceError, neuvector_file::NeuvectorFileSource, trivy_file::TrivyFileSource,
     },
 };
 use chrono::{DateTime, Utc};
+use std::path::{Path, PathBuf};
 
 pub fn build_source(cfg: &SourceConfig) -> Result<Box<dyn ScanSource>, ConfigError> {
     match cfg {
@@ -89,15 +90,61 @@ fn render_options(
     }
 }
 
+struct Inputs {
+    theme: crate::render::theme::Theme,
+    source_description: String,
+    report: Report,
+    sinks: Vec<Box<dyn ReportSink>>,
+}
+
+/// Configuration has already been validated by the loader. Preserve the
+/// theme -> sinks -> source error order for every pipeline entry point.
+fn load_inputs(cfg: &Config, now: DateTime<Utc>) -> Result<Inputs, RunError> {
+    let theme = crate::render::theme::load(cfg.theme.path.as_deref()).map_err(ConfigError::from)?;
+    let sinks = build_sinks(&cfg.output)?;
+    let source = build_source(&cfg.source)?;
+    let source_description = source.describe();
+    let report = assemble_report(source.fetch()?, &cfg.report, now);
+    Ok(Inputs {
+        theme,
+        source_description,
+        report,
+        sinks,
+    })
+}
+
+#[derive(Debug)]
+pub struct RenderDataSummary {
+    pub path: PathBuf,
+    pub images: usize,
+    pub findings: usize,
+}
+
+/// Write display-ready JSON for template iteration.
+pub fn write_render_data(
+    cfg: &Config,
+    now: DateTime<Utc>,
+    product: &ProductInfo,
+    out: &Path,
+) -> Result<RenderDataSummary, RunError> {
+    let data = render_data(cfg, now, product)?;
+    let bytes = serde_json::to_vec_pretty(&data).map_err(|e| RunError::Render(e.to_string()))?;
+    std::fs::write(out, bytes)
+        .map_err(|e| RunError::Render(format!("cannot write {}: {e}", out.display())))?;
+    Ok(RenderDataSummary {
+        path: out.to_owned(),
+        images: data.summary.images_total,
+        findings: data.summary.findings_total,
+    })
+}
+
 /// Build display-ready JSON using the same inputs and options as PDF rendering.
 pub fn render_data(
     cfg: &Config,
     now: DateTime<Utc>,
     product: &ProductInfo,
 ) -> Result<crate::render::model::RenderData, RunError> {
-    let theme = crate::render::theme::load(cfg.theme.path.as_deref()).map_err(ConfigError::from)?;
-    let set = build_source(&cfg.source)?.fetch()?;
-    let report = assemble_report(set, &cfg.report, now);
+    let Inputs { theme, report, .. } = load_inputs(cfg, now)?;
     let opts = render_options(&cfg.report, product);
     Ok(crate::render::model::build(
         &report,
@@ -112,10 +159,12 @@ pub fn run(
     now: DateTime<Utc>,
     product: &ProductInfo,
 ) -> Result<RunSummary, RunError> {
-    let sinks = build_sinks(&cfg.output)?;
-    let theme = crate::render::theme::load(cfg.theme.path.as_deref()).map_err(ConfigError::from)?;
-    let set = build_source(&cfg.source)?.fetch()?;
-    let report = assemble_report(set, &cfg.report, now);
+    let Inputs {
+        theme,
+        report,
+        sinks,
+        ..
+    } = load_inputs(cfg, now)?;
     let mut artifacts = Vec::new();
     if cfg.report.json {
         artifacts.push(Artifact {
@@ -169,16 +218,15 @@ pub fn run(
     Ok(summary)
 }
 
-pub fn check(cfg: &Config, _product: &ProductInfo) -> Result<String, RunError> {
-    build_sinks(&cfg.output)?;
-    let theme = crate::render::theme::load(cfg.theme.path.as_deref()).map_err(ConfigError::from)?;
-    let source = build_source(&cfg.source)?;
-    let set = source.fetch()?;
+pub fn check(cfg: &Config, product: &ProductInfo) -> Result<String, RunError> {
+    let inputs = load_inputs(cfg, Utc::now())?;
     Ok(format!(
-        "{}: {} images, {} findings; theme: {}",
-        source.describe(),
-        set.images.len(),
-        set.findings.len(),
-        theme.product.name
+        "{}: {} images, {} findings; theme: {}; product: {} {}",
+        inputs.source_description,
+        inputs.report.images.len(),
+        inputs.report.findings.len(),
+        inputs.theme.product.name,
+        product.name,
+        product.version
     ))
 }

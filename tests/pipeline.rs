@@ -1,11 +1,13 @@
 #[path = "support/pdf.rs"]
 mod pdf;
+#[path = "support/reduced_fixtures.rs"]
+mod reduced_fixtures;
 use chrono::{DateTime, NaiveDate, Utc};
 use image_scan_report::{
     config::Config,
     model::{Report, SourceKind},
     naming::{artifact_base_name, slug},
-    pipeline::{ProductInfo, RunError, check, run},
+    pipeline::{ProductInfo, RunError, check, run, write_render_data},
     source::SourceError,
 };
 use std::path::Path;
@@ -74,7 +76,7 @@ fn check_reports_counts() {
     assert_eq!(
         check(&cfg, &product()).unwrap(),
         format!(
-            "Trivy (files): {}: 11 images, {} findings; theme: judex",
+            "Trivy (files): {}: 11 images, {} findings; theme: judex; product: judex 0.1.0",
             fixtures().display(),
             summary.findings
         )
@@ -105,14 +107,31 @@ fn product() -> ProductInfo {
 #[test]
 fn run_writes_pdf_and_json() {
     let dir = tempfile::tempdir().unwrap();
-    let mut cfg = config(&fixtures(), dir.path());
+    let input = reduced_fixtures::input();
+    let mut cfg = config(input.path(), dir.path());
     cfg.report.pdf = true;
     let summary = run(&cfg, now(), &product()).unwrap();
     assert_eq!(summary.stored.len(), 2);
-    let bytes = std::fs::read(dir.path().join("trivy-trivy-files-2026-11-07.pdf")).unwrap();
+    let bytes = std::fs::read(dir.path().join(format!(
+        "{}.pdf",
+        artifact_base_name(
+            input.path().file_name().unwrap().to_str().unwrap(),
+            SourceKind::TrivyFiles,
+            now().date_naive()
+        )
+    )))
+    .unwrap();
     assert!(pdf::page_count(&bytes) >= 6);
     let _: Report = serde_json::from_slice(
-        &std::fs::read(dir.path().join("trivy-trivy-files-2026-11-07.json")).unwrap(),
+        &std::fs::read(dir.path().join(format!(
+            "{}.json",
+            artifact_base_name(
+                input.path().file_name().unwrap().to_str().unwrap(),
+                SourceKind::TrivyFiles,
+                now().date_naive()
+            )
+        )))
+        .unwrap(),
     )
     .unwrap();
 }
@@ -176,4 +195,68 @@ fn check_rejects_http_output_before_fetch() {
         Err(RunError::Config(_))
     ));
     assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 0);
+}
+
+#[test]
+fn theme_errors_precede_bad_sinks() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut cfg = config(dir.path(), dir.path());
+    cfg.theme.path =
+        Some(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/data/theme/unknown-key"));
+    cfg.output = vec![image_scan_report::config::OutputConfig::Http {
+        url: "https://example.test/upload".into(),
+        method: "POST".into(),
+        headers: Default::default(),
+        mode: image_scan_report::config::HttpMode::Raw,
+        ca_file: None,
+        timeout_secs: 30,
+    }];
+    for err in [
+        run(&cfg, now(), &product()).unwrap_err(),
+        check(&cfg, &product()).unwrap_err(),
+    ] {
+        assert!(matches!(err, RunError::Config(_)));
+        assert!(err.to_string().contains("theme.toml"));
+    }
+}
+
+#[test]
+fn write_render_data_empty_input_exits_3() {
+    let input = tempfile::tempdir().unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let err = write_render_data(
+        &config(input.path(), dir.path()),
+        now(),
+        &product(),
+        &dir.path().join("data.json"),
+    )
+    .unwrap_err();
+    assert_eq!(err.exit_code(), 3);
+    assert!(matches!(err, RunError::Source(SourceError::Empty(_))));
+}
+
+#[test]
+fn write_render_data_missing_parent_exits_4() {
+    let input = reduced_fixtures::input();
+    let dir = tempfile::tempdir().unwrap();
+    let out = dir.path().join("missing/data.json");
+    let err =
+        write_render_data(&config(input.path(), dir.path()), now(), &product(), &out).unwrap_err();
+    assert_eq!(err.exit_code(), 4);
+    assert!(matches!(err, RunError::Render(_)));
+    assert!(err.to_string().contains("missing/data.json"));
+}
+
+#[test]
+fn write_render_data_returns_summary() {
+    let input = reduced_fixtures::input();
+    let dir = tempfile::tempdir().unwrap();
+    let out = dir.path().join("data.json");
+    let summary =
+        write_render_data(&config(input.path(), dir.path()), now(), &product(), &out).unwrap();
+    let data: serde_json::Value = serde_json::from_slice(&std::fs::read(&out).unwrap()).unwrap();
+    assert_eq!(summary.path, out);
+    assert_eq!(summary.images, 3);
+    assert_eq!(data["summary"]["images_total"], summary.images);
+    assert_eq!(data["summary"]["findings_total"], summary.findings);
 }

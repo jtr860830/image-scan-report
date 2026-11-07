@@ -27,7 +27,7 @@ resolve from the working directory, not the configuration file's directory.
 See [fixture provenance](fixtures/README.md) for how the scanner inputs were captured.
 
 `version` prints `judex 0.1.0`. `check` fetches and parses the source and prints
-`Trivy (files): ./fixtures/trivy: 11 images, 4368 findings; theme: judex`; it validates output configuration and the theme without
+`Trivy (files): ./fixtures/trivy: 11 images, 4368 findings; theme: judex; product: judex 0.1.0`; it validates output configuration and the theme without
 writing artifacts. `run` prints `Report: 11 images, 4368 findings`, followed by
 one destination and filename per stored artifact. Counts depend on the inputs.
 The example produces `out/trivy-trivy-files-YYYY-MM-DD.pdf` and a matching JSON file, using the UTC run

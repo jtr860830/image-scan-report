@@ -69,9 +69,9 @@ extend `model::Language` and the string loader, and update language mapping in
 Visual preview PNGs live under `target/visual/`.
 
 Rendering tests use the reduced fixture helper in `tests/support/data.rs` to
-keep layout checks fast while retaining real scanner data. Full-fixture pipeline
-and binary tests cover integration with all findings; they can take a few minutes
-in debug builds. Do not reduce or modify captured files in `fixtures/`.
+keep layout checks fast while retaining real scanner data. PDF pipeline and binary integration tests copy only alpine-3.12.json,
+nginx-1.21.0.json and busybox-1.37.json into temporary directories using
+`tests/support/reduced_fixtures.rs`. JSON-only tests still cover the complete inputs. Do not reduce or modify captured files in `fixtures/`.
 
 ## Renaming
 
