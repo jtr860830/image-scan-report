@@ -36,16 +36,32 @@ struct NvFile {
     report: Option<NvReport>,
 }
 
-fn read_report(bytes: &[u8], path: Option<&Path>) -> Result<Option<NvReport>, ParseError> {
+fn read_report(
+    bytes: &[u8],
+    path: Option<&Path>,
+    source_dir: Option<&Path>,
+) -> Result<Option<NvReport>, ParseError> {
     let file: NvFile = serde_json::from_slice(bytes)?;
     if file.error_message.is_empty() {
         return Ok(file.report);
     }
     let mut report = file.report.unwrap_or_else(|| NvReport {
         repository: path
-            .and_then(Path::parent)
-            .and_then(Path::file_name)
-            .map(|name| name.to_string_lossy().into_owned())
+            .zip(source_dir)
+            .and_then(|(path, dir)| path.strip_prefix(dir).ok())
+            .map(|path| {
+                let mut reference = path.with_extension("");
+                if path
+                    .file_name()
+                    .is_some_and(|name| name == "scan_result.json")
+                    && reference
+                        .parent()
+                        .is_some_and(|parent| !parent.as_os_str().is_empty())
+                {
+                    reference.pop();
+                }
+                reference.to_string_lossy().into_owned()
+            })
             .unwrap_or_default(),
         ..NvReport::default()
     });
@@ -125,7 +141,7 @@ pub fn parse_neuvector_result(
     bytes: &[u8],
     scanned_at: Option<DateTime<Utc>>,
 ) -> Result<Option<(Image, Vec<Finding>)>, ParseError> {
-    Ok(read_report(bytes, None)?.map(|report| map_report(report, scanned_at)))
+    Ok(read_report(bytes, None, None)?.map(|report| map_report(report, scanned_at)))
 }
 
 pub struct NeuvectorFileSource {
@@ -140,15 +156,17 @@ impl ScanSource for NeuvectorFileSource {
         let mut db_version = None;
         let mut db_updated_at = None;
         let fetched = fetch_directory(&self.dir, |path, bytes, scanned_at| {
-            Ok(read_report(bytes, Some(path))?.map(|report| {
-                if db_version.is_none() {
-                    db_version = report.cvedb_version.clone();
-                }
-                if db_updated_at.is_none() {
-                    db_updated_at = report.cvedb_create_time;
-                }
-                map_report(report, scanned_at)
-            }))
+            Ok(
+                read_report(bytes, Some(path), Some(&self.dir))?.map(|report| {
+                    if db_version.is_none() {
+                        db_version = report.cvedb_version.clone();
+                    }
+                    if db_updated_at.is_none() {
+                        db_updated_at = report.cvedb_create_time;
+                    }
+                    map_report(report, scanned_at)
+                }),
+            )
         })?;
         Ok(fetched.into_scan_set(SourceInfo {
             kind: SourceKind::NeuvectorFiles,

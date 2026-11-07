@@ -198,3 +198,33 @@ fn top_level_error_overrides_report_success() {
     assert_eq!(image.scan.error.as_deref(), Some("scan failed"));
     assert!(findings.is_empty());
 }
+
+#[test]
+fn renamed_failed_scans_keep_distinct_references() {
+    let dir = tempfile::tempdir().unwrap();
+    for name in ["a.json", "b.json"] {
+        std::fs::write(
+            dir.path().join(name),
+            br#"{"error_message":"manifest unknown","report":null}"#,
+        )
+        .unwrap();
+    }
+    let set = NeuvectorFileSource {
+        dir: dir.path().into(),
+    }
+    .fetch()
+    .unwrap();
+    assert_eq!(set.images.len(), 2);
+    assert!(
+        set.images
+            .iter()
+            .all(|image| image.scan.state == ScanState::Failed)
+    );
+    let mut references: Vec<_> = set
+        .images
+        .iter()
+        .map(|image| image.reference.as_str())
+        .collect();
+    references.sort_unstable();
+    assert_eq!(references, ["a", "b"]);
+}
