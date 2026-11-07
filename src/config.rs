@@ -8,6 +8,7 @@ use serde::Deserialize;
 use crate::model::Language;
 
 #[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Config {
     pub source: SourceConfig,
     pub report: ReportConfig,
@@ -15,7 +16,7 @@ pub struct Config {
 }
 
 #[derive(Debug, Deserialize)]
-#[serde(tag = "type", rename_all = "kebab-case")]
+#[serde(tag = "type", rename_all = "kebab-case", deny_unknown_fields)]
 pub enum SourceConfig {
     TrivyFiles {
         path: PathBuf,
@@ -40,6 +41,7 @@ pub enum SourceConfig {
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct ReportConfig {
     pub language: Language,
     pub organization: String,
@@ -53,7 +55,7 @@ pub struct ReportConfig {
 }
 
 #[derive(Debug, Deserialize)]
-#[serde(tag = "type", rename_all = "kebab-case")]
+#[serde(tag = "type", rename_all = "kebab-case", deny_unknown_fields)]
 pub enum OutputConfig {
     Filesystem {
         path: PathBuf,

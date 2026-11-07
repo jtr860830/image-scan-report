@@ -75,9 +75,15 @@ fn missing_env_names_the_variable() {
 
 #[test]
 fn example_config_in_repo_loads() {
+    let previous = std::env::var_os("UPLOAD_TOKEN");
     unsafe { std::env::set_var("UPLOAD_TOKEN", "example-token") };
     let result = config::load(Path::new("examples/config.yaml"));
-    unsafe { std::env::remove_var("UPLOAD_TOKEN") };
+    unsafe {
+        match previous {
+            Some(value) => std::env::set_var("UPLOAD_TOKEN", value),
+            None => std::env::remove_var("UPLOAD_TOKEN"),
+        }
+    }
     let config = result.unwrap();
     assert!(matches!(config.source, SourceConfig::Harbor { .. }));
     assert_eq!(config.output.len(), 2);
@@ -206,4 +212,37 @@ fn loads_explicit_settings_and_expands_only_all_http_headers() {
         };
         assert_eq!(headers["X-Token"], "all-outputs");
     }
+}
+
+fn assert_unknown_key_is_parse_error(yaml: &str) {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("config.yaml");
+    std::fs::write(&path, yaml).unwrap();
+    assert!(matches!(config::load(&path), Err(ConfigError::Parse(_))));
+}
+
+#[test]
+fn unknown_top_level_key_is_parse_error() {
+    let yaml = include_str!("data/config/trivy-files.yaml");
+    assert_unknown_key_is_parse_error(&format!("{yaml}\nreprot: typo\n"));
+}
+
+#[test]
+fn unknown_report_key_is_parse_error() {
+    let yaml = include_str!("data/config/trivy-files.yaml");
+    assert_unknown_key_is_parse_error(&yaml.replace("report:", "report:\n  stale_after_day: 30"));
+}
+
+#[test]
+fn unknown_output_key_is_parse_error() {
+    let yaml = include_str!("data/config/trivy-files.yaml");
+    assert_unknown_key_is_parse_error(
+        &yaml.replace("type: filesystem", "type: filesystem\n    typo: true"),
+    );
+}
+
+#[test]
+fn unknown_harbor_source_key_is_parse_error() {
+    let yaml = include_str!("../examples/config.yaml");
+    assert_unknown_key_is_parse_error(&yaml.replace("type: harbor", "type: harbor\n  typo: true"));
 }
