@@ -103,31 +103,21 @@ at least 30,000 or 50,000 findings are present. They time the complete zh-TW
 `render::render_pdf` call, enforce 90/150 seconds respectively, and require more
 than 400 pages. PDF page counting is outside the timed interval. The CI perf job
 runs on manual dispatch and Mondays at 03:00 UTC, separately from push checks.
-Peak RSS from the command includes compilation and both test processes.
+Controller measurement on an Apple-silicon Mac, with the release binary already
+compiled, used a single test run:
 
-Measured on macOS on 2026-11-08 (two tests run concurrently by the default Rust
-test harness):
+```sh
+/usr/bin/time -l cargo test --offline --release --test perf -- --ignored --nocapture --test-threads=1 fifty
+```
 
-| Target | Actual findings | First run seconds | RSS rerun seconds | Pages |
-| --- | ---: | ---: | ---: | ---: |
-| 30k | 30,576 | 30.957 | 30.065 | 2,212 |
-| 50k | 52,416 | 33.063 | 32.201 | 3,703 |
-
-Both runs passed the unchanged budgets. The requested `/usr/bin/time -l` command
-reported 152.90 seconds including a 118-second release build, but sandbox policy
-denied `sysctl kern.clockrate`, preventing its RSS output. A second invocation
-wrapped in Python `resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss`
-measured peak child RSS of 7,586,463,744 bytes (7.07 GiB). This is a whole-command
-peak, not per-test memory; CI memory usage can differ.
+The 50,000-finding target (52,416 rows) rendered in **14.9 seconds**, producing
+**3,703 pages**. Peak RSS, from `/usr/bin/time -l`'s maximum resident set size,
+was **5.1 GB (5,090,951,168 bytes)**. Memory grows roughly 100 MB per 1,000
+findings with the full template, so a container running the largest realistic
+reports needs about 5 GiB; plan 4 sizes the deployment accordingly.
 
 The complete 11-image, 4,368-finding English report produced by
 `cargo run --offline -- run --config examples/config-trivy-files.yaml` decreased
 from the controller's 705-page baseline to 429 pages. Descriptions are capped at
 600 characters and rendered only for Critical/High findings; remediation uses
-30 cards followed by a compact table. To recount the generated PDF:
-
-```sh
-REPORT_PDF=out/trivy-trivy-files-2026-11-07.pdf cargo test --offline --test golden full_fixture_page_count -- --ignored --nocapture
-```
-
-Use the actual generated filename for `REPORT_PDF`.
+30 cards followed by a compact table.
