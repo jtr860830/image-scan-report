@@ -118,3 +118,52 @@ fn scope_for_dot_is_directory_name() {
             .to_string_lossy()
     );
 }
+
+#[test]
+fn render_data_subcommand_writes_json() {
+    let dir = tempfile::tempdir().unwrap();
+    let config = write_config(dir.path());
+    let path = dir.path().join("data.json");
+    let out = cargo_bin_cmd!("judex")
+        .args(["render-data", "--config"])
+        .arg(config)
+        .arg("--out")
+        .arg(&path)
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let data: serde_json::Value = serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
+    assert!(data.get("strings").is_some());
+    assert!(data.get("theme").is_some());
+    assert_eq!(data["meta"]["product_name"], "judex");
+}
+#[test]
+fn run_default_config_produces_pdf() {
+    let dir = tempfile::tempdir().unwrap();
+    let config = write_config(dir.path());
+    let yaml = std::fs::read_to_string(&config)
+        .unwrap()
+        .replace("  json: true\n  pdf: false\n", "");
+    std::fs::write(&config, yaml).unwrap();
+    let out = cargo_bin_cmd!("judex")
+        .args(["run", "--config"])
+        .arg(config)
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(
+        std::fs::read_dir(dir.path()).unwrap().any(|e| e
+            .unwrap()
+            .path()
+            .extension()
+            .is_some_and(|s| s == "pdf"))
+    );
+}

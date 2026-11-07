@@ -68,8 +68,52 @@ impl RunError {
     }
 }
 
-pub fn run(cfg: &Config, now: DateTime<Utc>) -> Result<RunSummary, RunError> {
+/// Product identity supplied by the application.
+#[derive(Clone, Debug)]
+pub struct ProductInfo {
+    pub name: String,
+    pub version: String,
+}
+
+fn render_options(
+    cfg: &ReportConfig,
+    product: &ProductInfo,
+) -> crate::render::model::RenderOptions {
+    crate::render::model::RenderOptions {
+        language: cfg.language.clone(),
+        stale_after_days: cfg.stale_after_days,
+        product_name: product.name.clone(),
+        product_version: product.version.clone(),
+        top_images: 10,
+        top_findings: 15,
+    }
+}
+
+/// Build display-ready JSON using the same inputs and options as PDF rendering.
+pub fn render_data(
+    cfg: &Config,
+    now: DateTime<Utc>,
+    product: &ProductInfo,
+) -> Result<crate::render::model::RenderData, RunError> {
+    let theme = crate::render::theme::load(cfg.theme.path.as_deref()).map_err(ConfigError::from)?;
+    let set = build_source(&cfg.source)?.fetch()?;
+    let report = assemble_report(set, &cfg.report, now);
+    let opts = render_options(&cfg.report, product);
+    Ok(crate::render::model::build(
+        &report,
+        &opts,
+        crate::render::strings::load(opts.language.clone()),
+        theme.to_render_value(),
+    ))
+}
+
+pub fn run(
+    cfg: &Config,
+    now: DateTime<Utc>,
+    product: &ProductInfo,
+) -> Result<RunSummary, RunError> {
     let sinks = build_sinks(&cfg.output)?;
+    let theme = crate::render::theme::load(cfg.theme.path.as_deref()).map_err(ConfigError::from)?;
     let set = build_source(&cfg.source)?.fetch()?;
     let report = assemble_report(set, &cfg.report, now);
     let mut artifacts = Vec::new();
@@ -85,12 +129,17 @@ pub fn run(cfg: &Config, now: DateTime<Utc>) -> Result<RunSummary, RunError> {
         });
     }
     if cfg.report.pdf {
-        tracing::warn!("PDF rendering is not available in this build yet; set report.json: true");
-    }
-    if artifacts.is_empty() {
-        return Err(RunError::Render(
-            "PDF rendering is not available in this build; set report.json: true".into(),
-        ));
+        let opts = render_options(&cfg.report, product);
+        let bytes = crate::render::render_pdf(&report, &opts, &theme)
+            .map_err(|err| RunError::Render(err.to_string()))?;
+        artifacts.push(Artifact {
+            file_name: format!(
+                "{}.pdf",
+                artifact_base_name(&report.scope, report.source.kind, now.date_naive())
+            ),
+            media_type: "application/pdf",
+            bytes,
+        });
     }
     let mut summary = RunSummary {
         images: report.images.len(),
@@ -120,14 +169,16 @@ pub fn run(cfg: &Config, now: DateTime<Utc>) -> Result<RunSummary, RunError> {
     Ok(summary)
 }
 
-pub fn check(cfg: &Config) -> Result<String, RunError> {
+pub fn check(cfg: &Config, _product: &ProductInfo) -> Result<String, RunError> {
     build_sinks(&cfg.output)?;
+    let theme = crate::render::theme::load(cfg.theme.path.as_deref()).map_err(ConfigError::from)?;
     let source = build_source(&cfg.source)?;
     let set = source.fetch()?;
     Ok(format!(
-        "{}: {} images, {} findings",
+        "{}: {} images, {} findings; theme: {}",
         source.describe(),
         set.images.len(),
-        set.findings.len()
+        set.findings.len(),
+        theme.product.name
     ))
 }

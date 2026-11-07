@@ -3,7 +3,7 @@
 judex turns existing container-image vulnerability scans into audit reports.
 It normalises Trivy and NeuVector scanner JSON into a shared model without scanning images itself.
 
-This milestone supports file sources and JSON output to the filesystem. PDF,
+This milestone supports file sources and PDF and JSON output to the filesystem.
 Harbor and NeuVector API sources, and HTTP upload are in progress; see the
 [product specification](docs/superpowers/specs/2026-11-07-product-redesign-design.md)
 and [core pipeline plan](docs/superpowers/plans/2026-11-07-core-pipeline.md).
@@ -22,16 +22,16 @@ cargo run -- run --config examples/config-trivy-files.yaml
 For an environment with dependencies already cached and no network, add
 `--offline` after `cargo run` in each command.
 The [runnable example](examples/config-trivy-files.yaml) reads `./fixtures/trivy`
-and writes JSON to `./out`, creating the directory if needed. Relative paths
+and writes PDF and JSON to `./out`, creating the directory if needed. Relative paths
 resolve from the working directory, not the configuration file's directory.
 See [fixture provenance](fixtures/README.md) for how the scanner inputs were captured.
 
 `version` prints `judex 0.1.0`. `check` fetches and parses the source and prints
-`Trivy (files): ./fixtures/trivy: 11 images, 4368 findings`; it does not write artifacts or validate
-output availability. `run` prints `Report: 11 images, 4368 findings`, followed by
+`Trivy (files): ./fixtures/trivy: 11 images, 4368 findings; theme: judex`; it validates output configuration and the theme without
+writing artifacts. `run` prints `Report: 11 images, 4368 findings`, followed by
 one destination and filename per stored artifact. Counts depend on the inputs.
-The example produces `out/trivy-trivy-files-YYYY-MM-DD.json`, using the UTC run
-date. In general filenames are `<slug(scope)>-<source-type>-<YYYY-MM-DD>.json`;
+The example produces `out/trivy-trivy-files-YYYY-MM-DD.pdf` and a matching JSON file, using the UTC run
+date. In general filenames are `<slug(scope)>-<source-type>-<YYYY-MM-DD>.<pdf|json>`;
 file-source scope is the input directory's final component. Repeating a run on
 the same date atomically overwrites the same filename.
 
@@ -77,11 +77,22 @@ and cannot run in this milestone.
 | `report.json` | Boolean | `false` |
 | `report.pdf` | Boolean | `true` |
 
-Set `json: true` and `pdf: false` for this build. Enabling PDF currently emits a
-warning and produces no PDF; a PDF-only run fails with exit code 4 and writes no
-artifacts. Logo and stale-age settings are reserved for rendering and derived
-views; they do not change the JSON report. The configuration's `organization`
-is serialised as `organisation` in the normalised JSON model.
+PDF is enabled by default; enable `json: true` to also write the normalised report.
+The configuration's `organization` is serialised as `organisation` in JSON.
+`stale_after_days` controls the appendix's stale-scan threshold.
+
+### Theme
+
+The optional top-level `theme.path` points to a directory containing `theme.toml`
+and an optional `logo.png` or `logo.svg`. Omit it to use the bundled default.
+Copy [themes/default/theme.toml](themes/default/theme.toml) to customise product
+branding, colors and font families. Unknown keys and invalid values fail with
+exit code 2 before fetching scans. Paths resolve from the working directory.
+
+```yaml
+theme:
+  path: ./themes/default
+```
 
 ### Output
 
@@ -119,6 +130,21 @@ strings do not receive this substitution. Keep credentials in environment variab
 Errors are printed to stderr as `error: ...`; warnings also go to stderr.
 A run with some successful writes returns `0` and reports failed sinks on stderr.
 These codes indicate pipeline outcomes, not vulnerability severity thresholds.
+
+## Design iteration
+
+Install Typst CLI **0.15.1**, matching the embedded crate version, then run:
+
+```sh
+judex render-data --config examples/config-trivy-files.yaml --out templates/data.json
+typst watch templates/report.typ --root templates templates/out.pdf --font-path assets/fonts --ignore-system-fonts
+```
+
+The CLI must see the bundled fonts through `--font-path assets/fonts`;
+`--ignore-system-fonts` keeps previews consistent with embedded rendering.
+Regenerate data after changing scan inputs or configuration. Theme logos are loaded
+by the embedded renderer; for CLI previews, make the logo file available under
+the template root with the filename recorded in the data.
 
 ## Development and licence
 

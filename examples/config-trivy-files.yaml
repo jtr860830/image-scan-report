@@ -5,7 +5,7 @@ report:
   language: en
   organization: "Example Org"
   json: true
-  pdf: false
+  pdf: true
 output:
   - type: filesystem
     path: ./out

@@ -1,9 +1,11 @@
+#[path = "support/pdf.rs"]
+mod pdf;
 use chrono::{DateTime, NaiveDate, Utc};
 use image_scan_report::{
     config::Config,
     model::{Report, SourceKind},
     naming::{artifact_base_name, slug},
-    pipeline::{RunError, check, run},
+    pipeline::{ProductInfo, RunError, check, run},
     source::SourceError,
 };
 use std::path::Path;
@@ -33,7 +35,7 @@ fn slug_and_base_name() {
 #[test]
 fn run_trivy_fixtures_to_json() {
     let dir = tempfile::tempdir().unwrap();
-    let summary = run(&config(&fixtures(), dir.path()), now()).unwrap();
+    let summary = run(&config(&fixtures(), dir.path()), now(), &product()).unwrap();
     let report: Report = serde_json::from_slice(
         &std::fs::read(dir.path().join("trivy-trivy-files-2026-11-07.json")).unwrap(),
     )
@@ -49,14 +51,18 @@ fn run_trivy_fixtures_to_json() {
 #[test]
 fn run_with_empty_input_exits_3() {
     let dir = tempfile::tempdir().unwrap();
-    let err = run(&config(dir.path(), dir.path()), now()).err().unwrap();
+    let err = run(&config(dir.path(), dir.path()), now(), &product())
+        .err()
+        .unwrap();
     assert_eq!(err.exit_code(), 3);
     assert!(matches!(err, RunError::Source(SourceError::Empty(_))));
 }
 #[test]
 fn run_with_unwritable_sink_exits_5() {
     let file = tempfile::NamedTempFile::new().unwrap();
-    let err = run(&config(&fixtures(), file.path()), now()).err().unwrap();
+    let err = run(&config(&fixtures(), file.path()), now(), &product())
+        .err()
+        .unwrap();
     assert_eq!(err.exit_code(), 5);
     assert!(matches!(err, RunError::AllSinksFailed(_)));
 }
@@ -64,11 +70,11 @@ fn run_with_unwritable_sink_exits_5() {
 fn check_reports_counts() {
     let dir = tempfile::tempdir().unwrap();
     let cfg = config(&fixtures(), dir.path());
-    let summary = run(&cfg, now()).unwrap();
+    let summary = run(&cfg, now(), &product()).unwrap();
     assert_eq!(
-        check(&cfg).unwrap(),
+        check(&cfg, &product()).unwrap(),
         format!(
-            "Trivy (files): {}: 11 images, {} findings",
+            "Trivy (files): {}: 11 images, {} findings; theme: judex",
             fixtures().display(),
             summary.findings
         )
@@ -84,22 +90,72 @@ fn partial_sink_failure_preserves_success() {
         .push(image_scan_report::config::OutputConfig::Filesystem {
             path: file.path().into(),
         });
-    let summary = run(&cfg, now()).unwrap();
+    let summary = run(&cfg, now(), &product()).unwrap();
     assert_eq!(summary.stored.len(), 1);
     assert_eq!(summary.failed_sinks.len(), 1);
     assert!(summary.failed_sinks[0].contains(&file.path().display().to_string()));
 }
 
+fn product() -> ProductInfo {
+    ProductInfo {
+        name: "judex".into(),
+        version: "0.1.0".into(),
+    }
+}
 #[test]
-fn pdf_only_fails_with_exit_4() {
+fn run_writes_pdf_and_json() {
     let dir = tempfile::tempdir().unwrap();
     let mut cfg = config(&fixtures(), dir.path());
+    cfg.report.pdf = true;
+    let summary = run(&cfg, now(), &product()).unwrap();
+    assert_eq!(summary.stored.len(), 2);
+    let bytes = std::fs::read(dir.path().join("trivy-trivy-files-2026-11-07.pdf")).unwrap();
+    assert!(pdf::page_count(&bytes) >= 6);
+    let _: Report = serde_json::from_slice(
+        &std::fs::read(dir.path().join("trivy-trivy-files-2026-11-07.json")).unwrap(),
+    )
+    .unwrap();
+}
+#[test]
+fn run_with_zero_findings_renders() {
+    let input = tempfile::tempdir().unwrap();
+    std::fs::copy(
+        fixtures().join("busybox-1.37.json"),
+        input.path().join("busybox.json"),
+    )
+    .unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let mut cfg = config(input.path(), dir.path());
     cfg.report.json = false;
     cfg.report.pdf = true;
-    let err = run(&cfg, now()).unwrap_err();
-    assert_eq!(err.exit_code(), 4);
-    assert!(matches!(err, RunError::Render(_)));
-    assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 0);
+    let summary = run(&cfg, now(), &product()).unwrap();
+    assert_eq!(summary.findings, 0);
+    assert_eq!(summary.stored.len(), 1);
+    let path = std::fs::read_dir(dir.path())
+        .unwrap()
+        .next()
+        .unwrap()
+        .unwrap()
+        .path();
+    let bytes = std::fs::read(path).unwrap();
+    assert!(pdf::page_count(&bytes) >= 4);
+    let strings = image_scan_report::render::strings::load(image_scan_report::model::Language::En);
+    assert!(pdf::text(&bytes).contains(&strings["no_findings"]));
+}
+#[test]
+fn theme_path_errors_exit_2() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut cfg = config(dir.path(), dir.path());
+    cfg.theme.path =
+        Some(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/data/theme/unknown-key"));
+    for err in [
+        run(&cfg, now(), &product()).unwrap_err(),
+        check(&cfg, &product()).unwrap_err(),
+    ] {
+        assert_eq!(err.exit_code(), 2);
+        assert!(err.to_string().contains("theme.toml"));
+        assert!(matches!(err, RunError::Config(_)));
+    }
 }
 
 #[test]
@@ -114,7 +170,10 @@ fn check_rejects_http_output_before_fetch() {
         ca_file: None,
         timeout_secs: 30,
     }];
-    assert!(matches!(check(&cfg), Err(RunError::Config(_))));
-    assert!(matches!(run(&cfg, now()), Err(RunError::Config(_))));
+    assert!(matches!(check(&cfg, &product()), Err(RunError::Config(_))));
+    assert!(matches!(
+        run(&cfg, now(), &product()),
+        Err(RunError::Config(_))
+    ));
     assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 0);
 }

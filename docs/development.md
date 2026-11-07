@@ -38,7 +38,7 @@ as a repository tool.
 | --- | --- |
 | `src/lib.rs` | Library module exports |
 | `src/main.rs` | Entry point, logging, summaries and exit handling |
-| `src/cli.rs` | clap commands: version, check and run |
+| `src/cli.rs` | clap commands: version, check, run and render-data |
 | `src/config.rs` | YAML schema, validation, defaults and environment resolution |
 | `src/model/` | Normalised reports, images, findings and severity enum |
 | `src/severity.rs` | Shared CVSS score selection and severity classification |
@@ -51,13 +51,27 @@ as a repository tool.
 | `src/sink/mod.rs` | Artifact, ReportSink trait and sink construction |
 | `src/sink/filesystem.rs` | Directory creation and atomic file replacement |
 | `src/naming.rs` | Scope slugs and dated artifact names |
-| `src/pipeline.rs` | Source construction, report assembly, JSON generation, storage and exit codes |
+| `src/pipeline.rs` | Source construction, report assembly, PDF/JSON generation, render data, storage and exit codes |
 
-The pipeline serialises the normalised model directly; derived views are available
-for later rendering. File sources and filesystem JSON output work now. PDF,
-API sources and HTTP upload belong to later plans. Consult the
-[design specification](superpowers/specs/2026-11-07-product-redesign-design.md)
-and [core pipeline plan](superpowers/plans/2026-11-07-core-pipeline.md) for scope.
+The pipeline writes PDF through the embedded Typst renderer and serialises the
+normalised model directly for JSON. API sources and HTTP upload remain future work.
+
+## Rendering and templates
+
+`templates/report.typ` is the entry point, `templates/lib/` contains shared
+formatting and layout helpers, and `templates/parts/` contains report chapters.
+Use the README's design iteration commands with Typst CLI 0.15.1 and bundled fonts.
+
+`src/render/strings.rs` defines the canonical string keys and is the source of truth.
+To add a locale, add a complete translation JSON file under `strings/`,
+extend `model::Language` and the string loader, and update language mapping in
+`render::model`. Run string completeness and rendering tests for the new locale.
+Visual preview PNGs live under `target/visual/`.
+
+Rendering tests use the reduced fixture helper in `tests/support/data.rs` to
+keep layout checks fast while retaining real scanner data. Full-fixture pipeline
+and binary tests cover integration with all findings; they can take a few minutes
+in debug builds. Do not reduce or modify captured files in `fixtures/`.
 
 ## Renaming
 

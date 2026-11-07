@@ -13,12 +13,39 @@ fn main() {
         .with_writer(std::io::stderr)
         .init();
 
+    let product = image_scan_report::pipeline::ProductInfo {
+        name: PRODUCT_NAME.into(),
+        version: PRODUCT_VERSION.into(),
+    };
     match Cli::parse().command {
+        cli::Command::RenderData { config, out } => {
+            let result = image_scan_report::config::load(&config)
+                .map_err(image_scan_report::pipeline::RunError::from)
+                .and_then(|cfg| {
+                    image_scan_report::pipeline::render_data(&cfg, chrono::Utc::now(), &product)
+                })
+                .and_then(|data| {
+                    let bytes = serde_json::to_vec_pretty(&data).map_err(|e| {
+                        image_scan_report::pipeline::RunError::Render(e.to_string())
+                    })?;
+                    std::fs::write(&out, bytes).map_err(|e| {
+                        image_scan_report::pipeline::RunError::Render(format!(
+                            "cannot write {}: {e}",
+                            out.display()
+                        ))
+                    })
+                });
+            if let Err(e) = result {
+                fail(e);
+            }
+        }
         cli::Command::Version => println!("{PRODUCT_NAME} {PRODUCT_VERSION}"),
         cli::Command::Run { config } => {
             let result = image_scan_report::config::load(&config)
                 .map_err(image_scan_report::pipeline::RunError::from)
-                .and_then(|cfg| image_scan_report::pipeline::run(&cfg, chrono::Utc::now()));
+                .and_then(|cfg| {
+                    image_scan_report::pipeline::run(&cfg, chrono::Utc::now(), &product)
+                });
             match result {
                 Ok(summary) => {
                     println!(
@@ -38,7 +65,7 @@ fn main() {
         cli::Command::Check { config } => {
             let result = image_scan_report::config::load(&config)
                 .map_err(image_scan_report::pipeline::RunError::from)
-                .and_then(|cfg| image_scan_report::pipeline::check(&cfg));
+                .and_then(|cfg| image_scan_report::pipeline::check(&cfg, &product));
             match result {
                 Ok(summary) => println!("{summary}"),
                 Err(e) => fail(e),
