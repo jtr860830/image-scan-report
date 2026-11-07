@@ -1,7 +1,9 @@
+static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 use std::path::Path;
 
-use judex::config::{self, Config, ConfigError, HttpMode, OutputConfig, SourceConfig};
-use judex::model::Language;
+use scanreport::config::{self, Config, ConfigError, HttpMode, OutputConfig, SourceConfig};
+use scanreport::model::Language;
 
 fn minimal() -> Config {
     config::load(Path::new("tests/data/config/trivy-files.yaml")).unwrap()
@@ -43,6 +45,7 @@ fn pdf_and_json_both_false_is_invalid() {
 
 #[test]
 fn header_env_placeholder_is_resolved() {
+    let _guard = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     // This variable belongs only to this test.
     unsafe { std::env::set_var("JUDEX_TEST_TOKEN", "abc") };
     let result = config::load(Path::new("tests/data/config/http.yaml"));
@@ -67,6 +70,7 @@ fn header_env_placeholder_is_resolved() {
 
 #[test]
 fn missing_env_names_the_variable() {
+    let _guard = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     unsafe { std::env::remove_var("JUDEX_UNSET_VAR_7") };
     assert!(
         matches!(config::resolve_env("${JUDEX_UNSET_VAR_7}"), Err(ConfigError::MissingEnv(name)) if name == "JUDEX_UNSET_VAR_7")
@@ -75,6 +79,7 @@ fn missing_env_names_the_variable() {
 
 #[test]
 fn example_config_in_repo_loads() {
+    let _guard = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let previous = std::env::var_os("UPLOAD_TOKEN");
     unsafe { std::env::set_var("UPLOAD_TOKEN", "example-token") };
     let result = config::load(Path::new("examples/config.yaml"));
@@ -124,6 +129,7 @@ fn empty_organization_is_invalid_and_json_only_is_valid() {
 
 #[test]
 fn resolves_all_valid_placeholders_and_preserves_other_text() {
+    let _guard = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     unsafe { std::env::set_var("JUDEX_CONFIG_MULTI_7", "value") };
     let result = config::resolve_env(
         "a ${JUDEX_CONFIG_MULTI_7}/${JUDEX_CONFIG_MULTI_7} ${9BAD} ${} ${unfinished",
@@ -135,6 +141,7 @@ fn resolves_all_valid_placeholders_and_preserves_other_text() {
 
 #[test]
 fn missing_first_placeholder_is_reported() {
+    let _guard = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     unsafe {
         std::env::remove_var("JUDEX_CONFIG_FIRST_7");
         std::env::remove_var("JUDEX_CONFIG_SECOND_7");
@@ -146,6 +153,7 @@ fn missing_first_placeholder_is_reported() {
 
 #[test]
 fn secret_from_env_reads_named_variable() {
+    let _guard = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     unsafe { std::env::set_var("JUDEX_CONFIG_SECRET_7", "secret") };
     let result = config::secret_from_env("JUDEX_CONFIG_SECRET_7");
     unsafe { std::env::remove_var("JUDEX_CONFIG_SECRET_7") };
@@ -164,6 +172,7 @@ fn unreadable_path_is_read_error() {
 
 #[test]
 fn loads_explicit_settings_and_expands_only_all_http_headers() {
+    let _guard = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     unsafe { std::env::set_var("JUDEX_CONFIG_OUTPUTS_7", "all-outputs") };
     let result = config::load(Path::new("tests/data/config/neuvector.yaml"));
     unsafe { std::env::remove_var("JUDEX_CONFIG_OUTPUTS_7") };

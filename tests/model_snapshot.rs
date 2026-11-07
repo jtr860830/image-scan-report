@@ -1,5 +1,5 @@
 use chrono::{DateTime, Utc};
-use judex::model::*;
+use scanreport::model::*;
 
 #[test]
 fn report_json_shape_is_stable() {
@@ -86,7 +86,7 @@ fn report_json_shape_is_stable() {
 
 #[test]
 fn severity_orders_critical_first() {
-    use judex::model::Severity::*;
+    use scanreport::model::Severity::*;
     let mut v = vec![Low, Unrated, Critical, Medium, High];
     v.sort_by(|a, b| b.cmp(a));
     assert_eq!(v, vec![Critical, High, Medium, Low, Unrated]);
@@ -94,7 +94,7 @@ fn severity_orders_critical_first() {
 
 #[test]
 fn fix_status_parses_known_and_other() {
-    use judex::model::FixStatus;
+    use scanreport::model::FixStatus;
     assert_eq!(FixStatus::parse("will_not_fix"), FixStatus::WillNotFix);
     assert_eq!(FixStatus::parse("End-Of-Life"), FixStatus::EndOfLife);
     assert_eq!(FixStatus::parse("weird"), FixStatus::Other("weird".into()));

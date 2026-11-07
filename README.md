@@ -78,8 +78,8 @@ and cannot run in this milestone.
 | `report.pdf` | Boolean | `true` |
 
 Set `json: true` and `pdf: false` for this build. Enabling PDF currently emits a
-warning and produces no PDF; a PDF-only run can succeed without writing any
-artifact. Logo and stale-age settings are reserved for rendering and derived
+warning and produces no PDF; a PDF-only run fails with exit code 4 and writes no
+artifacts. Logo and stale-age settings are reserved for rendering and derived
 views; they do not change the JSON report. The configuration's `organization`
 is serialised as `organisation` in the normalised JSON model.
 
@@ -98,8 +98,8 @@ is serialised as `organisation` in the normalised JSON model.
 | `ca_file` | Optional certificate file path; HTTP only | `null` |
 | `timeout_secs` | Unsigned 64-bit integer; HTTP only | `30` |
 
-HTTP outputs are accepted by the parser but rejected by `run` with “arrives in a
-later release”. `check` only checks the source, so it does not reject HTTP outputs.
+HTTP outputs are accepted by the parser but rejected by both `check` and `run`
+with “arrives in a later release”. Both validate outputs before fetching the source.
 Header values expand `${VAR}` placeholders when configuration is loaded; an unset
 variable fails with its name. Valid names use ASCII letters or underscore first,
 then letters, digits or underscores. Expansion is one pass, malformed placeholders

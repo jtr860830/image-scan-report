@@ -1,7 +1,7 @@
 use Severity::*;
 use chrono::{Duration, TimeZone, Utc};
-use judex::model::{Finding, Image, ScanState, ScanStatus, Severity, SeverityBasis};
-use judex::views::*;
+use scanreport::model::{Finding, Image, ScanState, ScanStatus, Severity, SeverityBasis};
+use scanreport::views::*;
 
 fn f(
     id: &str,

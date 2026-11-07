@@ -1,5 +1,5 @@
 use chrono::{DateTime, NaiveDate, Utc};
-use judex::{
+use scanreport::{
     config::Config,
     model::{Report, SourceKind},
     naming::{artifact_base_name, slug},
@@ -80,9 +80,10 @@ fn partial_sink_failure_preserves_success() {
     let dir = tempfile::tempdir().unwrap();
     let file = tempfile::NamedTempFile::new().unwrap();
     let mut cfg = config(&fixtures(), dir.path());
-    cfg.output.push(judex::config::OutputConfig::Filesystem {
-        path: file.path().into(),
-    });
+    cfg.output
+        .push(scanreport::config::OutputConfig::Filesystem {
+            path: file.path().into(),
+        });
     let summary = run(&cfg, now()).unwrap();
     assert_eq!(summary.stored.len(), 1);
     assert_eq!(summary.failed_sinks.len(), 1);
@@ -90,13 +91,30 @@ fn partial_sink_failure_preserves_success() {
 }
 
 #[test]
-fn pdf_only_returns_empty_summary() {
+fn pdf_only_fails_with_exit_4() {
     let dir = tempfile::tempdir().unwrap();
     let mut cfg = config(&fixtures(), dir.path());
     cfg.report.json = false;
     cfg.report.pdf = true;
-    let summary = run(&cfg, now()).unwrap();
-    assert!(summary.stored.is_empty());
-    assert!(summary.failed_sinks.is_empty());
+    let err = run(&cfg, now()).unwrap_err();
+    assert_eq!(err.exit_code(), 4);
+    assert!(matches!(err, RunError::Render(_)));
+    assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 0);
+}
+
+#[test]
+fn check_rejects_http_output_before_fetch() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut cfg = config(dir.path(), dir.path());
+    cfg.output = vec![scanreport::config::OutputConfig::Http {
+        url: "https://example.test/upload".into(),
+        method: "POST".into(),
+        headers: Default::default(),
+        mode: scanreport::config::HttpMode::Raw,
+        ca_file: None,
+        timeout_secs: 30,
+    }];
+    assert!(matches!(check(&cfg), Err(RunError::Config(_))));
+    assert!(matches!(run(&cfg, now()), Err(RunError::Config(_))));
     assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 0);
 }

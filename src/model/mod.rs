@@ -36,7 +36,7 @@ pub struct SourceInfo {
     pub db_updated_at: Option<DateTime<Utc>>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq)]
 #[serde(rename_all = "kebab-case")]
 pub enum SourceKind {
     Harbor,

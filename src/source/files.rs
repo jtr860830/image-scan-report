@@ -104,7 +104,9 @@ where
             });
         match parsed {
             Ok(Some(item)) => items.push(item),
-            Ok(None) => {}
+            Ok(None) => {
+                tracing::warn!(file = %path.display(), "not a recognised scan report; skipped")
+            }
             Err(error) => {
                 tracing::warn!(file = %path.display(), %error, "skipping unreadable or invalid scan report")
             }
@@ -113,9 +115,11 @@ where
     if items.is_empty() {
         return Err(SourceError::Empty(dir.into()));
     }
+    let directory =
+        std::fs::canonicalize(dir).map_err(|e| SourceError::Unreadable(dir.into(), e))?;
     let (images, findings) = dedupe_images(items);
     Ok(FetchedDirectory {
-        scope: dir
+        scope: directory
             .file_name()
             .unwrap_or_default()
             .to_string_lossy()

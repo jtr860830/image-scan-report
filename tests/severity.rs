@@ -1,8 +1,8 @@
-use judex::model::{Severity, Severity::*, SeverityBasis};
-use judex::severity::{
+use rstest::rstest;
+use scanreport::model::{Severity, Severity::*, SeverityBasis};
+use scanreport::severity::{
     CvssScores, ScoreInput, band_v2, band_v3, classify, clean_score, label_to_severity,
 };
-use rstest::rstest;
 
 #[rstest]
 #[case(10.0, Critical)]
@@ -28,6 +28,8 @@ fn v2_bands_have_no_critical(#[case] s: f32, #[case] want: Severity) {
 
 #[test]
 fn clean_score_drops_zero_and_rounds() {
+    assert_eq!(clean_score(Some(0.04)), None);
+    assert_eq!(clean_score(Some(f64::INFINITY)), None);
     assert_eq!(clean_score(Some(0.0)), None);
     assert_eq!(clean_score(Some(7.46)), Some(7.5));
     assert_eq!(clean_score(None), None);

@@ -1,5 +1,5 @@
 use clap::Parser;
-use judex::cli::{self, Cli};
+use scanreport::cli::{self, Cli};
 use tracing_subscriber::EnvFilter;
 
 const PRODUCT_NAME: &str = "judex";
@@ -16,9 +16,9 @@ fn main() {
     match Cli::parse().command {
         cli::Command::Version => println!("{PRODUCT_NAME} {PRODUCT_VERSION}"),
         cli::Command::Run { config } => {
-            let result = judex::config::load(&config)
-                .map_err(judex::pipeline::RunError::from)
-                .and_then(|cfg| judex::pipeline::run(&cfg, chrono::Utc::now()));
+            let result = scanreport::config::load(&config)
+                .map_err(scanreport::pipeline::RunError::from)
+                .and_then(|cfg| scanreport::pipeline::run(&cfg, chrono::Utc::now()));
             match result {
                 Ok(summary) => {
                     println!(
@@ -36,9 +36,9 @@ fn main() {
             }
         }
         cli::Command::Check { config } => {
-            let result = judex::config::load(&config)
-                .map_err(judex::pipeline::RunError::from)
-                .and_then(|cfg| judex::pipeline::check(&cfg));
+            let result = scanreport::config::load(&config)
+                .map_err(scanreport::pipeline::RunError::from)
+                .and_then(|cfg| scanreport::pipeline::check(&cfg));
             match result {
                 Ok(summary) => println!("{summary}"),
                 Err(e) => fail(e),
@@ -47,7 +47,7 @@ fn main() {
     }
 }
 
-fn fail(e: judex::pipeline::RunError) -> ! {
+fn fail(e: scanreport::pipeline::RunError) -> ! {
     eprintln!("error: {e}");
     std::process::exit(e.exit_code());
 }

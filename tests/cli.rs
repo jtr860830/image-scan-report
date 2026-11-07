@@ -36,7 +36,7 @@ fn run_subcommand_end_to_end() {
         .unwrap();
     assert!(name.starts_with("trivy-trivy-files-"));
     assert!(String::from_utf8_lossy(&out.stdout).contains(&name));
-    let report: judex::model::Report =
+    let report: scanreport::model::Report =
         serde_json::from_slice(&std::fs::read(dir.path().join(&name)).unwrap()).unwrap();
     assert!(String::from_utf8_lossy(&out.stdout).contains(&format!(
         "Report: {} images, {} findings",
@@ -78,4 +78,43 @@ fn partial_failure_is_reported_on_stderr() {
     assert!(out.status.success());
     assert!(!String::from_utf8_lossy(&out.stdout).contains("failed sink:"));
     assert!(String::from_utf8_lossy(&out.stderr).contains("failed sink:"));
+}
+
+#[test]
+fn scope_for_dot_is_directory_name() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(
+        dir.path().join("input.json"),
+        r#"{"SchemaVersion":2,"ArtifactName":"example","Results":[]}"#,
+    )
+    .unwrap();
+    std::fs::write(dir.path().join("config.yaml"),
+        "source:\n  type: trivy-files\n  path: .\nreport:\n  language: en\n  organization: Test\n  json: true\n  pdf: false\noutput:\n  - type: filesystem\n    path: out\n").unwrap();
+    let out = cargo_bin_cmd!("judex")
+        .current_dir(dir.path())
+        .args(["run", "--config", "config.yaml"])
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let name = std::fs::read_dir(dir.path().join("out"))
+        .unwrap()
+        .next()
+        .unwrap()
+        .unwrap()
+        .path();
+    let report: scanreport::model::Report =
+        serde_json::from_slice(&std::fs::read(name).unwrap()).unwrap();
+    assert_eq!(
+        report.scope,
+        dir.path()
+            .canonicalize()
+            .unwrap()
+            .file_name()
+            .unwrap()
+            .to_string_lossy()
+    );
 }

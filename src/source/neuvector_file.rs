@@ -7,7 +7,7 @@ use super::{
 use crate::model::*;
 use chrono::{DateTime, Utc};
 use serde::Deserialize;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 #[derive(Default, Deserialize)]
 #[serde(default)]
@@ -29,12 +29,30 @@ struct NvReport {
     vulnerabilities: Option<Vec<NvVulnerability>>,
 }
 
-fn read_report(bytes: &[u8]) -> Result<Option<NvReport>, ParseError> {
-    let value: serde_json::Value = serde_json::from_slice(bytes)?;
-    match value.get("report").filter(|v| v.is_object()) {
-        Some(report) => Ok(Some(serde_json::from_value(report.clone())?)),
-        None => Ok(None),
+#[derive(Deserialize)]
+struct NvFile {
+    #[serde(default)]
+    error_message: String,
+    report: Option<NvReport>,
+}
+
+fn read_report(bytes: &[u8], path: Option<&Path>) -> Result<Option<NvReport>, ParseError> {
+    let file: NvFile = serde_json::from_slice(bytes)?;
+    if file.error_message.is_empty() {
+        return Ok(file.report);
     }
+    let mut report = file.report.unwrap_or_else(|| NvReport {
+        repository: path
+            .and_then(Path::parent)
+            .and_then(Path::file_name)
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_default(),
+        ..NvReport::default()
+    });
+    report.result = Some("failed".into());
+    report.error = Some(file.error_message);
+    report.vulnerabilities = None;
+    Ok(Some(report))
 }
 
 fn map_report(report: NvReport, scanned_at: Option<DateTime<Utc>>) -> (Image, Vec<Finding>) {
@@ -107,7 +125,7 @@ pub fn parse_neuvector_result(
     bytes: &[u8],
     scanned_at: Option<DateTime<Utc>>,
 ) -> Result<Option<(Image, Vec<Finding>)>, ParseError> {
-    Ok(read_report(bytes)?.map(|report| map_report(report, scanned_at)))
+    Ok(read_report(bytes, None)?.map(|report| map_report(report, scanned_at)))
 }
 
 pub struct NeuvectorFileSource {
@@ -121,8 +139,8 @@ impl ScanSource for NeuvectorFileSource {
     fn fetch(&self) -> Result<ScanSet, SourceError> {
         let mut db_version = None;
         let mut db_updated_at = None;
-        let fetched = fetch_directory(&self.dir, |_, bytes, scanned_at| {
-            Ok(read_report(bytes)?.map(|report| {
+        let fetched = fetch_directory(&self.dir, |path, bytes, scanned_at| {
+            Ok(read_report(bytes, Some(path))?.map(|report| {
                 if db_version.is_none() {
                     db_version = report.cvedb_version.clone();
                 }

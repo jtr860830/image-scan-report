@@ -69,15 +69,15 @@ impl RunError {
 }
 
 pub fn run(cfg: &Config, now: DateTime<Utc>) -> Result<RunSummary, RunError> {
+    let sinks = build_sinks(&cfg.output)?;
     let set = build_source(&cfg.source)?.fetch()?;
     let report = assemble_report(set, &cfg.report, now);
-    let sinks = build_sinks(&cfg.output)?;
     let mut artifacts = Vec::new();
     if cfg.report.json {
         artifacts.push(Artifact {
             file_name: format!(
                 "{}.json",
-                artifact_base_name(&report.scope, report.source.kind.clone(), now.date_naive())
+                artifact_base_name(&report.scope, report.source.kind, now.date_naive())
             ),
             media_type: "application/json",
             bytes: serde_json::to_vec_pretty(&report)
@@ -86,6 +86,11 @@ pub fn run(cfg: &Config, now: DateTime<Utc>) -> Result<RunSummary, RunError> {
     }
     if cfg.report.pdf {
         tracing::warn!("PDF rendering is not available in this build yet; set report.json: true");
+    }
+    if artifacts.is_empty() {
+        return Err(RunError::Render(
+            "PDF rendering is not available in this build; set report.json: true".into(),
+        ));
     }
     let mut summary = RunSummary {
         images: report.images.len(),
@@ -116,6 +121,7 @@ pub fn run(cfg: &Config, now: DateTime<Utc>) -> Result<RunSummary, RunError> {
 }
 
 pub fn check(cfg: &Config) -> Result<String, RunError> {
+    build_sinks(&cfg.output)?;
     let source = build_source(&cfg.source)?;
     let set = source.fetch()?;
     Ok(format!(

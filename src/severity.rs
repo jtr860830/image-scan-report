@@ -21,8 +21,8 @@ pub struct Classification {
 }
 
 pub fn clean_score(raw: Option<f64>) -> Option<f32> {
-    raw.filter(|score| !score.is_nan() && *score > 0.0)
-        .map(|score| ((score * 10.0).round() / 10.0) as f32)
+    raw.map(|score| ((score * 10.0).round() / 10.0) as f32)
+        .filter(|score| score.is_finite() && *score > 0.0)
 }
 
 pub fn band_v3(score: f32) -> Severity {

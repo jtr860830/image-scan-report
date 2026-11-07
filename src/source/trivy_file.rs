@@ -10,6 +10,8 @@ use std::{collections::BTreeMap, path::PathBuf};
 
 #[derive(Default, Deserialize)]
 struct Report {
+    #[serde(default, rename = "SchemaVersion")]
+    schema_version: Option<serde::de::IgnoredAny>,
     #[serde(default, rename = "ArtifactName")]
     artifact_name: String,
     #[serde(default, rename = "CreatedAt")]
@@ -37,6 +39,8 @@ struct Os {
 }
 #[derive(Default, Deserialize)]
 struct ImageConfig {
+    #[serde(default)]
+    created: Option<DateTime<Utc>>,
     #[serde(default, rename = "architecture")]
     architecture: Option<String>,
     #[serde(default, rename = "os")]
@@ -111,11 +115,10 @@ pub fn parse_trivy_report(
     bytes: &[u8],
     scanned_at: Option<DateTime<Utc>>,
 ) -> Result<Option<(Image, Vec<Finding>)>, ParseError> {
-    let value: serde_json::Value = serde_json::from_slice(bytes)?;
-    if value.get("SchemaVersion").is_none() {
+    let report: Report = serde_json::from_slice(bytes)?;
+    if report.schema_version.is_none() {
         return Ok(None);
     }
-    let report: Report = serde_json::from_value(value)?;
     if report.artifact_name.is_empty() {
         return Err(ParseError::Shape("missing ArtifactName".into()));
     }
@@ -138,6 +141,11 @@ pub fn parse_trivy_report(
             .metadata
             .os
             .map(|os| format!("{} {}", os.family, os.name).trim().to_owned()),
+        created_at: report
+            .metadata
+            .image_config
+            .as_ref()
+            .and_then(|c| c.created),
         platform: report.metadata.image_config.and_then(|c| {
             c.architecture.map(|arch| {
                 let mut p = format!("{}/{}", c.os.as_deref().unwrap_or("linux"), arch);
@@ -149,10 +157,9 @@ pub fn parse_trivy_report(
             })
         }),
         size_bytes: None,
-        created_at: report.created_at,
         scan: ScanStatus {
             state: ScanState::Ok,
-            scanned_at,
+            scanned_at: report.created_at.or(scanned_at),
             scanner_version: None,
             error: None,
         },

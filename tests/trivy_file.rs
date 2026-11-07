@@ -1,5 +1,6 @@
-use judex::model::{ScanState, SeverityBasis};
-use judex::source::{
+use chrono::Datelike;
+use scanreport::model::{ScanState, SeverityBasis};
+use scanreport::source::{
     ScanSource, SourceError,
     files::{dedupe_images, walk_json_files},
     trivy_file::{TrivyFileSource, parse_trivy_report},
@@ -13,6 +14,11 @@ fn parses_nginx_fixture() {
     )
     .unwrap()
     .unwrap();
+    assert_eq!(image.created_at.unwrap().year(), 2021);
+    assert_eq!(
+        image.scan.scanned_at,
+        Some("2026-11-07T14:32:23.847557344Z".parse().unwrap())
+    );
     assert_eq!(image.reference, "nginx:1.21.0");
     assert!(image.digest.as_deref().unwrap().starts_with("sha256:"));
     assert!(image.os.as_deref().unwrap().starts_with("debian"));
@@ -24,7 +30,7 @@ fn parses_nginx_fixture() {
     assert_eq!(f.severity_basis, SeverityBasis::Cvss3);
     assert_eq!(f.score_source.as_deref(), Some("nvd"));
 }
-fn edge(name: &str) -> (judex::model::Image, Vec<judex::model::Finding>) {
+fn edge(name: &str) -> (scanreport::model::Image, Vec<scanreport::model::Finding>) {
     parse_trivy_report(
         &std::fs::read(format!("tests/data/trivy/{name}.json")).unwrap(),
         None,
@@ -141,7 +147,7 @@ fn maps_optional_fields_and_preserves_first_duplicate() {
     let bytes = br#"{
       "SchemaVersion":2,"ArtifactName":"ghcr.io/x/y:latest",
       "CreatedAt":"2025-01-01T00:00:00Z",
-      "Metadata":{"OS":{"Family":"alpine","Name":"3.20"},"RepoDigests":["x@sha256:abc"],"ImageConfig":{"os":"linux","architecture":"arm64","variant":"v8"}},
+      "Metadata":{"OS":{"Family":"alpine","Name":"3.20"},"RepoDigests":["x@sha256:abc"],"ImageConfig":{"created":"2024-01-01T00:00:00Z","os":"linux","architecture":"arm64","variant":"v8"}},
       "Results":[{"Class":"lang-pkgs","Vulnerabilities":[
         {"VulnerabilityID":"CVE-1","PkgName":"pkg","InstalledVersion":"1","FixedVersion":"","Status":"will_not_fix","Severity":"HIGH","CVSS":{"nvd":{"V3Score":0,"V2Score":7.54}},"Title":"fallback","PrimaryURL":"primary","References":["reference"],"PublishedDate":"2024-01-01T00:00:00Z"},
         {"VulnerabilityID":"CVE-1","PkgName":"pkg","InstalledVersion":"1","Description":"second"}
@@ -152,14 +158,20 @@ fn maps_optional_fields_and_preserves_first_duplicate() {
     assert_eq!(i.platform.as_deref(), Some("linux/arm64/v8"));
     assert_eq!(i.os.as_deref(), Some("alpine 3.20"));
     assert_eq!(i.digest.as_deref(), Some("sha256:abc"));
-    assert_eq!(i.scan.scanned_at, timestamp);
+    assert_eq!(
+        i.scan.scanned_at,
+        Some("2025-01-01T00:00:00Z".parse().unwrap())
+    );
     assert!(i.created_at.is_some());
     let (_, f) = dedupe_images(vec![(i, f)]);
     assert_eq!(f.len(), 1);
     assert_eq!(f[0].description, "fallback");
     assert_eq!(f[0].links, vec!["primary", "reference"]);
     assert_eq!(f[0].fixed_version, None);
-    assert_eq!(f[0].fix_status, Some(judex::model::FixStatus::WillNotFix));
+    assert_eq!(
+        f[0].fix_status,
+        Some(scanreport::model::FixStatus::WillNotFix)
+    );
     assert_eq!(f[0].severity_basis, SeverityBasis::Cvss2);
     assert_eq!(f[0].score_v2, Some(7.5));
     assert!(f[0].published_at.is_some());
@@ -190,4 +202,16 @@ fn tags_ignore_registry_ports_and_digest_references() {
             tags
         );
     }
+}
+
+#[test]
+fn missing_report_time_uses_file_mtime() {
+    let path = std::path::Path::new("tests/data/trivy/no-report-time.json");
+    let mtime = scanreport::source::files::file_modified_at(path);
+    let (image, _) = parse_trivy_report(&std::fs::read(path).unwrap(), mtime)
+        .unwrap()
+        .unwrap();
+    assert!(mtime.is_some());
+    assert_eq!(image.scan.scanned_at, mtime);
+    assert_eq!(image.created_at, None);
 }

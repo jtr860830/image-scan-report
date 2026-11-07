@@ -1,5 +1,5 @@
-use judex::model::{ScanState, Severity, SeverityBasis};
-use judex::source::{
+use scanreport::model::{ScanState, Severity, SeverityBasis};
+use scanreport::source::{
     ScanSource,
     neuvector::report::{NvVulnerability, finding_from_nv},
     neuvector_file::{NeuvectorFileSource, parse_neuvector_result},
@@ -36,7 +36,7 @@ fn finding_from_nv_uses_v3_then_v2() {
         assert_eq!(f.severity_basis, basis);
     }
 }
-fn edge(name: &str) -> (judex::model::Image, Vec<judex::model::Finding>) {
+fn edge(name: &str) -> (scanreport::model::Image, Vec<scanreport::model::Finding>) {
     parse_neuvector_result(
         &std::fs::read(format!("tests/data/neuvector/{name}.json")).unwrap(),
         None,
@@ -46,10 +46,17 @@ fn edge(name: &str) -> (judex::model::Image, Vec<judex::model::Finding>) {
 }
 #[test]
 fn failed_scan_is_kept_as_failed() {
-    let (i, f) = edge("failed");
+    let set = NeuvectorFileSource {
+        dir: "tests/data/neuvector/failed".into(),
+    }
+    .fetch()
+    .unwrap();
+    assert_eq!(set.images.len(), 1);
+    let i = &set.images[0];
     assert_eq!(i.scan.state, ScanState::Failed);
-    assert!(i.scan.error.is_some());
-    assert!(f.is_empty());
+    assert_eq!(i.scan.error.as_deref(), Some("manifest unknown"));
+    assert_eq!(i.reference, "nginx-9.9.9");
+    assert!(set.findings.is_empty());
 }
 #[test]
 fn empty_vulnerabilities_is_ok() {
@@ -120,7 +127,7 @@ fn maps_optional_fields_and_timestamp_precedence() {
 
 #[test]
 fn timestamp_and_shape_edges() {
-    use judex::source::neuvector::report::nv_timestamp;
+    use scanreport::source::neuvector::report::nv_timestamp;
     assert_eq!(nv_timestamp(None), None);
     assert_eq!(nv_timestamp(Some(0)), None);
     assert_eq!(nv_timestamp(Some(i64::MAX)), None);
@@ -169,7 +176,7 @@ fn fetch_skips_bad_files_and_deduplicates_latest() {
     assert_eq!(s.images[0].reference, "host/new");
     assert_eq!(s.source.db_version.as_deref(), Some("v1"));
     assert!(s.source.db_updated_at.is_some());
-    assert_eq!(s.source.kind, judex::model::SourceKind::NeuvectorFiles);
+    assert_eq!(s.source.kind, scanreport::model::SourceKind::NeuvectorFiles);
     assert_eq!(s.source.scanner_name.as_deref(), Some("NeuVector"));
     let d = tempfile::tempdir().unwrap();
     assert!(matches!(
@@ -177,6 +184,17 @@ fn fetch_skips_bad_files_and_deduplicates_latest() {
             dir: d.path().into()
         }
         .fetch(),
-        Err(judex::source::SourceError::Empty(_))
+        Err(scanreport::source::SourceError::Empty(_))
     ));
+}
+
+#[test]
+fn top_level_error_overrides_report_success() {
+    let (image, findings) = parse_neuvector_result(
+        br#"{"error_message":"scan failed","report":{"repository":"nginx","tag":"9","vulnerabilities":[]}}"#, None
+    ).unwrap().unwrap();
+    assert_eq!(image.reference, "nginx:9");
+    assert_eq!(image.scan.state, ScanState::Failed);
+    assert_eq!(image.scan.error.as_deref(), Some("scan failed"));
+    assert!(findings.is_empty());
 }

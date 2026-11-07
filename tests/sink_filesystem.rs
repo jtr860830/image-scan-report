@@ -1,4 +1,4 @@
-use judex::sink::{Artifact, ReportSink, filesystem::FilesystemSink};
+use scanreport::sink::{Artifact, ReportSink, filesystem::FilesystemSink};
 
 #[test]
 fn writes_and_overwrites_file() {

@@ -15,7 +15,7 @@ The tests cover configuration, scanner parsing, severity classification, derived
 views, filesystem output and CLI/pipeline behavior. Real scanner inputs and their
 capture procedure are documented in [fixtures/README.md](../fixtures/README.md).
 Do not hand-edit captured fixtures; recapture them. Synthetic edge cases live in
-`tests/data/`.
+`tests/data/`. No real failed-scan capture exists yet.
 
 ## Snapshots
 
@@ -65,4 +65,5 @@ The product name lives in three places: `Cargo.toml` `[package] name`, the binar
 name, and `PRODUCT_NAME` in `src/main.rs`. Cargo currently derives the binary name
 from the package name (there is no explicit `[[bin]]` override). Renaming judex
 touches exactly these three naming points, plus the literal in `tests/cli.rs` and
-README mentions. Keep the CLI's version text and executable assertions aligned.
+README prose. The library crate stays named `scanreport` across product renames.
+Keep the CLI's version text and executable assertions aligned.
