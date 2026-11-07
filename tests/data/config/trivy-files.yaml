@@ -1,0 +1,9 @@
+source:
+  type: trivy-files
+  path: /input
+report:
+  language: zh-TW
+  organization: Example Organization
+output:
+  - type: filesystem
+    path: /output

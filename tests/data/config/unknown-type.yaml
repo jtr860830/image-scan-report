@@ -1,0 +1,8 @@
+source:
+  type: foo
+report:
+  language: en
+  organization: Example Organization
+output:
+  - type: filesystem
+    path: /output
