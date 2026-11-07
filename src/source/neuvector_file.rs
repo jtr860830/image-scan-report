@@ -1,7 +1,7 @@
 //! NeuVector scanner JSON reports loaded from a directory.
 use super::{
     ParseError, ScanSource, SourceError,
-    files::{dedupe_images, file_modified_at, walk_json_files},
+    files::fetch_directory,
     neuvector::report::{NvVulnerability, finding_from_nv, nv_timestamp},
 };
 use crate::model::*;
@@ -119,50 +119,26 @@ impl ScanSource for NeuvectorFileSource {
         format!("NeuVector scanner (files): {}", self.dir.display())
     }
     fn fetch(&self) -> Result<ScanSet, SourceError> {
-        let mut items = Vec::new();
         let mut db_version = None;
         let mut db_updated_at = None;
-        for path in walk_json_files(&self.dir)? {
-            let parsed = std::fs::read(&path)
-                .map_err(|e| e.to_string())
-                .and_then(|bytes| read_report(&bytes).map_err(|e| e.to_string()));
-            match parsed {
-                Ok(Some(report)) => {
-                    if db_version.is_none() {
-                        db_version = report.cvedb_version.clone();
-                    }
-                    if db_updated_at.is_none() {
-                        db_updated_at = report.cvedb_create_time;
-                    }
-                    items.push(map_report(report, file_modified_at(&path)));
+        let fetched = fetch_directory(&self.dir, |_, bytes, scanned_at| {
+            Ok(read_report(bytes)?.map(|report| {
+                if db_version.is_none() {
+                    db_version = report.cvedb_version.clone();
                 }
-                Ok(None) => {}
-                Err(error) => {
-                    tracing::warn!(file = %path.display(), %error, "skipping unreadable or invalid scan report")
+                if db_updated_at.is_none() {
+                    db_updated_at = report.cvedb_create_time;
                 }
-            }
-        }
-        if items.is_empty() {
-            return Err(SourceError::Empty(self.dir.clone()));
-        }
-        let (images, findings) = dedupe_images(items);
-        Ok(ScanSet {
-            source: SourceInfo {
-                kind: SourceKind::NeuvectorFiles,
-                display_name: "NeuVector scanner (files)".into(),
-                scanner_name: Some("NeuVector".into()),
-                scanner_version: None,
-                db_version,
-                db_updated_at,
-            },
-            scope: self
-                .dir
-                .file_name()
-                .unwrap_or_default()
-                .to_string_lossy()
-                .into_owned(),
-            images,
-            findings,
-        })
+                map_report(report, scanned_at)
+            }))
+        })?;
+        Ok(fetched.into_scan_set(SourceInfo {
+            kind: SourceKind::NeuvectorFiles,
+            display_name: "NeuVector scanner (files)".into(),
+            scanner_name: Some("NeuVector".into()),
+            scanner_version: None,
+            db_version,
+            db_updated_at,
+        }))
     }
 }

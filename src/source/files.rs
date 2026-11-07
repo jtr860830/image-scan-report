@@ -1,6 +1,6 @@
 //! Shared discovery, timestamps, and stable deduplication.
-use super::SourceError;
-use crate::model::{Finding, Image};
+use super::{ParseError, SourceError};
+use crate::model::{Finding, Image, ScanSet, SourceInfo};
 use chrono::{DateTime, Utc};
 use std::{
     collections::{HashMap, HashSet},
@@ -66,4 +66,61 @@ pub fn dedupe_images(items: Vec<(Image, Vec<Finding>)>) -> (Vec<Image>, Vec<Find
         }));
     }
     (images, findings)
+}
+
+/// Deduplicated scan results and the directory scope shared by file sources.
+pub struct FetchedDirectory {
+    pub scope: String,
+    pub images: Vec<Image>,
+    pub findings: Vec<Finding>,
+}
+
+impl FetchedDirectory {
+    pub fn into_scan_set(self, source: SourceInfo) -> ScanSet {
+        ScanSet {
+            source,
+            scope: self.scope,
+            images: self.images,
+            findings: self.findings,
+        }
+    }
+}
+
+/// Read reports in sorted path order, skipping unrelated or invalid files.
+pub fn fetch_directory<F>(dir: &Path, mut parse: F) -> Result<FetchedDirectory, SourceError>
+where
+    F: FnMut(
+        &Path,
+        &[u8],
+        Option<DateTime<Utc>>,
+    ) -> Result<Option<(Image, Vec<Finding>)>, ParseError>,
+{
+    let mut items = Vec::new();
+    for path in walk_json_files(dir)? {
+        let parsed = std::fs::read(&path)
+            .map_err(|e| e.to_string())
+            .and_then(|bytes| {
+                parse(&path, &bytes, file_modified_at(&path)).map_err(|e| e.to_string())
+            });
+        match parsed {
+            Ok(Some(item)) => items.push(item),
+            Ok(None) => {}
+            Err(error) => {
+                tracing::warn!(file = %path.display(), %error, "skipping unreadable or invalid scan report")
+            }
+        }
+    }
+    if items.is_empty() {
+        return Err(SourceError::Empty(dir.into()));
+    }
+    let (images, findings) = dedupe_images(items);
+    Ok(FetchedDirectory {
+        scope: dir
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .into_owned(),
+        images,
+        findings,
+    })
 }

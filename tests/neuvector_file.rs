@@ -13,7 +13,7 @@ fn parses_scanner_fixture() {
     )
     .unwrap()
     .unwrap();
-    assert!(image.reference.ends_with("nginx:1.21.0"));
+    assert_eq!(image.reference, "registry-1.docker.io/library/nginx:1.21.0");
     assert!(findings.len() > 100);
     assert!(
         findings

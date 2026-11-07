@@ -1,8 +1,5 @@
 //! Trivy JSON reports loaded from a directory.
-use super::{
-    ParseError, ScanSource, SourceError,
-    files::{dedupe_images, file_modified_at, walk_json_files},
-};
+use super::{ParseError, ScanSource, SourceError, files::fetch_directory};
 use crate::{
     model::*,
     severity::{CvssScores, ScoreInput, classify, clean_score},
@@ -97,43 +94,17 @@ impl ScanSource for TrivyFileSource {
         format!("Trivy (files): {}", self.dir.display())
     }
     fn fetch(&self) -> Result<ScanSet, SourceError> {
-        let mut items = Vec::new();
-        for path in walk_json_files(&self.dir)? {
-            let parsed = std::fs::read(&path)
-                .map_err(|e| e.to_string())
-                .and_then(|bytes| {
-                    parse_trivy_report(&bytes, file_modified_at(&path)).map_err(|e| e.to_string())
-                });
-            match parsed {
-                Ok(Some(item)) => items.push(item),
-                Ok(None) => {}
-                Err(error) => {
-                    tracing::warn!(file = %path.display(), %error, "skipping unreadable or invalid scan report")
-                }
-            }
-        }
-        if items.is_empty() {
-            return Err(SourceError::Empty(self.dir.clone()));
-        }
-        let (images, findings) = dedupe_images(items);
-        Ok(ScanSet {
-            source: SourceInfo {
-                kind: SourceKind::TrivyFiles,
-                display_name: "Trivy (files)".into(),
-                scanner_name: Some("Trivy".into()),
-                scanner_version: None,
-                db_version: None,
-                db_updated_at: None,
-            },
-            scope: self
-                .dir
-                .file_name()
-                .unwrap_or_default()
-                .to_string_lossy()
-                .into_owned(),
-            images,
-            findings,
-        })
+        let fetched = fetch_directory(&self.dir, |_, bytes, scanned_at| {
+            parse_trivy_report(bytes, scanned_at)
+        })?;
+        Ok(fetched.into_scan_set(SourceInfo {
+            kind: SourceKind::TrivyFiles,
+            display_name: "Trivy (files)".into(),
+            scanner_name: Some("Trivy".into()),
+            scanner_version: None,
+            db_version: None,
+            db_updated_at: None,
+        }))
     }
 }
 pub fn parse_trivy_report(
