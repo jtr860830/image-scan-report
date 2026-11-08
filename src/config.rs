@@ -263,6 +263,14 @@ impl Config {
                         "output.method must be PUT or POST".into(),
                     ));
                 }
+                if method.eq_ignore_ascii_case("PUT")
+                    && self.report.json
+                    && !url.contains("{filename}")
+                {
+                    return Err(ConfigError::Invalid(
+                        "output.url: PUT with report.json needs a {filename} placeholder, or every artifact overwrites the same resource".into(),
+                    ));
+                }
                 let parsed = url::Url::parse(url)
                     .map_err(|e| ConfigError::Invalid(format!("output.url: {e}")))?;
                 if !matches!(parsed.scheme(), "http" | "https")

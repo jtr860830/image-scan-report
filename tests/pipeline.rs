@@ -503,7 +503,7 @@ fn json_artifact_goes_to_http_sink_too() {
     let dir = tempfile::tempdir().unwrap();
     let mut cfg = config(input.path(), dir.path());
     cfg.report.pdf = true;
-    cfg.output = vec![upload_output(&server.url("/upload"))];
+    cfg.output = vec![upload_output(&server.url("/upload/{filename}"))];
     let base = artifact_base_name(
         input.path().file_name().unwrap().to_str().unwrap(),
         SourceKind::TrivyFiles,
@@ -514,6 +514,7 @@ fn json_artifact_goes_to_http_sink_too() {
         .map(|(ext, ct)| {
             server.mock(|w, t| {
                 w.method("PUT")
+                    .path(format!("/upload/{base}.{ext}"))
                     .header(
                         "Content-Disposition",
                         format!("attachment; filename=\"{base}.{ext}\""),

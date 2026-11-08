@@ -116,7 +116,7 @@ impl HttpClient {
         self
     }
 
-    /// Send raw bytes using the shared retry policy.
+    /// Send raw bytes, retrying PUT uploads but sending POST uploads only once.
     pub fn send_bytes(
         &self,
         method: &str,
@@ -138,7 +138,14 @@ impl HttpClient {
             .filter(|(k, _)| !k.eq_ignore_ascii_case("content-type"))
             .collect();
         headers.push(("Content-Type", content_type));
-        self.request(&method, url, &Auth::None, &headers, Some(body))
+        self.request(
+            &method,
+            url,
+            &Auth::None,
+            &headers,
+            Some(body),
+            if method == "POST" { 1 } else { 3 },
+        )
     }
 
     pub fn get_json<T: DeserializeOwned>(
@@ -147,7 +154,11 @@ impl HttpClient {
         auth: &Auth,
         headers: &[(&str, &str)],
     ) -> Result<Response<T>, HttpError> {
-        self.json_response("GET", url, self.request("GET", url, auth, headers, None)?)
+        self.json_response(
+            "GET",
+            url,
+            self.request("GET", url, auth, headers, None, 3)?,
+        )
     }
 
     pub fn post_json<B: Serialize, T: DeserializeOwned>(
@@ -163,7 +174,7 @@ impl HttpClient {
         self.json_response(
             "POST",
             url,
-            self.request("POST", url, auth, headers, Some(&bytes))?,
+            self.request("POST", url, auth, headers, Some(&bytes), 3)?,
         )
     }
 
@@ -173,7 +184,7 @@ impl HttpClient {
         auth: &Auth,
         headers: &[(&str, &str)],
     ) -> Result<(), HttpError> {
-        self.request("DELETE", url, auth, headers, None)?;
+        self.request("DELETE", url, auth, headers, None, 3)?;
         Ok(())
     }
 
@@ -183,7 +194,7 @@ impl HttpClient {
         auth: &Auth,
         headers: &[(&str, &str)],
     ) -> Result<(), HttpError> {
-        self.request("DELETE_ONCE", url, auth, headers, None)?;
+        self.request("DELETE", url, auth, headers, None, 1)?;
         Ok(())
     }
 
@@ -221,9 +232,8 @@ impl HttpClient {
         auth: &Auth,
         headers: &[(&str, &str)],
         body: Option<&[u8]>,
+        attempts: usize,
     ) -> Result<Response<Vec<u8>>, HttpError> {
-        let once = method == "DELETE_ONCE";
-        let method = if once { "DELETE" } else { method };
         let uri: ureq::http::Uri = url.parse().map_err(|e: ureq::http::uri::InvalidUri| {
             HttpError::InvalidRequest(format!("{method} {}", redact_url(url)), e.to_string())
         })?;
@@ -242,7 +252,7 @@ impl HttpClient {
             Auth::Bearer(token) => Some(format!("Bearer {token}")),
         };
         let context = format!("{method} {}", redact_url(url));
-        for attempt in 0..3 {
+        for attempt in 0..attempts {
             tracing::debug!(method, url = redact_url(url));
             let mut request = ureq::http::Request::builder().method(method).uri(url);
             if let Some(value) = &authorization {
@@ -313,12 +323,12 @@ impl HttpClient {
                 &result,
                 Err(HttpError::Transport(..) | HttpError::Status(_, 500..=599))
             );
-            if once || !retry || attempt == 2 {
+            if !retry || attempt + 1 == attempts {
                 return result;
             }
             std::thread::sleep(self.retry_delays[attempt]);
         }
-        unreachable!("three attempts always return a result")
+        unreachable!("request attempts always return a result")
     }
 }
 

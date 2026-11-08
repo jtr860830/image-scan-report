@@ -418,3 +418,28 @@ fn http_method_is_normalized_on_load() {
     cfg.output = config::load(&path).unwrap().output;
     assert!(matches!(&cfg.output[0], OutputConfig::Http { method, .. } if method == "POST"));
 }
+
+#[test]
+fn put_with_json_requires_filename_placeholder() {
+    let mut cfg = minimal();
+    cfg.report.json = true;
+    cfg.output = vec![
+        serde_yaml_ng::from_str(
+            "type: http\nurl: https://reports.example.test/upload\nmethod: put",
+        )
+        .unwrap(),
+    ];
+    assert!(matches!(cfg.validate(), Err(ConfigError::Invalid(message))
+        if message == "output.url: PUT with report.json needs a {filename} placeholder, or every artifact overwrites the same resource"));
+    let OutputConfig::Http { url, .. } = &mut cfg.output[0] else {
+        unreachable!()
+    };
+    url.push_str("/{filename}");
+    cfg.validate().unwrap();
+    let OutputConfig::Http { url, method, .. } = &mut cfg.output[0] else {
+        unreachable!()
+    };
+    *url = "https://reports.example.test/upload".into();
+    *method = "POST".into();
+    cfg.validate().unwrap();
+}

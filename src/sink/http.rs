@@ -2,7 +2,7 @@
 use super::{Artifact, ReportSink, SinkError};
 use crate::{
     config::HttpMode,
-    source::http::{HttpClient, redact_url},
+    source::http::{HttpClient, encode_segment, redact_url},
 };
 use std::{
     sync::atomic::{AtomicU64, Ordering},
@@ -58,9 +58,16 @@ pub fn multipart_body(
 }
 impl ReportSink for HttpSink {
     fn describe(&self) -> String {
-        format!("HTTP {} {}", self.method, redact_url(&self.url))
+        format!(
+            "HTTP {} {}",
+            self.method,
+            redact_url(&self.url).replace("%7Bfilename%7D", "{filename}")
+        )
     }
     fn store(&self, artifact: &Artifact) -> Result<(), SinkError> {
+        let url = self
+            .url
+            .replace("{filename}", &encode_segment(&artifact.file_name));
         let mut headers: Vec<_> = self
             .headers
             .iter()
@@ -75,7 +82,7 @@ impl ReportSink for HttpSink {
                 headers.push(("Content-Disposition", &disposition));
                 self.client.send_bytes(
                     &self.method,
-                    &self.url,
+                    &url,
                     &headers,
                     artifact.media_type,
                     &artifact.bytes,
@@ -92,15 +99,11 @@ impl ReportSink for HttpSink {
                     &artifact.bytes,
                 );
                 self.client
-                    .send_bytes(&self.method, &self.url, &headers, &content_type, &body)
+                    .send_bytes(&self.method, &url, &headers, &content_type, &body)
             }
         };
         result.map(|_| ()).map_err(|e| {
-            SinkError::Other(format!(
-                "HTTP {} {}: {e}",
-                self.method,
-                redact_url(&self.url)
-            ))
+            SinkError::Other(format!("HTTP {} {}: {e}", self.method, redact_url(&url)))
         })
     }
 }

@@ -25,7 +25,7 @@ output:
   - type: filesystem
     path: /output
   - type: http
-    url: https://reports.example.com/upload
+    url: https://reports.example.com/upload/{filename}
     method: PUT
     headers: { Authorization: "Bearer ${UPLOAD_TOKEN}" }
     mode: raw

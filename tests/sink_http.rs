@@ -216,3 +216,55 @@ fn upload_query_is_redacted() {
     assert!(error.contains(&redacted_url));
     assert!(!error.contains("SECRET"));
 }
+
+#[test]
+fn put_substitutes_filename_placeholder() {
+    let server = httpmock::MockServer::start();
+    for mode in [HttpMode::Raw, HttpMode::Multipart] {
+        let sink = sink(server.url("/reports/{filename}?token=SECRET"), mode, "PUT");
+        assert!(sink.describe().contains("/reports/{filename}"));
+        assert!(!sink.describe().contains("SECRET"));
+        for (name, media_type) in [
+            ("report.json", "application/json"),
+            ("report.pdf", "application/pdf"),
+        ] {
+            let mut mock = server.mock(|w, t| {
+                w.method("PUT").path(format!("/reports/{name}"));
+                t.status(201);
+            });
+            sink.store(&Artifact {
+                file_name: name.into(),
+                media_type,
+                bytes: vec![],
+            })
+            .unwrap();
+            mock.assert_calls(1);
+            mock.delete();
+        }
+    }
+}
+
+#[test]
+fn post_is_not_retried() {
+    let server = httpmock::MockServer::start();
+    for mode in [HttpMode::Raw, HttpMode::Multipart] {
+        let mut mock = server.mock(|w, t| {
+            w.method("POST").path("/reports/report.pdf");
+            t.status(503);
+        });
+        let error = sink(server.url("/reports/{filename}?token=SECRET"), mode, "POST")
+            .store(&artifact())
+            .unwrap_err();
+        assert!(matches!(
+            error,
+            image_scan_report::sink::SinkError::Other(_)
+        ));
+        let message = error.to_string();
+        assert!(message.contains("/reports/report.pdf"));
+        assert!(message.contains("503"));
+        assert!(!message.contains("{filename}"));
+        assert!(!message.contains("SECRET"));
+        mock.assert_calls(1);
+        mock.delete();
+    }
+}
