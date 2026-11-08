@@ -8,7 +8,7 @@ fn version_prints_product_name_and_semver() {
     assert!(out.status.success());
     let s = String::from_utf8(out.stdout).unwrap();
     assert!(s.starts_with("judex "));
-    // The version is the crate's own; a pre-release such as 1.0.0-rc.1 is fine.
+    // The version is the crate's own, whatever shape it has (0.1.0, 1.0.0-rc.1, ...).
     assert_eq!(
         s.trim().split(' ').nth(1).unwrap(),
         env!("CARGO_PKG_VERSION")

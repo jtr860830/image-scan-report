@@ -82,7 +82,7 @@ under 4 GiB. See [development sizing notes](../../docs/development.md). The PVC
 requests 1Gi; monitor retained reports and remove old artifacts or increase it.
 Job history limits do not prune files on the PVC.
 
-Both workloads pin `ghcr.io/jtr860830/judex:1.0.0-rc.1` to the current crate release.
+Both workloads pin `ghcr.io/jtr860830/judex:0.1.0` to the current crate release.
 Update both tags when releasing; the Rust manifest test compares them with
 `env!("CARGO_PKG_VERSION")`. The image supplies the default `run --config
 /etc/report/config.yaml` command and runs as UID/GID 65532. The pod also sets
