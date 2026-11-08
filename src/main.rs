@@ -1,20 +1,26 @@
 use clap::Parser;
 use image_scan_report::cli::{self, Cli};
+use std::process::ExitCode;
 use tracing_subscriber::EnvFilter;
 
 const PRODUCT_NAME: &str = "judex";
 const PRODUCT_VERSION: &str = env!("CARGO_PKG_VERSION");
 
-fn main() {
+fn main() -> ExitCode {
     tracing_subscriber::fmt()
-        .with_env_filter(
-            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
-        )
+        .with_env_filter(log_filter(std::env::var("RUST_LOG").ok().as_deref()))
         .with_writer(std::io::stderr)
         .init();
 
-    if let Err(e) = dispatch(Cli::parse().command) {
-        fail(e);
+    // Not `fn main() -> Result<..>`: that form always exits with status 1 and
+    // prints the error with `Debug`, while this program promises distinct exit
+    // codes (2 config, 3 source, 4 render, 5 sinks) and a `Display` message.
+    match dispatch(Cli::parse().command) {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(e) => {
+            eprintln!("error: {e}");
+            ExitCode::from(e.exit_code() as u8)
+        }
     }
 }
 
@@ -52,7 +58,20 @@ fn dispatch(command: cli::Command) -> Result<(), image_scan_report::pipeline::Ru
     Ok(())
 }
 
-fn fail(e: image_scan_report::pipeline::RunError) -> ! {
-    eprintln!("error: {e}");
-    std::process::exit(e.exit_code());
+fn log_filter(env: Option<&str>) -> EnvFilter {
+    // ureq_proto trace dumps request bodies and credentials, including login tokens.
+    EnvFilter::try_new(env.unwrap_or("info"))
+        .unwrap_or_else(|_| EnvFilter::new("info"))
+        .add_directive("ureq_proto=off".parse().unwrap())
+        .add_directive("ureq=debug".parse().unwrap())
+}
+
+#[cfg(test)]
+mod logging_tests {
+    #[test]
+    fn trace_keeps_transport_credentials_private() {
+        let filter = super::log_filter(Some("trace")).to_string();
+        assert!(filter.contains("ureq_proto=off"));
+        assert!(filter.contains("ureq=debug"));
+    }
 }

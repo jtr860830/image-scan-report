@@ -80,18 +80,15 @@ fn missing_env_names_the_variable() {
 #[test]
 fn example_config_in_repo_loads() {
     let _guard = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-    let previous = std::env::var_os("UPLOAD_TOKEN");
-    unsafe { std::env::set_var("UPLOAD_TOKEN", "example-token") };
     let result = config::load(Path::new("examples/config.yaml"));
-    unsafe {
-        match previous {
-            Some(value) => std::env::set_var("UPLOAD_TOKEN", value),
-            None => std::env::remove_var("UPLOAD_TOKEN"),
-        }
-    }
+    let nv_result = config::load(Path::new("examples/config-neuvector.yaml"));
     let config = result.unwrap();
+    // Loading does not read source credentials or CA files.
+    let neuvector = nv_result.unwrap();
+    assert!(matches!(neuvector.source, SourceConfig::Neuvector { .. }));
     assert!(matches!(config.source, SourceConfig::Harbor { .. }));
-    assert_eq!(config.output.len(), 2);
+    assert_eq!(config.output.len(), 1);
+    assert_eq!(neuvector.output.len(), 1);
 }
 
 #[test]
@@ -298,5 +295,70 @@ fn report_length_settings() {
             ("parse", Err(ConfigError::Parse(_))) => (),
             (_, result) => panic!("unexpected result: {result:?}"),
         }
+    }
+}
+
+fn api_source(kind: &str, extra: &str) -> SourceConfig {
+    let registry = if kind == "neuvector" {
+        "registry: production\n"
+    } else {
+        ""
+    };
+    serde_yaml_ng::from_str(&format!("type: {kind}\nurl: https://scanner.test\nusername: reader\npassword_env: PASSWORD\n{registry}{extra}")).unwrap()
+}
+
+#[test]
+fn api_sources_accept_timeout_and_reject_bad_url() {
+    for kind in ["harbor", "neuvector"] {
+        let mut cfg = minimal();
+        cfg.source = api_source(kind, "timeout_secs: 7");
+        cfg.validate().unwrap();
+        for bad in [
+            "ftp://x",
+            "not a url",
+            "https://user@scanner.test",
+            "https://user:secret@scanner.test",
+            "https://:secret@scanner.test",
+        ] {
+            match &mut cfg.source {
+                SourceConfig::Harbor { url, .. } | SourceConfig::Neuvector { url, .. } => {
+                    *url = bad.into()
+                }
+                _ => unreachable!(),
+            }
+            assert!(
+                matches!(cfg.validate(), Err(ConfigError::Invalid(m)) if m.contains("source.url"))
+            );
+        }
+        cfg.source = api_source(kind, "timeout_secs: 0");
+        assert!(
+            matches!(cfg.validate(), Err(ConfigError::Invalid(m)) if m.contains("timeout_secs"))
+        );
+    }
+}
+
+#[test]
+fn insecure_skip_verify_parses_and_conflicts_with_ca() {
+    for kind in ["harbor", "neuvector"] {
+        let mut cfg = minimal();
+        cfg.source = api_source(kind, "");
+        assert!(matches!(
+            cfg.source,
+            SourceConfig::Harbor {
+                timeout_secs: 30,
+                insecure_skip_verify: false,
+                ..
+            } | SourceConfig::Neuvector {
+                timeout_secs: 30,
+                insecure_skip_verify: false,
+                ..
+            }
+        ));
+        cfg.source = api_source(kind, "insecure_skip_verify: true");
+        cfg.validate().unwrap();
+        cfg.source = api_source(kind, "insecure_skip_verify: true\nca_file: ca.pem");
+        assert!(
+            matches!(cfg.validate(), Err(ConfigError::Invalid(m)) if m.contains("ca_file") && m.contains("insecure_skip_verify"))
+        );
     }
 }

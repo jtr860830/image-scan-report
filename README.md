@@ -1,12 +1,10 @@
 # judex
 
 judex turns existing container-image vulnerability scans into audit reports.
-It normalises Trivy and NeuVector scanner JSON into a shared model without scanning images itself.
+It normalises Trivy and NeuVector scanner JSON and results from the Harbor and NeuVector APIs into a shared model without scanning images itself.
 
-This milestone supports file sources and PDF and JSON output to the filesystem.
-Harbor and NeuVector API sources, and HTTP upload are in progress; see the
-[design document](docs/superpowers/specs/2026-11-07-product-redesign-design.md)
-and [implementation plans](docs/superpowers/plans/2026-11-07-core-pipeline.md).
+Sources: Trivy and NeuVector scanner files, the Harbor API and the NeuVector controller API.
+Outputs: PDF and JSON to the filesystem.
 
 ## Quick start
 
@@ -53,18 +51,71 @@ optional fields default to `null`. `output` must contain at least one destinatio
 | `source.registry` | String; NeuVector API only | Required for `neuvector` |
 | `source.username` | String; either API source | Required for API sources |
 | `source.password_env` | String naming the password environment variable; either API source | Required for API sources |
-| `source.ca_file` | Optional certificate file path; either API source | `null` |
+| `source.ca_file` | Optional PEM CA bundle path; either API source | `null` |
+| `source.insecure_skip_verify` | Boolean; either API source; disables TLS verification | `false` |
+| `source.timeout_secs` | Positive unsigned integer; request timeout in seconds | `30` |
 
 File sources recursively discover JSON files. Invalid reports are skipped with a
 warning; no usable reports is a source failure. For NeuVector standalone scanner
 files, use `neuvector-files` and a directory such as `./fixtures/neuvector-scanner`.
 
-`harbor` and `neuvector` are accepted by the configuration parser but rejected by
-both `check` and `run` with “arrives in a later release” in this build.
-`password_env` names a variable (for example `HARBOR_PASSWORD`), not the password
-itself. Passwords are read when an API source connects; this build never connects.
-The existing [Harbor example](examples/config.yaml) describes future functionality
-and cannot run in this milestone.
+Start from the [Harbor example](examples/config.yaml) or the
+[NeuVector example](examples/config-neuvector.yaml): they are templates, so
+replace the URL, credentials and file paths (CA bundle, logo) with yours, then
+run `judex check --config <file>` followed by `judex run --config <file>`.
+`url` must use HTTP or HTTPS. `password_env` names an environment variable,
+not the password itself; a missing variable fails with exit code 2.
+Use a least-privilege read-only account: a read-only project member in Harbor (Guest is sufficient; Limited Guest should work but was not verified),
+or a reader role in NeuVector.
+
+Harbor scope is `<authority>/<project>`; omit `project` to include all accessible
+projects (scope `<authority> (all projects)`). NeuVector scope is
+`<authority>/<registry>`; `registry` is the configured scanner registry name,
+not a registry endpoint URL. Harbor multi-arch indexes produce one row per
+platform child, such as `repo:tag (linux/arm64)`; attestation children are skipped.
+Should two children of one index share a platform string, the second is written
+`repo:tag (linux/arm64, <12-digit digest>)` so the rows stay distinct.
+Authentication/authorisation failures (HTTP 401/403) abort the whole source with
+exit 3; any other per-artifact failure becomes a Failed row. Connection or discovery failures still fail the source.
+
+Mount the appliance's exported CA certificate as a PEM bundle and set `ca_file`
+to its path. Invalid or unreadable CA files fail with exit code 2. As a last
+resort for appliances whose CA cannot be exported, remove `ca_file` and set
+`insecure_skip_verify: true`. This disables certificate verification and prints
+`source <authority>: TLS certificate verification is disabled` once per check/run.
+The two settings cannot be combined.
+
+The default trust store is the bundled Mozilla root set. The OS store is not
+consulted (the image ships no system certificates); `ca_file` replaces the bundled
+roots. 3xx redirects are not followed: fix the configured URL to the final endpoint.
+A path prefix in `url`, such as `https://host/harbor`, is supported.
+`timeout_secs` covers the whole response download.
+
+Across API sources, NeuVector rows have no platform. Harbor `os` is the image OS
+from the manifest; NeuVector `os` is the detected distro. Harbor sizes are compressed,
+while NeuVector sizes are uncompressed. NeuVector's scanner version is its CVE
+database version.
+
+Harbor scan states:
+
+| Scanner state | Report state |
+| --- | --- |
+| `Success` | Ok |
+| `Error` or unknown state | Failed |
+| `Running`, `Pending`, `Scheduled` | NotScanned (scan in progress) |
+| Missing or empty | NotScanned |
+
+A Success scan whose vulnerability report is missing or has no `vulnerabilities` field is listed as Failed (vulnerability report missing); a report with an empty list is a clean image. If the report request itself fails, the row is Failed with that HTTP error instead.
+
+NeuVector scan states (case insensitive):
+
+| Scanner state / result | Report state |
+| --- | --- |
+| `finished` / `succeeded` | Ok |
+| `finished` / any other result | Failed |
+| `scheduled`, `scanning` | NotScanned (scan in progress) |
+| Missing or empty | NotScanned |
+| Any other state | Failed |
 
 ### Report
 
@@ -113,7 +164,7 @@ theme:
 | `timeout_secs` | Unsigned 64-bit integer; HTTP only | `30` |
 
 HTTP outputs are accepted by the parser but rejected by both `check` and `run`
-with “arrives in a later release”. Both validate outputs before fetching the source.
+with an unsupported-output error. Both validate outputs before fetching the source.
 Header values expand `${VAR}` placeholders when configuration is loaded; an unset
 variable fails with its name. Valid names use ASCII letters or underscore first,
 then letters, digits or underscores. Expansion is one pass, malformed placeholders
@@ -125,7 +176,7 @@ strings do not receive this substitution. Keep credentials in environment variab
 | Code | Meaning |
 | --- | --- |
 | `0` | Success (including partial output success) |
-| `2` | Configuration or CLI argument error; includes unsupported sources/outputs |
+| `2` | Configuration or CLI argument error; includes unsupported outputs (HTTP upload arrives in a later release) |
 | `3` | Source failure, including no usable input reports |
 | `4` | Rendering / JSON serialisation failure |
 | `5` | Every artifact write failed |

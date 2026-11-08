@@ -25,6 +25,8 @@ thiserror = "2"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 walkdir = "2"
+ureq = { version = "3", features = ["json"] }
+url = "2"
 
 typst = "0.15"
 typst-layout = "0.15"
@@ -35,6 +37,7 @@ rayon = "1"
 toml = "1"
 
 [dev-dependencies]
+httpmock = "0.9"
 lopdf = "0.47"
 pdf-extract = "0.12"
 image_scan_report = { package = "judex", path = ".", features = ["preview"] }

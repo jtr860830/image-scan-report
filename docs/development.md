@@ -54,7 +54,7 @@ as a repository tool.
 | `src/pipeline.rs` | Source construction, report assembly, PDF/JSON generation, render data, storage and exit codes |
 
 The pipeline writes PDF through the embedded Typst renderer and serialises the
-normalised model directly for JSON. API sources and HTTP upload remain future work.
+normalised model directly for JSON. API sources use the shared HTTP transport; HTTP upload remains future work.
 
 ## Rendering and templates
 
@@ -121,3 +121,41 @@ The complete 11-image, 4,368-finding English report produced by
 from the previous layout's 705 pages to 429 pages. Descriptions are capped at
 600 characters and rendered only for Critical/High findings; remediation uses
 30 cards followed by a compact table.
+
+## API mock tests
+
+API integration tests use httpmock with fixture-serving helpers in
+`tests/support/harbor_mock.rs` and `tests/support/neuvector_mock.rs`. Point the
+pipeline configuration or binary at the mock server and supply test credentials
+through the environment. The Harbor subset helper serves three repositories
+and one artifact each to keep PDF tests small. Use the captured fixture files without editing them; see
+[fixture capture instructions](../fixtures/README.md).
+
+Mock servers bind loopback sockets. These tests, including the closed-port
+connection test, must run where loopback binding is permitted (some sandboxes deny it).
+Compile them with `cargo test --offline --no-run` and run socket-free tests
+where loopback binding is unavailable.
+
+## Live verification
+
+The API sources were run against a real Harbor and NeuVector before release.
+The lab (two VMs' worth of k3s on one node) is private; the numbers below are
+the record of what the release build did there. Re-run this table whenever a
+source changes or a scanner is upgraded.
+
+| Item | Value |
+|---|---|
+| Date | 2026-11-08 |
+| Build | commit `1d66eea`, `cargo build --release --locked` in `rust:1.99-bookworm` (x86_64) |
+| Harbor | 2.15.4 with Trivy v0.75.0, plain `http://` NodePort, project `demo` |
+| Harbor result | `check` and `run` in both languages: 20 images (12 single-arch across 11 repositories — `demo/busybox` and `demo/nested/busybox` share one digest and both stay listed — plus 8 platform children of one multi-arch index), 4 383 findings; PDF 435 pages (zh-TW) / 434 pages (en), 1.8 MB; `run` 90 s wall (≈ 65 s fetching sequentially, ≈ 25 s rendering), peak RSS 860 MB. An earlier build of this branch reported 19 here because rows were deduplicated by digest; that is the bug the shared-digest regression tests now pin |
+| NeuVector | 5.6.4 controller, self-signed certificate whose only SAN is `neuvector`, registry configuration `harbor-lab` |
+| NeuVector with `insecure_skip_verify: true` | OK by IP; the warning line is printed once; 12 images, 3 560 findings, 348 pages, 18 s, RSS 716 MB |
+| NeuVector with `ca_file` | OK when addressed as `https://neuvector:<port>` (hosts entry); by IP the handshake fails with exit 3 and `certificate not valid for name "…"; certificate is only valid for DnsName("neuvector")` — the expected behaviour, and the message tells the operator what to fix |
+| Schema drift | none; every captured fixture shape matched the live responses |
+
+Notes: NeuVector reports a multi-arch index as a single image (the amd64 child),
+Harbor reports one row per platform child, so the same registry yields 12 and
+20 images respectively. With `RUST_LOG=trace` neither run printed the Basic
+credentials or the NeuVector token. The sequential Harbor fetch is the slow part of a run;
+concurrent requests are a later optimisation.

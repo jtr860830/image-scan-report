@@ -59,9 +59,47 @@ Note `SCANNER_ON_DEMAND=true` is required.
 
 ## Sanitisation
 
-Lab addresses were rewritten: `192.168.1.x:30002` to `harbor.example.test` and
-any other `192.168.1.x` to `neuvector.example.test`. No credentials were present
+Lab addresses were rewritten: the private lab IPv4 address with port 30002 to
+`harbor.example.test`, and other private lab IPv4 addresses to
+`neuvector.example.test`. No credentials were present
 (`password` fields in the API captures are empty; the registry `username` is
 `admin`). Remaining matches for "secret"/"password" are scanner content, such as
 the Debian `snakeoil` placeholder key reported for `postgres:12.4` and Perl
 module file names. Everything else is untouched.
+
+
+## Additional API captures (2026-11-08)
+
+These captures use the same Harbor 2.15.4, Trivy 0.75.0, and NeuVector 5.6.4
+versions listed above. Lab addresses were sanitised as described above.
+
+| Path | Contents |
+|---|---|
+| `harbor/multiarch/artifacts-alpine-multi.json` | Harbor artifact list for `demo/alpine-multi:3.20`, an OCI image index with 16 child references |
+| `harbor/multiarch/child-<digest12>.json` | Each of the 16 child artifacts, fetched with `?with_scan_overview=true&with_tag=true` |
+| `harbor/multiarch/vulns-<digest12>.json` | Vulnerability additions for the 8 scanned platform children |
+| `harbor/projects.json` | Harbor project list |
+| `harbor/repositories-paged-p1.json` | First repository page with `page_size=2` |
+| `harbor/repositories-paged-p1.headers` | First-page HTTP response headers, including `X-Total-Count: 11` and a `Link` to `page=2&page_size=2` with `rel="next"` |
+| `harbor/repositories-paged-p2.json` | Second repository page with `page_size=2` |
+| `harbor/repositories-after.json` | Full repository list after the pushes |
+| `harbor/artifacts-junk-artifact.json` | Deliberately non-image OCI artifact with Harbor type `JUNK` |
+| `harbor/artifacts-nested-busybox.json` | Artifact list of the nested repository `demo/nested/busybox` (a copy of `demo/busybox:1.37`). Harbor only answers when the repository segment is double-encoded: `.../repositories/nested%252Fbusybox/artifacts` returns 200, `nested%2Fbusybox` returns 404 (measured on Harbor 2.15.4) |
+| `neuvector-api/rescan/registry.json` | Registry summary after the rescan |
+| `neuvector-api/rescan/registry-images.json` | Registry image list after the rescan, containing 12 images |
+
+Of the index's 16 children, 8 are platform images with scan status `Success`.
+The other 8 are attestation manifests with platform `unknown/unknown` and no
+`scan_overview`; they are not failed image scans.
+
+NeuVector lists the index as a single image, `demo/alpine-multi:3.20`, using
+its amd64 child digest
+`sha256:c64c687cbea9300178b30c95835354e34c4e4febc4badfe27102879de0483b5e`.
+A real failed NeuVector scan could not be provoked: NeuVector ignores the
+`JUNK` artifact. The `Failed` branch therefore keeps the synthetic envelope
+used by the tests rather than claiming a captured failure response.
+
+Outside this directory, `tests/data/tls/ca.pem` is a self-signed test CA for
+custom CA certificate loading, and `tests/data/tls/not-a-cert.pem` is invalid
+certificate input for testing rejection. These are test inputs, not scanner
+captures.

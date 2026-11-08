@@ -292,3 +292,129 @@ fn customer_logo_renders_on_cover_and_gif_exits_2() {
     assert!(!err.to_string().contains("theme:"), "{err}");
     assert!(matches!(err, RunError::Config(_)));
 }
+
+#[allow(dead_code)]
+#[path = "support/harbor_mock.rs"]
+mod harbor_mock;
+#[allow(dead_code)]
+#[path = "support/neuvector_mock.rs"]
+mod neuvector_mock;
+
+fn api_config(kind: &str, url: &str, output: &Path) -> Config {
+    static INIT: std::sync::Once = std::sync::Once::new();
+    INIT.call_once(|| unsafe { std::env::set_var("JUDEX_TASK5_MOCK_PASSWORD", "secret-password") });
+    let mut cfg = config(output, output);
+    cfg.source = serde_yaml_ng::from_str(&format!(
+        "type: {kind}\nurl: {url}\nusername: {}\npassword_env: JUDEX_TASK5_MOCK_PASSWORD\ntimeout_secs: 1\n{}",
+        if kind == "harbor" { "robot" } else { "admin" },
+        if kind == "harbor" {
+            "project: demo"
+        } else {
+            "registry: harbor-lab"
+        }
+    ))
+    .unwrap();
+    cfg
+}
+
+#[test]
+fn missing_password_env_exits_2() {
+    let dir = tempfile::tempdir().unwrap();
+    for kind in ["harbor", "neuvector"] {
+        let mut cfg = api_config(kind, "https://scanner.test", dir.path());
+        match &mut cfg.source {
+            image_scan_report::config::SourceConfig::Harbor { password_env, .. }
+            | image_scan_report::config::SourceConfig::Neuvector { password_env, .. } => {
+                *password_env = "JUDEX_TASK5_UNSET_PASSWORD_49382".into()
+            }
+            _ => unreachable!(),
+        }
+        let err = check(&cfg, &product()).unwrap_err();
+        assert_eq!(err.exit_code(), 2);
+        assert!(err.to_string().contains("JUDEX_TASK5_UNSET_PASSWORD_49382"));
+        assert!(
+            matches!(err, RunError::Config(image_scan_report::config::ConfigError::MissingEnv(ref n)) if n == "JUDEX_TASK5_UNSET_PASSWORD_49382")
+        );
+    }
+}
+
+#[test]
+fn bad_ca_file_exits_2() {
+    let dir = tempfile::tempdir().unwrap();
+    for kind in ["harbor", "neuvector"] {
+        let mut cfg = api_config(kind, "https://scanner.test", dir.path());
+        match &mut cfg.source {
+            image_scan_report::config::SourceConfig::Harbor { ca_file, .. }
+            | image_scan_report::config::SourceConfig::Neuvector { ca_file, .. } => {
+                *ca_file = Some("tests/data/tls/not-a-cert.pem".into())
+            }
+            _ => unreachable!(),
+        }
+        let err = check(&cfg, &product()).unwrap_err();
+        assert_eq!(err.exit_code(), 2);
+        assert!(err.to_string().contains("ca_file"));
+    }
+}
+
+#[test]
+fn unreachable_scanner_exits_3() {
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let url = format!("http://{}", listener.local_addr().unwrap());
+    drop(listener);
+    let dir = tempfile::tempdir().unwrap();
+    let start = std::time::Instant::now();
+    let err = check(&api_config("harbor", &url, dir.path()), &product()).unwrap_err();
+    assert_eq!(err.exit_code(), 3);
+    assert!(err.to_string().contains(url.trim_start_matches("http://")));
+    assert!(matches!(err, RunError::Source(_)));
+    assert!(start.elapsed() < std::time::Duration::from_secs(5));
+}
+
+#[test]
+fn run_against_mock_harbor_writes_pdf_and_json() {
+    let (server, _) = harbor_mock::harbor_mock_subset();
+    run_api_mock("harbor", &server.base_url(), Some(3));
+}
+
+#[test]
+fn run_against_mock_neuvector_writes_pdf() {
+    let (server, _) = neuvector_mock::capture(false);
+    run_api_mock("neuvector", &server.base_url(), None);
+}
+
+fn run_api_mock(kind: &str, url: &str, images: Option<usize>) {
+    let dir = tempfile::tempdir().unwrap();
+    let mut cfg = api_config(kind, url, dir.path());
+    match &mut cfg.source {
+        image_scan_report::config::SourceConfig::Harbor { password_env, .. }
+        | image_scan_report::config::SourceConfig::Neuvector { password_env, .. } => {
+            *password_env = "JUDEX_TASK5_MOCK_PASSWORD".into()
+        }
+        _ => unreachable!(),
+    }
+    cfg.report.pdf = true;
+    let result = run(&cfg, now(), &product());
+    let summary = result.unwrap();
+    assert_eq!(summary.stored.len(), 2);
+    for entry in std::fs::read_dir(dir.path()).unwrap() {
+        let path = entry.unwrap().path();
+        let bytes = std::fs::read(&path).unwrap();
+        if path.extension().unwrap() == "pdf" {
+            assert!(pdf::page_count(&bytes) >= 6);
+        } else {
+            let report: Report = serde_json::from_slice(&bytes).unwrap();
+            if kind == "neuvector" {
+                let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+                assert_eq!(json["source"]["kind"], "neuvector");
+                assert_eq!(
+                    report.scope,
+                    format!("{}/harbor-lab", url.trim_start_matches("http://"))
+                );
+            }
+            if let Some(n) = images {
+                assert_eq!(report.images.len(), n);
+            }
+            assert_eq!(report.images.len(), summary.images);
+        }
+    }
+}
