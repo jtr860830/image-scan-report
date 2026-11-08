@@ -4,6 +4,9 @@ use serde::{Serialize, de::DeserializeOwned};
 use std::{collections::BTreeMap, path::PathBuf, sync::Arc, time::Duration};
 use ureq::tls::{PemItem, RootCerts, TlsConfig, parse_pem};
 
+pub const MAX_RESPONSE_BYTES: u64 = 512 * 1024 * 1024;
+
+#[derive(Debug, Clone)]
 pub struct HttpOptions {
     pub ca_file: Option<PathBuf>,
     pub insecure_skip_verify: bool,
@@ -29,6 +32,8 @@ pub enum HttpError {
     Unauthorized(String),
     #[error("{0} returned HTTP {1}")]
     Status(String, u16),
+    #[error("invalid request {0}: {1}")]
+    InvalidRequest(String, String),
     #[error("request to {0} failed: {1}")]
     Transport(String, String),
     #[error("invalid response from {0}: {1}")]
@@ -69,6 +74,7 @@ impl HttpClient {
         let config = ureq::Agent::config_builder()
             .timeout_global(Some(opts.timeout))
             .http_status_as_error(false)
+            .max_redirects(0)
             .user_agent(opts.user_agent.clone())
             .tls_config(
                 TlsConfig::builder()
@@ -106,7 +112,7 @@ impl HttpClient {
         headers: &[(&str, &str)],
     ) -> Result<Response<T>, HttpError> {
         let bytes = serde_json::to_vec(body)
-            .map_err(|e| HttpError::Decode(format!("POST {url}"), e.to_string()))?;
+            .map_err(|e| HttpError::InvalidRequest(format!("POST {url}"), e.to_string()))?;
         self.json_response(
             "POST",
             url,
@@ -128,24 +134,26 @@ impl HttpClient {
         &self,
         method: &str,
         url: &str,
-        mut response: ureq::http::Response<ureq::Body>,
+        response: Response<Vec<u8>>,
     ) -> Result<Response<T>, HttpError> {
         let context = format!("{method} {url}");
-        let headers = response
-            .headers()
-            .iter()
-            .filter_map(|(k, v)| {
-                v.to_str()
-                    .ok()
-                    .map(|v| (k.as_str().to_ascii_lowercase(), v.to_owned()))
-            })
-            .collect();
-        let bytes = response
-            .body_mut()
-            .read_to_vec()
-            .map_err(|e| HttpError::Decode(context.clone(), e.to_string()))?;
-        let body = serde_json::from_slice(&bytes)
-            .map_err(|e| HttpError::Decode(context, e.to_string()))?;
+        let headers = response.headers;
+        let body = serde_json::from_slice(&response.body).map_err(|e| {
+            HttpError::Decode(
+                context,
+                format!(
+                    "invalid JSON ({}) at line {} column {}",
+                    match e.classify() {
+                        serde_json::error::Category::Io => "io",
+                        serde_json::error::Category::Syntax => "syntax",
+                        serde_json::error::Category::Data => "data",
+                        serde_json::error::Category::Eof => "eof",
+                    },
+                    e.line(),
+                    e.column()
+                ),
+            )
+        })?;
         Ok(Response { body, headers })
     }
 
@@ -156,7 +164,16 @@ impl HttpClient {
         auth: &Auth,
         headers: &[(&str, &str)],
         body: Option<&[u8]>,
-    ) -> Result<ureq::http::Response<ureq::Body>, HttpError> {
+    ) -> Result<Response<Vec<u8>>, HttpError> {
+        let uri: ureq::http::Uri = url.parse().map_err(|e: ureq::http::uri::InvalidUri| {
+            HttpError::InvalidRequest(format!("{method} {url}"), e.to_string())
+        })?;
+        if !matches!(uri.scheme_str(), Some("http" | "https")) || uri.authority().is_none() {
+            return Err(HttpError::InvalidRequest(
+                format!("{method} {url}"),
+                "expected an absolute HTTP(S) URL".into(),
+            ));
+        }
         let authorization = match auth {
             Auth::None => None,
             Auth::Basic { username, password } => Some(format!(
@@ -170,27 +187,63 @@ impl HttpClient {
             tracing::debug!(method, url);
             let mut request = ureq::http::Request::builder().method(method).uri(url);
             if let Some(value) = &authorization {
+                let mut value = ureq::http::HeaderValue::from_str(value)
+                    .map_err(|e| HttpError::InvalidRequest(context.clone(), e.to_string()))?;
+                value.set_sensitive(true);
                 request = request.header("Authorization", value);
             }
             for (key, value) in headers {
-                request = request.header(*key, *value);
+                let mut value = ureq::http::HeaderValue::from_str(value)
+                    .map_err(|e| HttpError::InvalidRequest(context.clone(), e.to_string()))?;
+                if key.eq_ignore_ascii_case("authorization")
+                    || key.eq_ignore_ascii_case("x-auth-token")
+                {
+                    value.set_sensitive(true);
+                }
+                request = request.header(*key, value);
             }
             if body.is_some() {
                 request = request.header("Content-Type", "application/json");
             }
             let request = request
                 .body(body.unwrap_or_default())
-                .map_err(|e| HttpError::Transport(context.clone(), e.to_string()))?;
+                .map_err(|e| HttpError::InvalidRequest(context.clone(), e.to_string()))?;
             let result = self
                 .agent
                 .run(request)
                 .map_err(|e| HttpError::Transport(context.clone(), e.to_string()))
-                .and_then(|response| {
+                .and_then(|mut response| {
                     let code = response.status().as_u16();
                     match code {
                         401 | 403 => Err(HttpError::Unauthorized(context.clone())),
-                        400..=599 => Err(HttpError::Status(context.clone(), code)),
-                        _ => Ok(response),
+                        300..=599 => Err(HttpError::Status(context.clone(), code)),
+                        _ => {
+                            let headers = response
+                                .headers()
+                                .iter()
+                                .filter_map(|(k, v)| {
+                                    v.to_str()
+                                        .ok()
+                                        .map(|v| (k.as_str().to_owned(), v.to_owned()))
+                                })
+                                .collect();
+                            let body = response
+                                .body_mut()
+                                .with_config()
+                                .limit(MAX_RESPONSE_BYTES)
+                                .read_to_vec()
+                                .map_err(|e| {
+                                    if matches!(e, ureq::Error::BodyExceedsLimit(_)) {
+                                        HttpError::Decode(
+                                            context.clone(),
+                                            "response larger than 512 MiB".into(),
+                                        )
+                                    } else {
+                                        HttpError::Transport(context.clone(), e.to_string())
+                                    }
+                                })?;
+                            Ok(Response { body, headers })
+                        }
                     }
                 });
             let retry = matches!(
@@ -263,6 +316,10 @@ mod tests {
                 user_agent: format!("image-scan-report/{}", env!("CARGO_PKG_VERSION")),
             })
             .unwrap();
+            assert_eq!(
+                client.retry_delays,
+                [Duration::from_secs(1), Duration::from_secs(2)]
+            );
             assert_eq!(
                 client.agent.config().tls_config().disable_verification(),
                 insecure_skip_verify

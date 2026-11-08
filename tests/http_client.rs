@@ -116,9 +116,12 @@ fn gives_up_after_three_transport_failures() {
     drop(l);
     let start = std::time::Instant::now();
     assert!(matches!(
-        client().get_json::<Value>(&format!("http://{addr}/"), &Auth::None, &[]),
+        client()
+            .with_backoff([Duration::from_millis(50), Duration::from_millis(100)])
+            .get_json::<Value>(&format!("http://{addr}/"), &Auth::None, &[]),
         Err(HttpError::Transport(..))
     ));
+    assert!(start.elapsed() >= Duration::from_millis(150));
     assert!(start.elapsed() < Duration::from_secs(3));
 }
 #[test]
@@ -212,4 +215,42 @@ fn untrusted_server_is_source_error() {
         source_error,
         image_scan_report::source::SourceError::Other(_)
     ));
+}
+
+#[test]
+fn multi_certificate_pem_is_accepted() {
+    let mut o = options();
+    o.ca_file = Some("tests/data/tls/bundle.pem".into());
+    assert!(HttpClient::new(&o).is_ok());
+}
+
+#[test]
+fn redirects_do_not_forward_headers() {
+    let target = MockServer::start();
+    let hit = target.mock(|_, t| {
+        t.json_body(json!({}));
+    });
+    let origin = MockServer::start();
+    origin.mock(|_, t| {
+        t.status(302).header("Location", target.url("/"));
+    });
+    assert!(matches!(
+        client().get_json::<Value>(&origin.url("/"), &Auth::None, &[("X-Auth-Token", "secret")]),
+        Err(HttpError::Status(_, 302))
+    ));
+    hit.assert_calls(0);
+}
+
+#[test]
+fn decode_errors_do_not_expose_response_values() {
+    let s = MockServer::start();
+    s.mock(|_, t| {
+        t.json_body(json!({"token":{"token":"TOPSECRET"}}));
+    });
+    let e = client()
+        .get_json::<std::collections::BTreeMap<String, u64>>(&s.url("/"), &Auth::None, &[])
+        .err()
+        .unwrap();
+    assert!(matches!(e, HttpError::Decode(..)));
+    assert!(!e.to_string().contains("TOPSECRET"));
 }
