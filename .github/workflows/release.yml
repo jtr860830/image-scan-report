@@ -44,7 +44,9 @@ jobs:
               echo "::error::Invalid release tag '$TAG': expected vMAJOR.MINOR.PATCH with an optional prerelease suffix."
               exit 1
             fi
-            PACKAGE_VERSION=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].version')
+            # Read the version from Cargo.toml directly: this job installs no
+            # toolchain, and the manifest has a single [package] table.
+            PACKAGE_VERSION=$(grep -m1 '^version = ' Cargo.toml | cut -d'"' -f2)
             if [[ "${TAG#v}" != "$PACKAGE_VERSION" ]]; then
               echo "::error::Tag version '${TAG#v}' does not match Cargo package version '$PACKAGE_VERSION'."
               exit 1
@@ -125,7 +127,7 @@ jobs:
           context: .
           file: Containerfile
           tags: ghcr.io/jtr860830/${{ env.IMAGE_NAME }}
-          outputs: type=image,push-by-digest=true,name-canonical=true,push=true
+          outputs: type=image,name=ghcr.io/jtr860830/${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=true
           build-args: |
             VERSION=${{ needs.version.outputs.version }}
             REVISION=${{ github.sha }}
