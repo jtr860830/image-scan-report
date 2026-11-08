@@ -1,4 +1,6 @@
-FROM docker.io/library/rust:1.99-trixie AS build
+# Pinned to the same patch release as rust-toolchain.toml so rustup never
+# has to download a toolchain during the build.
+FROM docker.io/library/rust:1.99.1-trixie AS build
 ARG BIN=judex
 WORKDIR /src
 COPY Cargo.toml Cargo.lock rust-toolchain.toml ./

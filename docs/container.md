@@ -86,8 +86,9 @@ to their configured services.
 Memory use is about 0.8 GB plus 70 MB per 1,000 findings; the Kubernetes examples request 1 GiB and limit 4 GiB (about 45,000 findings).
 Allow sufficient output disk space for both PDF and JSON when enabled.
 
-Distroless has no shell; a `:debug-nonroot` image is not provided. Use `podman cp`
-to retrieve artifacts from a stopped container, or run the binary locally to
-investigate configuration and rendering. Use `judex:dev --version` through
-`podman run --rm judex:dev --version` to inspect the embedded product version;
-OCI version and revision labels describe the image build separately.
+Distroless has no shell, and a `:debug-nonroot` variant of this image is not
+provided. Reports land in the `/output` mount, so nothing needs to be copied
+out of the container; to investigate configuration or rendering problems, run
+the same binary locally with the same configuration file. `podman run --rm
+judex:dev --version` prints the embedded product version; the OCI `version` and
+`revision` labels describe the image build separately.
