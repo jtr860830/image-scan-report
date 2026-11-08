@@ -4,7 +4,7 @@
 
 1. Bump `[package].version` in Cargo.toml and the judex package version in
    Cargo.lock together. Keep the Kubernetes image tags in deploy/k8s/*.yaml and
-   version examples in README/docs aligned. The current candidate is 1.0.0-rc.1;
+   deploy/podman/run.sh (including its default image tag) and version examples in README/docs aligned. The current candidate is 1.0.0-rc.1;
    bump to 1.0.0 for the stable release.
 2. Review CHANGELOG.md and replace `unreleased` in the version heading with the
    release date (YYYY-MM-DD). Run the checks in [development.md](development.md).
@@ -12,28 +12,33 @@
 
    ```sh
    git tag -s vX.Y.Z -m 'Release X.Y.Z'
-   git push --tags
+   git push origin vX.Y.Z
    ```
 
-The release workflow builds natively on ubuntu-latest (x86_64-unknown-linux-gnu)
+The release workflow builds natively on ubuntu-24.04 (x86_64-unknown-linux-gnu)
 and ubuntu-24.04-arm (aarch64-unknown-linux-gnu). It installs the toolchain from
 rust-toolchain.toml and runs `cargo build --release --locked`; no cross compiler
 or emulation is involved. The two `judex-vX.Y.Z-<target>.tar.gz` archives contain
-the binary, LICENSE, THIRD_PARTY_NOTICES.md, README.md and docs/container.md.
+a top-level `judex-vX.Y.Z-<target>/` directory containing the binary, LICENSE, THIRD_PARTY_NOTICES.md, README.md and docs/container.md.
 Per-target checksums are merged into one SHA256SUMS. The workflow creates a
 **draft** GitHub release with those three assets and the matching CHANGELOG
-section. Review the assets and notes, then publish the draft manually.
+section. Delete a stale draft before re-running the release job. Review the assets and notes, then publish the draft manually.
 
 Native image builds export digests; a manifest job combines both architectures
-at `ghcr.io/jtr860830/judex:X.Y.Z` and `:latest`, then inspects the result.
-Candidate tags also update `latest`; release maintainers should account for this
-when choosing when to push a candidate. Images publish before the draft is reviewed.
+at `ghcr.io/jtr860830/judex:X.Y.Z`, then verifies both architectures. Only stable
+versions (without a `-`) update `:latest`; release candidates never move it.
+Images publish before the draft is reviewed. After the first GHCR push, make the
+package public and link it to the repository in the package settings.
+
+Native binaries require glibc >= 2.39 (built on ubuntu-24.04). Use the container
+image on hosts with older glibc. SHA256SUMS is checkable with `sha256sum -c
+SHA256SUMS` from the download directory.
 
 ## Dispatch dry-run
 
 Run Release with workflow_dispatch on the branch. Leave `ref_tag` empty to use
 the seven-character commit SHA as the build version, or set it to a version label
-for packaging/OCI version checks. This input labels the build; it does not check
+for archive naming. OCI VERSION is always `sha-<seven-character-SHA>` on dispatch. This input labels the build; it does not check
 out another ref. Dispatch publishes only `:sha-<seven-character-SHA>`, never
 `:latest`, and creates no GitHub release when dispatched on any ref. Native
 binary archives remain available as workflow artifacts.
@@ -89,12 +94,14 @@ Keep the library crate name `image_scan_report`. Update these product surfaces:
 6. Image references in deploy/k8s/*.yaml and deploy/podman/run.sh.
 7. `[product].name` in themes/default/theme.toml: this intentional branding
    literal is checked separately by the naming guard.
-8. CLI expectations in tests/cli.rs and user-facing README/docs examples.
+8. All of tests/: `cargo_bin_cmd!("judex")` calls, the image constant in
+   tests/deploy_manifests.rs, and tests/snapshots/*.snap.
+9. Product references in examples/ and user-facing README/docs examples.
 
 From the repository root, this exact grep lists the naming surfaces:
 
 ```sh
-grep -rn -i 'judex' Cargo.toml Cargo.lock src/ templates/ strings/ themes/default/theme.toml Containerfile .github/workflows/release.yml .github/workflows/ci.yml deploy/k8s/ deploy/podman/run.sh tests/cli.rs README.md docs/
+grep -rn -i 'judex' Cargo.toml Cargo.lock src/ templates/ strings/ themes/default/theme.toml Containerfile .github/workflows/release.yml .github/workflows/ci.yml deploy/k8s/ deploy/podman/run.sh tests/ examples/ README.md docs/
 ```
 
 For example, update the image repository without introducing kustomization:

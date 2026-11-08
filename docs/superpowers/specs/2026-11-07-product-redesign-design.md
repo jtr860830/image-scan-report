@@ -363,6 +363,6 @@ Version 1 is a single release with all four sources; nobody is waiting on a part
 
 ## 18. Open
 
-- **Product name** – the user is choosing one. Until then the working name is `judex` (chosen 2026-11-07 as a placeholder, not a decision); the crate name, the binary name and the `PRODUCT_NAME` constant are the only places it appears in code, so a rename touches three lines.
+- **Product name** – the user is choosing one. Until then the working name is `judex` (chosen 2026-11-07 as a placeholder, not a decision); the crate name, the binary name and the `PRODUCT_NAME` constant are the only places it appears in code, follow the [rename checklist in docs/release.md](../../release.md#rename-procedure) for all naming surfaces.
 
 Rename checklist and guard: [release procedure](../../release.md#rename-procedure).

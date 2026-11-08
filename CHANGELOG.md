@@ -15,7 +15,8 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   uploads, configurable headers, custom CAs, timeouts and retries.
 - Non-root container image, Kubernetes Job/CronJob examples and Podman wrapper.
 - Native Linux x86_64/aarch64 release archives, checksums, draft release notes
-  and multi-architecture GHCR images.
+  and multi-architecture GHCR images. Release candidates never update `latest`;
+  only stable releases move that tag.
 
 ### Changed
 
@@ -35,4 +36,4 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Scope is "images stored in the registry", not workloads running in a cluster.
 - No history: comparisons between runs are out of scope.
 
-[1.0.0-rc.1]: https://github.com/jtr860830/image-scan-report/compare/rewrite/release...v1.0.0-rc.1
+[1.0.0-rc.1]: https://github.com/jtr860830/image-scan-report/releases/tag/v1.0.0-rc.1

@@ -1,7 +1,7 @@
 # judex
 
 [![CI](https://github.com/jtr860830/image-scan-report/actions/workflows/ci.yml/badge.svg)](https://github.com/jtr860830/image-scan-report/actions/workflows/ci.yml)
-[![Latest release](https://img.shields.io/github/v/release/jtr860830/image-scan-report?include_prereleases)](https://github.com/jtr860830/image-scan-report/releases/latest)
+[![Latest release](https://img.shields.io/github/v/release/jtr860830/image-scan-report?include_prereleases)](https://github.com/jtr860830/image-scan-report/releases)
 
 judex turns existing container-image vulnerability scans into audit reports.
 It normalises Trivy and NeuVector scanner JSON and results from the Harbor and NeuVector APIs into a shared model without scanning images itself.
@@ -265,3 +265,6 @@ Licensed under [Apache-2.0](LICENSE).
 Regenerate third-party notices with `cargo about generate --config about.toml about.hbs -o THIRD_PARTY_NOTICES.md` using cargo-about 0.9.3; see [development notes](docs/development.md#third-party-notices).
 
 Set `report.logo` to a local PNG or SVG file to place the customer logo on the cover. Theme logos appear beside the product credit in the appendix.
+
+Native binaries require glibc >= 2.39 (built on ubuntu-24.04). Use the container
+image on hosts with older glibc.

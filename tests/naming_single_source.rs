@@ -13,10 +13,10 @@ fn product_name_appears_only_in_known_places() {
         for entry in WalkDir::new(root.join(directory)) {
             let entry = entry.unwrap();
             if entry.file_type().is_file()
-                && fs::read_to_string(entry.path())
+                && fs::read(entry.path())
+                    .map(|bytes| String::from_utf8(bytes).ok())
                     .unwrap()
-                    .to_lowercase()
-                    .contains(&needle)
+                    .is_some_and(|text| text.to_lowercase().contains(&needle))
             {
                 hits.push(entry.path().strip_prefix(root).unwrap().to_path_buf());
             }

@@ -12,8 +12,11 @@ on:
         type: string
 
 permissions:
-  contents: write
-  packages: write
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 env:
   # the only place the release pipeline names the product; see docs/release.md
@@ -28,12 +31,24 @@ jobs:
       version: ${{ steps.version.outputs.version }}
       image_tag: ${{ steps.version.outputs.image_tag }}
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - id: version
         env:
           REF_TAG: ${{ inputs.ref_tag }}
         run: |
           if [[ "$GITHUB_EVENT_NAME" == push ]]; then
             TAG="$GITHUB_REF_NAME"
+            if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+              echo "::error::Invalid release tag '$TAG': expected vMAJOR.MINOR.PATCH with an optional prerelease suffix."
+              exit 1
+            fi
+            PACKAGE_VERSION=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].version')
+            if [[ "${TAG#v}" != "$PACKAGE_VERSION" ]]; then
+              echo "::error::Tag version '${TAG#v}' does not match Cargo package version '$PACKAGE_VERSION'."
+              exit 1
+            fi
             IMAGE_TAG="${TAG#v}"
           else
             TAG="${REF_TAG:-${GITHUB_SHA::7}}"
@@ -41,7 +56,7 @@ jobs:
           fi
           [[ "$TAG" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]] || exit 1
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+          echo "version=$IMAGE_TAG" >> "$GITHUB_OUTPUT"
           echo "image_tag=$IMAGE_TAG" >> "$GITHUB_OUTPUT"
 
   binaries:
@@ -50,14 +65,16 @@ jobs:
     strategy:
       matrix:
         include:
-          - runner: ubuntu-latest
+          - runner: ubuntu-24.04
             target: x86_64-unknown-linux-gnu
           - runner: ubuntu-24.04-arm
             target: aarch64-unknown-linux-gnu
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - run: rustup toolchain install
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       - run: cargo build --release --locked
       - name: Package native binary
         env:
@@ -65,48 +82,52 @@ jobs:
           TARGET: ${{ matrix.target }}
         run: |
           mkdir -p dist
-          tar -czf "dist/${BIN}-${TAG}-${TARGET}.tar.gz" -C target/release "$BIN" -C "$GITHUB_WORKSPACE" LICENSE THIRD_PARTY_NOTICES.md README.md docs/container.md
+          bundle="${BIN}-${TAG}-${TARGET}"
+          mkdir -p "dist/$bundle/docs"
+          cp "target/release/$BIN" LICENSE THIRD_PARTY_NOTICES.md README.md "dist/$bundle/"
+          cp docs/container.md "dist/$bundle/docs/"
+          tar -czf "dist/$bundle.tar.gz" -C dist "$bundle"
+          rm -r "dist/$bundle"
           cd dist
           sha256sum *.tar.gz > "SHA256SUMS-${TARGET}"
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: binary-${{ matrix.target }}
           path: dist/*
           if-no-files-found: error
 
   image:
+    permissions:
+      contents: read
+      packages: write
     needs: version
     runs-on: ${{ matrix.runner }}
     strategy:
       matrix:
         include:
-          - runner: ubuntu-latest
+          - runner: ubuntu-24.04
             target: x86_64-unknown-linux-gnu
           - runner: ubuntu-24.04-arm
             target: aarch64-unknown-linux-gnu
     steps:
-      - uses: actions/checkout@v7
-      - uses: docker/login-action@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - uses: docker/setup-buildx-action@v4
-      - uses: docker/metadata-action@v6
-        id: meta
-        with:
-          images: ghcr.io/jtr860830/${{ env.IMAGE_NAME }}
-      - uses: docker/build-push-action@v7
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         id: build
         with:
           context: .
           file: Containerfile
-          push: true
           tags: ghcr.io/jtr860830/${{ env.IMAGE_NAME }}
-          outputs: type=image,push-by-digest=true,name-canonical=true
-          labels: ${{ steps.meta.outputs.labels }}
+          outputs: type=image,push-by-digest=true,name-canonical=true,push=true
           build-args: |
-            VERSION=${{ needs.version.outputs.tag }}
+            VERSION=${{ needs.version.outputs.version }}
             REVISION=${{ github.sha }}
           cache-from: type=gha,scope=${{ matrix.target }}
           cache-to: type=gha,mode=max,scope=${{ matrix.target }}
@@ -116,34 +137,36 @@ jobs:
         run: |
           mkdir -p digests
           touch "digests/${DIGEST#sha256:}"
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: digest-${{ matrix.target }}
           path: digests/*
           if-no-files-found: error
 
   manifest:
+    permissions:
+      packages: write
     needs: [version, image]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: digest-*
           path: digests
           merge-multiple: true
-      - uses: docker/login-action@v4
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - uses: docker/setup-buildx-action@v4
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
       - name: Publish and inspect native multi-arch image
         env:
           VERSION: ${{ needs.version.outputs.image_tag }}
         run: |
           IMAGE="ghcr.io/jtr860830/${IMAGE_NAME}"
           tags=(-t "$IMAGE:$VERSION")
-          if [[ "$GITHUB_EVENT_NAME" == push && "$GITHUB_REF" == refs/tags/v* ]]; then
+          if [[ "$GITHUB_EVENT_NAME" == push && "$GITHUB_REF" == refs/tags/v* && "$VERSION" != *-* ]]; then
             tags+=(-t "$IMAGE:latest")
           fi
           sources=()
@@ -152,15 +175,19 @@ jobs:
           done
           [[ ${#sources[@]} == 2 ]]
           docker buildx imagetools create "${tags[@]}" "${sources[@]}"
-          docker buildx imagetools inspect "$IMAGE:$VERSION"
+          docker buildx imagetools inspect "$IMAGE:$VERSION" --format '{{json .Manifest}}' | jq -e '[.manifests[].platform.architecture] | index("amd64") and index("arm64")'
 
   release:
+    permissions:
+      contents: write
     if: startsWith(github.ref, 'refs/tags/v') && github.event_name == 'push'
     needs: [version, binaries, manifest]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/download-artifact@v8
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: binary-*
           path: dist
@@ -171,13 +198,20 @@ jobs:
         run: |
           cat dist/SHA256SUMS-* > dist/SHA256SUMS
           (cd dist && sha256sum -c SHA256SUMS)
+          if ! awk -v heading="## [$VERSION] - " '
+            index($0, heading) == 1 && substr($0, length(heading) + 1) ~ /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/ { found=1 }
+            END { exit !found }
+          ' CHANGELOG.md; then
+            echo "::error::CHANGELOG section for $VERSION must have a release date (YYYY-MM-DD); it may still be unreleased."
+            exit 1
+          fi
           awk -v heading="## [$VERSION] - " '
             index($0, heading) == 1 { found=1; next }
-            found && /^## / { exit }
+            found && (/^## \[/ || /^\[/) { exit }
             found { print }
           ' CHANGELOG.md > release-notes.md
           test -s release-notes.md
-      - uses: softprops/action-gh-release@v3
+      - uses: softprops/action-gh-release@8a0cd651e5b2365bd640854a3fa5dfc70e4875f3 # v3.0.4
         with:
           draft: true
           prerelease: ${{ contains(needs.version.outputs.version, '-') }}
