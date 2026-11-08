@@ -17,13 +17,70 @@ pub fn build_source(cfg: &SourceConfig) -> Result<Box<dyn ScanSource>, ConfigErr
         SourceConfig::NeuvectorFiles { path } => {
             Ok(Box::new(NeuvectorFileSource { dir: path.clone() }))
         }
-        SourceConfig::Harbor { .. } => Err(ConfigError::Invalid(
-            "harbor source arrives in a later release".into(),
-        )),
-        SourceConfig::Neuvector { .. } => Err(ConfigError::Invalid(
-            "neuvector source arrives in a later release".into(),
-        )),
+        SourceConfig::Harbor {
+            url,
+            project,
+            username,
+            password_env,
+            ca_file,
+            timeout_secs,
+            insecure_skip_verify,
+        } => {
+            let password = crate::config::secret_from_env(password_env)?;
+            let client = source_client(url, ca_file, *timeout_secs, *insecure_skip_verify)?;
+            Ok(Box::new(crate::source::harbor::HarborSource::from_config(
+                &crate::source::harbor::HarborParams {
+                    url: url.clone(),
+                    project: project.clone(),
+                    username: username.clone(),
+                },
+                client,
+                password,
+            )))
+        }
+        SourceConfig::Neuvector {
+            url,
+            registry,
+            username,
+            password_env,
+            ca_file,
+            timeout_secs,
+            insecure_skip_verify,
+        } => {
+            let password = crate::config::secret_from_env(password_env)?;
+            let client = source_client(url, ca_file, *timeout_secs, *insecure_skip_verify)?;
+            Ok(Box::new(
+                crate::source::neuvector_api::NeuvectorSource::from_config(
+                    &crate::source::neuvector_api::NeuvectorParams {
+                        url: url.clone(),
+                        registry: registry.clone(),
+                        username: username.clone(),
+                    },
+                    client,
+                    password,
+                ),
+            ))
+        }
     }
+}
+
+fn source_client(
+    url: &str,
+    ca_file: &Option<PathBuf>,
+    timeout_secs: u64,
+    insecure_skip_verify: bool,
+) -> Result<crate::source::http::HttpClient, ConfigError> {
+    let client = crate::source::http::HttpClient::new(&crate::source::http::HttpOptions {
+        ca_file: ca_file.clone(),
+        insecure_skip_verify,
+        timeout: std::time::Duration::from_secs(timeout_secs),
+        user_agent: format!("image-scan-report/{}", env!("CARGO_PKG_VERSION")),
+    })
+    .map_err(|e| ConfigError::Invalid(format!("source.ca_file: {e}")))?;
+    if insecure_skip_verify {
+        tracing::warn!("source {}: TLS certificate verification is disabled", url);
+    }
+    Ok(client)
 }
 
 pub fn assemble_report(set: ScanSet, cfg: &ReportConfig, now: DateTime<Utc>) -> Report {

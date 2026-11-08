@@ -177,3 +177,37 @@ fn run_default_config_produces_pdf() {
             .is_some_and(|s| s == "pdf"))
     );
 }
+
+#[allow(dead_code)]
+#[path = "support/harbor_mock.rs"]
+mod harbor_mock;
+
+#[test]
+fn check_against_mock_harbor_reports_counts() {
+    use image_scan_report::source::ScanSource;
+    let (server, source) = harbor_mock::harbor_mock_subset();
+    let expected = source.fetch().unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let path = write_config(dir.path());
+    let mut cfg: serde_yaml_ng::Value =
+        serde_yaml_ng::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    cfg["source"] = serde_yaml_ng::from_str(&format!("type: harbor\nurl: {}\nproject: demo\nusername: robot\npassword_env: JUDEX_CLI_HARBOR_PASSWORD", server.base_url())).unwrap();
+    std::fs::write(&path, serde_yaml_ng::to_string(&cfg).unwrap()).unwrap();
+    let out = cargo_bin_cmd!("judex")
+        .args(["check", "--config"])
+        .arg(path)
+        .env("JUDEX_CLI_HARBOR_PASSWORD", "secret-password")
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(String::from_utf8_lossy(&out.stdout).contains(&format!(
+        "Harbor {}: demo: {} images, {} findings;",
+        server.address(),
+        expected.images.len(),
+        expected.findings.len()
+    )));
+}

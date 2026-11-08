@@ -1882,6 +1882,7 @@ dependencies = [
  "typst-pdf",
  "typst-render",
  "ureq",
+ "url",
  "walkdir",
 ]
 

@@ -32,6 +32,10 @@ pub enum SourceConfig {
         username: String,
         password_env: String,
         ca_file: Option<PathBuf>,
+        #[serde(default = "default_timeout")]
+        timeout_secs: u64,
+        #[serde(default)]
+        insecure_skip_verify: bool,
     },
     Neuvector {
         url: String,
@@ -39,6 +43,10 @@ pub enum SourceConfig {
         username: String,
         password_env: String,
         ca_file: Option<PathBuf>,
+        #[serde(default = "default_timeout")]
+        timeout_secs: u64,
+        #[serde(default)]
+        insecure_skip_verify: bool,
     },
 }
 
@@ -183,6 +191,39 @@ pub fn secret_from_env(name: &str) -> Result<String, ConfigError> {
 
 impl Config {
     pub fn validate(&self) -> Result<(), ConfigError> {
+        if let SourceConfig::Harbor {
+            url,
+            ca_file,
+            timeout_secs,
+            insecure_skip_verify,
+            ..
+        }
+        | SourceConfig::Neuvector {
+            url,
+            ca_file,
+            timeout_secs,
+            insecure_skip_verify,
+            ..
+        } = &self.source
+        {
+            let parsed = url::Url::parse(url)
+                .map_err(|e| ConfigError::Invalid(format!("source.url: {e}")))?;
+            if !matches!(parsed.scheme(), "http" | "https") {
+                return Err(ConfigError::Invalid(
+                    "source.url: scheme must be http or https".into(),
+                ));
+            }
+            if ca_file.is_some() && *insecure_skip_verify {
+                return Err(ConfigError::Invalid(
+                    "source.ca_file and source.insecure_skip_verify cannot be combined".into(),
+                ));
+            }
+            if *timeout_secs == 0 {
+                return Err(ConfigError::Invalid(
+                    "source.timeout_secs must be greater than zero".into(),
+                ));
+            }
+        }
         if self.report.description_chars < 50 {
             return Err(ConfigError::Invalid(
                 "report.description_chars must be at least 50".into(),

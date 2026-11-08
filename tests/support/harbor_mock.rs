@@ -77,6 +77,13 @@ pub fn harbor_mock() -> (MockServer, HarborSource) {
     harbor_mock_with_failure(None)
 }
 pub fn harbor_mock_with_failure(failure: Option<(&str, u16)>) -> (MockServer, HarborSource) {
+    harbor_mock_selected(failure, false)
+}
+#[allow(dead_code)]
+pub fn harbor_mock_subset() -> (MockServer, HarborSource) {
+    harbor_mock_selected(None, true)
+}
+fn harbor_mock_selected(failure: Option<(&str, u16)>, subset: bool) -> (MockServer, HarborSource) {
     let server = MockServer::start();
     if let Some((path, status)) = failure {
         server.mock(|w, t| {
@@ -90,10 +97,18 @@ pub fn harbor_mock_with_failure(failure: Option<(&str, u16)>) -> (MockServer, Ha
         w.path("/api/v2.0/projects");
         t.status(200).json_body(fixture("projects.json"));
     });
-    let repos = fixture("repositories-after.json")
+    let mut repos = fixture("repositories-after.json")
         .as_array()
         .unwrap()
         .clone();
+    if subset {
+        repos.retain(|r| {
+            matches!(
+                r["name"].as_str(),
+                Some("demo/alpine" | "demo/nginx" | "demo/busybox")
+            )
+        });
+    }
     paged(
         &server,
         "/api/v2.0/projects/demo/repositories",
@@ -110,7 +125,10 @@ pub fn harbor_mock_with_failure(failure: Option<(&str, u16)>) -> (MockServer, Ha
         } else {
             format!("artifacts-{name}.json")
         };
-        let values = fixture(&file).as_array().unwrap().clone();
+        let mut values = fixture(&file).as_array().unwrap().clone();
+        if subset {
+            values.truncate(1);
+        }
         artifacts(&server, name, values.clone());
         for a in values {
             if let Some(refs) = a["references"].as_array() {

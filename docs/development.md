@@ -54,7 +54,7 @@ as a repository tool.
 | `src/pipeline.rs` | Source construction, report assembly, PDF/JSON generation, render data, storage and exit codes |
 
 The pipeline writes PDF through the embedded Typst renderer and serialises the
-normalised model directly for JSON. API sources and HTTP upload remain future work.
+normalised model directly for JSON. API sources use the shared HTTP transport; HTTP upload remains future work.
 
 ## Rendering and templates
 
@@ -121,3 +121,17 @@ The complete 11-image, 4,368-finding English report produced by
 from the previous layout's 705 pages to 429 pages. Descriptions are capped at
 600 characters and rendered only for Critical/High findings; remediation uses
 30 cards followed by a compact table.
+
+## API mock tests
+
+API integration tests use httpmock with fixture-serving helpers in
+`tests/support/harbor_mock.rs` and `tests/support/neuvector_mock.rs`. Point the
+pipeline configuration or binary at the mock server and supply test credentials
+through the environment. The Harbor subset helper serves three repositories
+and one artifact each to keep PDF tests small. Captures remain unchanged; see
+[fixture capture instructions](../fixtures/README.md).
+
+Mock servers bind loopback sockets. These tests, including the closed-port
+connection test, run under the controller outside the Codex sandbox because
+loopback binding is denied there. Compile them with `cargo test --offline --no-run`
+and run socket-free tests inside the sandbox.

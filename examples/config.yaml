@@ -5,6 +5,9 @@ source:
   project: my-project
   username: report-reader
   password_env: HARBOR_PASSWORD
+  timeout_secs: 30
+  # Last resort when the CA cannot be exported; prints a TLS verification warning.
+  # insecure_skip_verify: true
   # Mount your private certificate authority bundle at this path.
   ca_file: /etc/report/harbor-ca.pem
 
