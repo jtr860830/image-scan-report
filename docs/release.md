@@ -19,7 +19,8 @@ The release workflow builds natively on ubuntu-24.04 (x86_64-unknown-linux-gnu)
 and ubuntu-24.04-arm (aarch64-unknown-linux-gnu). It installs the toolchain from
 rust-toolchain.toml and runs `cargo build --release --locked`; no cross compiler
 or emulation is involved. The two `judex-vX.Y.Z-<target>.tar.gz` archives contain
-a top-level `judex-vX.Y.Z-<target>/` directory containing the binary, LICENSE, THIRD_PARTY_NOTICES.md, README.md and docs/container.md.
+a top-level `judex-vX.Y.Z-<target>/` directory containing the binary, LICENSE, THIRD_PARTY_NOTICES.md, README.md, docs/container.md, OFL texts in licenses/fonts/, all example YAML
+configs in examples/, and the Podman wrapper run.sh for offline use.
 Per-target checksums are merged into one SHA256SUMS. The workflow creates a
 **draft** GitHub release with those three assets and the matching CHANGELOG
 section. Delete a stale draft before re-running the release job. Review the assets and notes, then publish the draft manually.
@@ -36,23 +37,27 @@ SHA256SUMS` from the download directory.
 
 ## Dispatch dry-run
 
-Run Release with workflow_dispatch on the branch. Leave `ref_tag` empty to use
-the seven-character commit SHA as the build version, or set it to a version label
-for archive naming. OCI VERSION is always `sha-<seven-character-SHA>` on dispatch. This input labels the build; it does not check
-out another ref. Dispatch publishes only `:sha-<seven-character-SHA>`, never
-`:latest`, and creates no GitHub release when dispatched on any ref. Native
-binary archives remain available as workflow artifacts.
+`workflow_dispatch` is available only once release.yml exists on the default
+branch. Use this order:
 
-The release job requires `startsWith(github.ref, 'refs/tags/v')` and a push
-event, so dispatch cannot create a release. Dispatch on the branch for testing. Controller validation is pending: this sandbox
-has no network and has not run the hosted workflow. The controller should run:
+1. Merge the PR, then run `gh workflow run release.yml --ref main`.
+   Dispatch publishes only `ghcr.io/jtr860830/judex:sha-<7>` (the seven-character
+   commit SHA), never `:latest`, and creates no GitHub release. Native archives
+   remain workflow artifacts. Inspect both platforms in the manifest.
+2. After verification, either leave the test image or delete both its SHA tag
+   and the untagged per-architecture and attestation manifests it references
+   from the GHCR package versions page.
+3. Date the CHANGELOG section, bump nothing else, and commit the change.
+4. Tag only a CI-green commit: the release workflow does not wait for CI.
 
-```sh
-podman run --rm ghcr.io/jtr860830/judex:sha-<short> --version
-```
+   ```sh
+   git tag -s vX.Y.Z -m 'Release X.Y.Z'
+   git push origin vX.Y.Z
+   ```
 
-Inspect both platforms in the manifest and optionally delete the test tag after
-verification. Record the hosted run URL and result here when available.
+The version job requires an exactly matching dated CHANGELOG heading before any
+build or publication. RC tags produce a draft pre-release; stable tags produce a
+draft release. Review and publish the draft manually.
 
 ## Air-gap bundle
 

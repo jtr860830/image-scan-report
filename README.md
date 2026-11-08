@@ -17,6 +17,19 @@ Download the native Linux tarball for x86_64 or aarch64 and `SHA256SUMS` from
 The container image is `ghcr.io/jtr860830/judex:<ver>`. See the
 [release guide](docs/release.md) for assets and air-gap bundles.
 
+### First run from the tarball
+
+```sh
+tar -xzf judex-vX.Y.Z-<target>.tar.gz
+cd judex-vX.Y.Z-<target>
+cp examples/config.yaml ./config.yaml
+# Edit config.yaml for your source, credentials and output.
+./judex check --config ./config.yaml
+./judex run --config ./config.yaml
+```
+
+Use `RUST_LOG=debug` for diagnostics; even `trace` never prints credentials.
+
 ### Container installation
 
 Use `ghcr.io/jtr860830/judex:<ver>` with a release tag, a config whose filesystem
@@ -29,6 +42,8 @@ podman run --rm --read-only --security-opt no-new-privileges -v ./config.yaml:/e
 For air-gapped hosts, transfer the image with `podman save` and `podman load`.
 See [container installation](docs/container.md) for the wrapper script, mounts,
 permissions, secrets, local builds, and air-gap commands.
+
+Sizing: about 0.8 GB plus 70 MB per 1,000 findings; the Kubernetes examples request 1 GiB and limit 4 GiB. See [container sizing](docs/container.md).
 
 ## Kubernetes
 
@@ -114,8 +129,7 @@ exit 3; any other per-artifact failure becomes a Failed row. Connection or disco
 Mount the appliance's exported CA certificate as a PEM bundle and set `ca_file`
 to its path. Invalid or unreadable CA files fail with exit code 2. As a last
 resort for appliances whose CA cannot be exported, remove `ca_file` and set
-`insecure_skip_verify: true`. This disables certificate verification and prints
-`source <authority>: TLS certificate verification is disabled` once per check/run.
+`insecure_skip_verify: true`. This disables certificate verification and prints a warning with the redacted URL: `source https://host/path: TLS certificate verification is disabled` once per check/run.
 The two settings cannot be combined.
 
 The default trust store is the bundled Mozilla root set. The OS store is not
@@ -219,8 +233,7 @@ exits zero; exit 5 means every artifact write failed.
 Mount the endpoint's exported CA certificate as a PEM bundle and set `ca_file`
 to its path. Invalid or unreadable CA files fail with exit code 2. As a last
 resort for endpoints whose CA cannot be exported, remove `ca_file` and set
-`insecure_skip_verify: true`. This disables certificate verification and prints
-`output <authority>: TLS certificate verification is disabled` once per check/run.
+`insecure_skip_verify: true`. This disables certificate verification and prints a warning with the redacted URL: `output https://host/path: TLS certificate verification is disabled` once per check/run.
 The two settings cannot be combined.
 
 Header values expand `${VAR}` placeholders when configuration is loaded; an unset

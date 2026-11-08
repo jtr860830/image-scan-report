@@ -25,6 +25,7 @@ LABEL org.opencontainers.image.source="https://github.com/jtr860830/image-scan-r
       org.opencontainers.image.description="Turns container image vulnerability scans into audit reports"
 COPY --from=build /src/target/release/judex /usr/local/bin/judex
 COPY LICENSE THIRD_PARTY_NOTICES.md /usr/share/doc/judex/
+COPY assets/fonts/LICENSE-*.txt /usr/share/doc/judex/fonts/
 USER 65532:65532
 WORKDIR /output
 VOLUME ["/output"]

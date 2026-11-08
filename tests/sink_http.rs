@@ -35,18 +35,42 @@ fn artifact() -> Artifact {
 #[test]
 fn raw_put_sends_bytes_with_content_headers() {
     let s = httpmock::MockServer::start();
+    let captured = Arc::new(Mutex::new(None));
+    let capture = captured.clone();
     let m = s.mock(|w, t| {
-        w.method("PUT")
-            .header("Content-Type", "application/pdf")
-            .header("Content-Disposition", "attachment; filename=\"report.pdf\"")
-            .header("Authorization", "Bearer t")
-            .body("%PDF-test");
+        w.is_true(move |r| {
+            *capture.lock().unwrap() = Some(r.clone());
+            true
+        })
+        .method("PUT")
+        .header("Content-Type", "application/pdf")
+        .header("Content-Disposition", "attachment; filename=\"report.pdf\"")
+        .header("Authorization", "Bearer t")
+        .body("%PDF-test");
         t.status(201);
     });
-    sink(s.url("/upload"), HttpMode::Raw, "PUT")
-        .store(&artifact())
-        .unwrap();
+    HttpSink::new(
+        s.url("/upload"),
+        "PUT".into(),
+        vec![
+            ("Authorization".into(), "Bearer t".into()),
+            ("cOnTeNt-Disposition".into(), "caller-value".into()),
+        ],
+        HttpMode::Raw,
+        client_from_tls(None, false, Duration::from_secs(5)).unwrap(),
+    )
+    .store(&artifact())
+    .unwrap();
     m.assert_calls(1);
+    let captured = captured.lock().unwrap();
+    let headers = captured.as_ref().unwrap().headers_vec();
+    assert_eq!(
+        headers
+            .iter()
+            .filter(|(k, _)| k.eq_ignore_ascii_case("Content-Disposition"))
+            .count(),
+        1
+    );
 }
 #[test]
 fn multipart_post_has_one_file_part() {

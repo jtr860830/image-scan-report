@@ -91,6 +91,14 @@ jobs:
           chmod 777 smoke-out
       - name: Check and render with a read-only root filesystem
         run: |
+          docker image inspect -f '{{.Config.User}}' judex:ci | grep -qx '65532:65532'
+          docker run --rm --read-only \
+            -v "$PWD/fixtures:/fixtures:ro" \
+            -v "$PWD/smoke-config.yaml:/etc/report/config.yaml:ro" \
+            -v "$PWD/smoke-out:/output" \
+            judex:ci
+          test -n "$(find smoke-out -type f -name '*.pdf' -print -quit)"
+          rm -f smoke-out/*.pdf
           for command in check run; do
             docker run --rm --read-only --user 65532:65532 \
               -v "$PWD/fixtures:/fixtures:ro" \

@@ -71,6 +71,7 @@ impl ReportSink for HttpSink {
         debug_assert!(!artifact.file_name.contains(['"', '\r', '\n']));
         let result = match self.mode {
             HttpMode::Raw => {
+                headers.retain(|(key, _)| !key.eq_ignore_ascii_case("Content-Disposition"));
                 headers.push(("Content-Disposition", &disposition));
                 self.client.send_bytes(
                     &self.method,

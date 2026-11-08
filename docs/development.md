@@ -26,6 +26,12 @@ cargo install cargo-about --version 0.9.3 --locked --features cli
 cargo about generate --config about.toml about.hbs -o THIRD_PARTY_NOTICES.md
 ```
 
+A dependency bump requires running
+`cargo about generate --config about.toml about.hbs -o THIRD_PARTY_NOTICES.md`
+(the regeneration command reported by CI) and committing the result. CI generates
+its comparison with the exact command
+`cargo about generate --config about.toml about.hbs -o /tmp/THIRD_PARTY_NOTICES.md`.
+
 Commit the generated `THIRD_PARTY_NOTICES.md` whenever dependencies, `about.toml`,
 or `about.hbs` change. The CI `notices` job regenerates it and fails when the
 committed file is stale. Rust licence notices come from cargo-about; the font
@@ -58,6 +64,9 @@ as a repository tool.
 | `src/model/` | Normalised reports, images, findings and severity enum |
 | `src/severity.rs` | Shared CVSS score selection and severity classification |
 | `src/source/mod.rs` | ScanSource trait and source/parse errors |
+| `src/source/http.rs` | Shared HTTP transport, TLS, retries and URL redaction |
+| `src/source/harbor/` | Harbor API fetching and report mapping |
+| `src/source/neuvector_api.rs` | NeuVector controller API source |
 | `src/source/files.rs` | Recursive file discovery, timestamps and deduplication |
 | `src/source/trivy_file.rs` | Trivy JSON parsing and file source |
 | `src/source/neuvector_file.rs` | NeuVector standalone JSON mapping and file source |
@@ -65,11 +74,14 @@ as a repository tool.
 | `src/views.rs` | Pure derived counts, vulnerability/remediation groups and image summaries |
 | `src/sink/mod.rs` | Artifact, ReportSink trait and sink construction |
 | `src/sink/filesystem.rs` | Directory creation and atomic file replacement |
+| `src/sink/http.rs` | Raw and multipart HTTP artifact uploads |
+| `src/render/` | Embedded Typst engine, fonts, theme, strings and render model |
 | `src/naming.rs` | Scope slugs and dated artifact names |
 | `src/pipeline.rs` | Source construction, report assembly, PDF/JSON generation, render data, storage and exit codes |
 
 The pipeline writes PDF through the embedded Typst renderer and serialises the
-normalised model directly for JSON. API sources use the shared HTTP transport; HTTP upload remains future work.
+normalised model directly for JSON. API sources use the shared HTTP transport; the HTTP sink uploads artifacts via PUT or POST in raw or multipart mode,
+with configurable headers, TLS settings and retries.
 
 ## Rendering and templates
 

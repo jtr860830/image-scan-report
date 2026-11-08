@@ -296,7 +296,7 @@ Licence inventory: `LICENSE` (Apache-2.0), `THIRD_PARTY_NOTICES.md` listing Typs
 - Exit codes **(call)**: 0 report produced (even if some images failed to fetch – they are listed in the appendix); 2 configuration error; 3 source unreachable or authentication failed; 4 render failure; 5 all sinks failed.
 - Logs: structured, to stderr, no secrets.
 - Container: runs as non-root; reads config and CA from mounts; writes to `/output` by default. Published to GHCR with semantic version tags; `podman save`/`load` is the air-gap transfer path, documented.
-- Kubernetes: a CronJob example with ConfigMap + Secret + PVC in `deploy/`; resource request 1 CPU / 1 GiB, limit 3 GiB, with the 40 MB-per-1 000-rows rule of thumb in the docs.
+- Kubernetes: a CronJob example with ConfigMap + Secret + PVC in `deploy/`; resource request 1 CPU / 1 GiB, limit 4 GiB, with the 0.8 GB + 70 MB per 1,000 findings rule of thumb (measured 2026-11-08) in the docs.
 
 ---
 
