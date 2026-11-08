@@ -17,7 +17,7 @@ jobs:
         run: rustup toolchain install
       - name: Cache cargo-about
         id: cargo-about-cache
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: ~/.cargo/bin/cargo-about
           key: ${{ runner.os }}-${{ runner.arch }}-cargo-about-0.9.3

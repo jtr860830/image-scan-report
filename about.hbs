@@ -15,9 +15,9 @@ do not edit it by hand.
 ## Rust crates
 
 Each crate is listed under the licence this build uses it under (the first
-acceptable licence in the crate's SPDX expression). One text per licence is
-reproduced in full in the next section; a crate's own copy differs at most in
-its copyright line and is available in the crate's source archive.
+acceptable licence in the crate's SPDX expression). The next section
+reproduces every distinct licence text, each followed by the crates it
+covers, so that each crate's own copyright notice is preserved.
 
 {{#each licenses}}
 {{#if first_of_kind}}
@@ -32,8 +32,12 @@ its copyright line and is available in the crate's source archive.
 ## Licence texts
 
 {{#each licenses}}
-{{#if first_of_kind}}
 ### {{{name}}} ({{id}})
+
+Applies to:
+{{#each used_by}}
+- {{crate.name}} {{crate.version}}
+{{/each}}
 
 <details>
 <summary>Full text</summary>
@@ -44,7 +48,6 @@ its copyright line and is available in the crate's source archive.
 
 </details>
 
-{{/if}}
 {{/each}}
 ## Fonts
 
