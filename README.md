@@ -73,6 +73,8 @@ projects (scope `<authority> (all projects)`). NeuVector scope is
 `<authority>/<registry>`; `registry` is the configured scanner registry name,
 not a registry endpoint URL. Harbor multi-arch indexes produce one row per
 platform child, such as `repo:tag (linux/arm64)`; attestation children are skipped.
+Should two children of one index share a platform string, the second is written
+`repo:tag (linux/arm64, <12-digit digest>)` so the rows stay distinct.
 Authentication/authorisation failures (HTTP 401/403) abort the whole source with
 exit 3; any other per-artifact failure becomes a Failed row. Connection or discovery failures still fail the source.
 
@@ -103,7 +105,7 @@ Harbor scan states:
 | `Running`, `Pending`, `Scheduled` | NotScanned (scan in progress) |
 | Missing or empty | NotScanned |
 
-A Success scan whose vulnerability report cannot be retrieved or is empty of data is listed as Failed (vulnerability report missing).
+A Success scan whose vulnerability report is missing or has no `vulnerabilities` field is listed as Failed (vulnerability report missing); a report with an empty list is a clean image. If the report request itself fails, the row is Failed with that HTTP error instead.
 
 NeuVector scan states (case insensitive):
 
