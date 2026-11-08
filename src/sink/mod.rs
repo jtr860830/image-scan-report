@@ -36,7 +36,8 @@ pub trait ReportSink {
     ///
     /// Filesystem sinks fail if the directory cannot be created or the temporary file cannot be
     /// written or renamed into place. HTTP sinks fail if the request cannot be built or sent,
-    /// or the server answers with a status of 300 or more.
+    /// the server answers with a status of 300 or more, or its success body exceeds the
+    /// client's response limit.
     ///
     /// # Panics
     ///

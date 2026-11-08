@@ -247,7 +247,8 @@ pub struct FindingRow {
     pub scanner_severity: String,
     /// Severity basis key: `cvss3`, `cvss2`, `scanner_label` or `none`.
     pub basis: String,
-    /// Sanitised description, cut to `description_chars` characters plus `…`.
+    /// Sanitised description; longer than `description_chars` characters it is cut there and
+    /// ends in `…`.
     pub description: String,
     /// Whether the finding's band is in `describe_severities`.
     pub show_description: bool,
@@ -291,8 +292,8 @@ pub fn sanitize(text: &str) -> String {
         })
         .collect()
 }
-/// Format a byte count in decimal units with one decimal, such as `1.5 MB`, or
-/// [`PLACEHOLDER`] for `None`.
+/// Format a byte count in decimal units: whole bytes below 1000 (`512 B`), one decimal
+/// above (`1.5 MB`), or [`PLACEHOLDER`] for `None`.
 pub fn format_size(bytes: Option<u64>) -> String {
     let Some(bytes) = bytes else {
         return PLACEHOLDER.into();

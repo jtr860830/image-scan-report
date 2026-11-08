@@ -73,7 +73,8 @@ pub enum SourceKind {
 /// Container image identity, metadata, and latest scan outcome.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct Image {
-    /// Reference that findings point at; Harbor appends ` (platform)` for image-index children.
+    /// Reference that findings point at. Harbor image-index children get ` (platform)`, or
+    /// the first 12 digest hex digits when the platform is unknown or the reference collides.
     pub reference: String,
     /// Tags of the image content; Trivy and NeuVector sources give at most one.
     pub tags: Vec<String>,

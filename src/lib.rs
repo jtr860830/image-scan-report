@@ -1,6 +1,7 @@
 //! Library behind the report binary: it collects container-image vulnerability scans from
-//! Harbor, NeuVector or Trivy files, classifies severity on one CVSS v3 scale, renders a
-//! bilingual audit PDF with Typst and stores the artifacts in filesystem or HTTP sinks.
+//! Harbor, NeuVector or Trivy files, classifies severity on one scale (CVSS v3 bands, with
+//! v2 and scanner labels as fallbacks), renders an audit PDF in English or Traditional
+//! Chinese with Typst and stores the artifacts in filesystem or HTTP sinks.
 
 pub mod cli;
 pub mod config;

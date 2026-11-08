@@ -36,7 +36,8 @@ pub trait ScanSource {
     /// # Errors
     ///
     /// File sources fail if the directory is unreadable or holds no usable report. API sources
-    /// fail on TLS setup, authentication or any failed listing request (including a missing
+    /// fail on transport errors (including a TLS handshake the configured roots reject),
+    /// authentication or any failed listing request (including a missing
     /// Harbor project or NeuVector registry), on NeuVector login problems, or when the scope
     /// has no images; other per-image request failures mark that image as failed instead.
     fn fetch(&self) -> Result<ScanSet, SourceError>;

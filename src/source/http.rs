@@ -171,7 +171,8 @@ impl HttpClient {
     /// # Errors
     ///
     /// Fails if the method is not PUT or POST, the URL or headers are invalid, the request
-    /// fails in transport, or the server answers with a status of 300 or more.
+    /// fails in transport, the server answers with a status of 300 or more, or a success
+    /// body exceeds [`MAX_RESPONSE_BYTES`].
     pub fn send_bytes(
         &self,
         method: &str,
@@ -249,8 +250,8 @@ impl HttpClient {
     ///
     /// # Errors
     ///
-    /// Fails if the URL or headers are invalid, the last attempt fails in transport, or the
-    /// status is 300 or more.
+    /// Fails if the URL or headers are invalid, the last attempt fails in transport, the
+    /// status is 300 or more, or a success body exceeds [`MAX_RESPONSE_BYTES`].
     pub fn delete(
         &self,
         url: &str,
@@ -265,8 +266,8 @@ impl HttpClient {
     ///
     /// # Errors
     ///
-    /// Fails if the URL or headers are invalid, the request fails in transport, or the status
-    /// is 300 or more.
+    /// Fails if the URL or headers are invalid, the request fails in transport, the status
+    /// is 300 or more, or a success body exceeds [`MAX_RESPONSE_BYTES`].
     pub fn delete_once(
         &self,
         url: &str,
