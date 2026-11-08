@@ -412,3 +412,115 @@ fn missing_project_on_first_repositories_page_is_named() {
     );
     request.assert_calls(1);
 }
+
+fn fetch_with_additions(body: serde_json::Value) -> ScanSet {
+    let server = httpmock::MockServer::start();
+    paged(
+        &server,
+        "/api/v2.0/projects/demo/repositories",
+        vec![serde_json::json!({"name":"demo/repo"})],
+    );
+    artifacts(
+        &server,
+        "repo",
+        vec![
+            serde_json::json!({"type":"IMAGE","digest":"sha256:abc","tags":[{"name":"v1"}],"scan_overview":{"report":{"scan_status":"Success"}}}),
+        ],
+    );
+    server.mock(|w, t| {
+        w.path("/api/v2.0/projects/demo/repositories/repo/artifacts/sha256:abc/additions/vulnerabilities");
+        t.json_body(body);
+    });
+    source(&server).fetch().unwrap()
+}
+
+#[test]
+fn empty_additions_body_is_failed() {
+    let result = fetch_with_additions(serde_json::json!({}));
+    assert_eq!(result.images[0].scan.state, ScanState::Failed);
+    assert_eq!(
+        result.images[0].scan.error.as_deref(),
+        Some("vulnerability report missing")
+    );
+    assert!(result.findings.is_empty());
+}
+
+#[test]
+fn null_vulnerabilities_is_failed() {
+    for report in [
+        serde_json::json!({"vulnerabilities":null}),
+        serde_json::json!({}),
+    ] {
+        let result = fetch_with_additions(
+            serde_json::json!({"application/vnd.security.vulnerability.report; version=1.1":report}),
+        );
+        assert_eq!(result.images[0].scan.state, ScanState::Failed);
+        assert_eq!(
+            result.images[0].scan.error.as_deref(),
+            Some("vulnerability report missing")
+        );
+        assert!(result.findings.is_empty());
+    }
+}
+
+#[test]
+fn empty_vulnerability_list_is_clean() {
+    let result = fetch_with_additions(
+        serde_json::json!({"application/vnd.security.vulnerability.report; version=1.1":{"vulnerabilities":[]}}),
+    );
+    assert_eq!(result.images[0].scan.state, ScanState::Ok);
+    assert_eq!(result.images[0].scan.error, None);
+    assert!(result.findings.is_empty());
+}
+
+#[test]
+fn sibling_children_with_same_platform_get_distinct_references() {
+    let server = httpmock::MockServer::start();
+    paged(
+        &server,
+        "/api/v2.0/projects/demo/repositories",
+        vec![serde_json::json!({"name":"demo/index"})],
+    );
+    let digests = ["sha256:111111111111aaaa", "sha256:222222222222bbbb"];
+    artifacts(
+        &server,
+        "index",
+        vec![
+            serde_json::json!({"type":"IMAGE","digest":"sha256:parent","tags":[{"name":"v1"}],"references":digests.map(|digest| serde_json::json!({"child_digest":digest,"platform":{"os":"linux","architecture":"amd64"}}))}),
+        ],
+    );
+    for (i, digest) in digests.iter().enumerate() {
+        server.mock(|w, t| {
+            w.path(format!("/api/v2.0/projects/demo/repositories/index/artifacts/{digest}"));
+            t.json_body(serde_json::json!({"type":"IMAGE","digest":digest,"scan_overview":{"report":{"scan_status":"Success"}}}));
+        });
+        server.mock(|w, t| {
+            w.path(format!("/api/v2.0/projects/demo/repositories/index/artifacts/{digest}/additions/vulnerabilities"));
+            t.json_body(serde_json::json!({"application/vnd.security.vulnerability.report; version=1.1":{"vulnerabilities":[{"id":format!("CVE-{i}"),"severity":"High"}]}}));
+        });
+    }
+    let result = source(&server).fetch().unwrap();
+    assert_eq!(result.images.len(), 2);
+    assert_eq!(result.findings.len(), 2);
+    for (i, expected) in [
+        "demo/index:v1 (linux/amd64)",
+        "demo/index:v1 (linux/amd64, 222222222222)",
+    ]
+    .iter()
+    .enumerate()
+    {
+        let row = result
+            .images
+            .iter()
+            .find(|row| row.digest.as_deref() == Some(digests[i]))
+            .unwrap();
+        assert_eq!(&row.reference, expected);
+        let finding = result
+            .findings
+            .iter()
+            .find(|finding| finding.id == format!("CVE-{i}"))
+            .unwrap();
+        assert_eq!(finding.image, row.reference);
+    }
+    assert_ne!(result.images[0].reference, result.images[1].reference);
+}

@@ -160,7 +160,7 @@ impl ScanSource for NeuvectorSource {
                         }
                         None => {
                             scan.state = ScanState::Failed;
-                            scan.error = Some("vulnerabilities missing".into());
+                            scan.error = Some("vulnerability report missing".into());
                             tracing::warn!(image = reference, "NeuVector vulnerabilities missing");
                         }
                     },

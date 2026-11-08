@@ -10,7 +10,7 @@ use crate::model::*;
 use api::*;
 use map::digest12;
 use serde::de::DeserializeOwned;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 /// Connection fields kept independent of pipeline configuration.
 pub struct HarborParams {
@@ -116,6 +116,7 @@ impl HarborSource {
             }
         }
         let mut rows = Vec::new();
+        let mut references = BTreeSet::new();
         for (artifact, kind, mut failure) in candidates {
             let platform = match &kind {
                 RowKind::Single => artifact
@@ -137,8 +138,18 @@ impl HarborSource {
                         .unwrap_or_else(|| digest12(&artifact.digest)),
                 ),
             };
-            let reference =
+            let mut reference =
                 map::image_reference(repository, &tags, &artifact.digest, suffix.as_deref());
+            if !references.insert(reference.clone()) {
+                let suffix = format!(
+                    "{}, {}",
+                    suffix.unwrap_or_default(),
+                    digest12(&artifact.digest)
+                );
+                reference =
+                    map::image_reference(repository, &tags, &artifact.digest, Some(&suffix));
+                references.insert(reference.clone());
+            }
             let mut scan = map::scan_status(artifact.scan_overview.values().next());
             let mut findings = Vec::new();
             if failure.is_none() && scan.state == ScanState::Ok {
@@ -154,16 +165,25 @@ impl HarborSource {
                     )],
                 ) {
                     Ok(response) => {
-                        if let Some(report) = response.body.into_values().next() {
-                            if scanner.is_none() {
-                                *scanner = report.scanner;
+                        let vulnerabilities =
+                            response.body.into_values().next().and_then(|report| {
+                                if scanner.is_none() {
+                                    *scanner = report.scanner;
+                                }
+                                report.vulnerabilities
+                            });
+                        match vulnerabilities {
+                            Some(vulnerabilities) => {
+                                findings = vulnerabilities
+                                    .iter()
+                                    .map(|v| map::finding(v, &reference))
+                                    .collect();
                             }
-                            findings = report
-                                .vulnerabilities
-                                .unwrap_or_default()
-                                .iter()
-                                .map(|v| map::finding(v, &reference))
-                                .collect();
+                            None => {
+                                scan.state = ScanState::Failed;
+                                scan.error = Some("vulnerability report missing".into());
+                                tracing::warn!(image = reference, "Harbor vulnerabilities missing");
+                            }
                         }
                     }
                     Err(error) => failure = Some(row_failure(error)?),

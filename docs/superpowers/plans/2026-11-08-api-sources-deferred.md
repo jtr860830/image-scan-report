@@ -14,4 +14,3 @@ Carried out of the execution ledger when plan 3 (API sources) finished on 2026-1
 - Consider module layout neuvector/{controller,file,api,report}.rs.
 - Unify test-support module inclusion.
 - Populate Harbor db_version from scanner metadata.
-- **Sibling children with an identical platform string** (two `linux/amd64` manifests in one index) would compute the same reference; `dedupe_images_by_reference` keys on `(reference, digest)` so both rows survive, but their `Finding.image` keys collide in the renderer. Append `digest12` to the reference when a sibling already uses the same platform.

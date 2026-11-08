@@ -103,6 +103,8 @@ Harbor scan states:
 | `Running`, `Pending`, `Scheduled` | NotScanned (scan in progress) |
 | Missing or empty | NotScanned |
 
+A Success scan whose vulnerability report cannot be retrieved or is empty of data is listed as Failed (vulnerability report missing).
+
 NeuVector scan states (case insensitive):
 
 | Scanner state / result | Report state |
