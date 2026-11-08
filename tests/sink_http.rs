@@ -171,7 +171,9 @@ fn connection_refused_is_transport_after_retries() {
         .store(&artifact())
         .unwrap_err()
         .to_string();
-    assert!(e.contains("failed"));
+    assert!(e.contains("request to"));
+    assert!(e.contains("failed:"));
+    assert!(!e.contains("authentication failed"));
     assert!(!e.contains("Bearer t"));
 }
 #[test]
@@ -182,12 +184,11 @@ fn upload_query_is_redacted() {
         t.status(403);
     });
     let sink = sink(s.url("/upload?token=SECRET"), HttpMode::Raw, "PUT");
-    assert!(!sink.describe().contains("SECRET"));
-    assert!(
-        !sink
-            .store(&artifact())
-            .unwrap_err()
-            .to_string()
-            .contains("SECRET")
-    );
+    let redacted_url = s.url("/upload");
+    let description = sink.describe();
+    assert!(description.contains(&redacted_url));
+    assert!(!description.contains("SECRET"));
+    let error = sink.store(&artifact()).unwrap_err().to_string();
+    assert!(error.contains(&redacted_url));
+    assert!(!error.contains("SECRET"));
 }

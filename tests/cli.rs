@@ -230,12 +230,14 @@ fn version_flag_prints_product_and_version() {
 
 #[test]
 fn default_config_path_is_etc_report() {
+    let temp = tempfile::tempdir().unwrap();
+    let output = temp.path().join("unused.json");
     assert!(!std::path::Path::new("/etc/report/config.yaml").exists());
     for command in ["run", "check", "render-data"] {
         let mut cmd = cargo_bin_cmd!("judex");
         cmd.env_remove("HOME").arg(command);
         if command == "render-data" {
-            cmd.args(["--out", "/tmp/judex-unused.json"]);
+            cmd.arg("--out").arg(&output);
         }
         let out = cmd.output().unwrap();
         assert_eq!(out.status.code(), Some(2));

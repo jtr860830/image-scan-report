@@ -17,10 +17,15 @@ kubectl apply -f deploy/k8s/pvc.yaml
 kubectl apply -f deploy/k8s/cronjob.yaml
 ```
 
+To keep the password out of shell history, use
+`--from-file=HARBOR_PASSWORD=./password.txt` instead of `--from-literal`.
+
 `ca-configmap.example.yaml` shows the CA object's shape; replace its placeholder
 with a PEM bundle if applying it instead of creating it from a file. The CA
 ConfigMap volume is optional, but the supplied application config references
-`/etc/report/ca.pem`: create the CA before running. For a publicly trusted Harbor,
+`/etc/report/ca.pem`: create the CA before running. If the CA ConfigMap is
+missing, the Job fails and its log reports the CA file read error. For a
+publicly trusted Harbor,
 remove `source.ca_file` and the CA volume and mount from both workloads.
 Avoid applying the whole directory unchanged: it includes placeholder secrets
 and certificates and starts the one-off Job.
@@ -41,7 +46,8 @@ CronJob: `Forbid` only covers jobs created by that CronJob, and the PVC is RWO.
 
 After the report Job completes, mount its PVC in a temporary helper pod. Avoid
 running the helper concurrently with a report Job on a different node (RWO).
-The helper image must contain `tar` for `kubectl cp`.
+`kubectl cp` needs a running pod, which is why the helper pod is used after
+the Job completes. The helper image must contain `tar` for `kubectl cp`.
 
 ```sh
 kubectl -n image-scan-report run report-reader --image=busybox:1.37 --restart=Never --overrides='{"spec":{"securityContext":{"runAsUser":65532,"runAsGroup":65532,"fsGroup":65532},"containers":[{"name":"report-reader","image":"busybox:1.37","command":["sleep","3600"],"volumeMounts":[{"name":"output","mountPath":"/output","readOnly":true}]}],"volumes":[{"name":"output","persistentVolumeClaim":{"claimName":"report-output"}}]}}'

@@ -89,7 +89,8 @@ Keep the library crate name `image_scan_report`. Update these product surfaces:
 2. `PRODUCT_NAME` in src/main.rs (the only source/template/string literal).
 3. `BIN` and `IMAGE_NAME` in .github/workflows/release.yml, the single workflow
    naming point for archives and images.
-4. Both `ARG BIN` defaults and the destination/ENTRYPOINT paths in Containerfile.
+4. The build binary name and COPY source, documentation, destination, and
+   ENTRYPOINT paths in Containerfile.
 5. `judex:ci` and its version-output assertion in .github/workflows/ci.yml.
 6. Image references in deploy/k8s/*.yaml and deploy/podman/run.sh.
 7. `[product].name` in themes/default/theme.toml: this intentional branding

@@ -291,21 +291,23 @@ pub fn run(
 
 pub fn check(cfg: &Config, product: &ProductInfo) -> Result<String, RunError> {
     let inputs = load_inputs(cfg, Utc::now())?;
-    let mut counts = [0usize; 3];
+    let mut scanned = 0usize;
+    let mut failed = 0usize;
+    let mut not_scanned = 0usize;
     for image in &inputs.report.images {
-        counts[match image.scan.state {
-            crate::model::ScanState::Ok => 0,
-            crate::model::ScanState::Failed => 1,
-            crate::model::ScanState::NotScanned => 2,
-        }] += 1;
+        match image.scan.state {
+            crate::model::ScanState::Ok => scanned += 1,
+            crate::model::ScanState::Failed => failed += 1,
+            crate::model::ScanState::NotScanned => not_scanned += 1,
+        }
     }
     Ok(format!(
         "{}: {} images ({} scanned, {} failed, {} not scanned), {} findings; theme: {}; product: {} {}",
         inputs.source_description,
         inputs.report.images.len(),
-        counts[0],
-        counts[1],
-        counts[2],
+        scanned,
+        failed,
+        not_scanned,
         inputs.report.findings.len(),
         inputs.theme.product.name,
         product.name,
