@@ -13,38 +13,43 @@ fn main() {
         .with_writer(std::io::stderr)
         .init();
 
-    match Cli::parse().command {
+    if let Err(e) = dispatch(Cli::parse().command) {
+        fail(e);
+    }
+}
+
+fn dispatch(command: cli::Command) -> Result<(), image_scan_report::pipeline::RunError> {
+    use image_scan_report::{config, pipeline};
+    let product = pipeline::ProductInfo {
+        name: PRODUCT_NAME.into(),
+        version: PRODUCT_VERSION.into(),
+    };
+    match command {
+        cli::Command::RenderData { config, out } => {
+            let cfg = config::load(&config)?;
+            pipeline::write_render_data(&cfg, chrono::Utc::now(), &product, &out)?;
+        }
         cli::Command::Version => println!("{PRODUCT_NAME} {PRODUCT_VERSION}"),
         cli::Command::Run { config } => {
-            let result = image_scan_report::config::load(&config)
-                .map_err(image_scan_report::pipeline::RunError::from)
-                .and_then(|cfg| image_scan_report::pipeline::run(&cfg, chrono::Utc::now()));
-            match result {
-                Ok(summary) => {
-                    println!(
-                        "Report: {} images, {} findings",
-                        summary.images, summary.findings
-                    );
-                    for stored in summary.stored {
-                        println!("{stored}");
-                    }
-                    for failed in summary.failed_sinks {
-                        eprintln!("failed sink: {failed}");
-                    }
-                }
-                Err(e) => fail(e),
+            let cfg = config::load(&config)?;
+            let summary = pipeline::run(&cfg, chrono::Utc::now(), &product)?;
+            println!(
+                "Report: {} images, {} findings",
+                summary.images, summary.findings
+            );
+            for stored in summary.stored {
+                println!("{stored}");
+            }
+            for failed in summary.failed_sinks {
+                eprintln!("failed sink: {failed}");
             }
         }
         cli::Command::Check { config } => {
-            let result = image_scan_report::config::load(&config)
-                .map_err(image_scan_report::pipeline::RunError::from)
-                .and_then(|cfg| image_scan_report::pipeline::check(&cfg));
-            match result {
-                Ok(summary) => println!("{summary}"),
-                Err(e) => fail(e),
-            }
+            let cfg = config::load(&config)?;
+            println!("{}", pipeline::check(&cfg, &product)?);
         }
     }
+    Ok(())
 }
 
 fn fail(e: image_scan_report::pipeline::RunError) -> ! {

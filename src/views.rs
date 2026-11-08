@@ -45,6 +45,7 @@ pub struct UniqueVulnerability {
     pub id: String,
     pub severity: Severity,
     pub score_v3: Option<f32>,
+    pub score: Option<f32>,
     pub packages: Vec<String>,
     pub fixed_versions: Vec<String>,
     pub images: Vec<String>,
@@ -91,6 +92,7 @@ pub fn unique_vulnerabilities(findings: &[Finding]) -> Vec<UniqueVulnerability> 
             id: f.id.clone(),
             severity: f.severity,
             score_v3: f.score_v3,
+            score: f.score_v3.or(f.score_v2),
             packages: vec![],
             fixed_versions: vec![],
             images: vec![],
@@ -98,6 +100,9 @@ pub fn unique_vulnerabilities(findings: &[Finding]) -> Vec<UniqueVulnerability> 
         group.severity = group.severity.max(f.severity);
         if let Some(score) = f.score_v3 {
             group.score_v3 = Some(group.score_v3.map_or(score, |old| old.max(score)));
+        }
+        if let Some(score) = f.score_v3.or(f.score_v2) {
+            group.score = Some(group.score.map_or(score, |old| old.max(score)));
         }
         group.packages.push(f.package.clone());
         if let Some(version) = &f.fixed_version {
@@ -114,7 +119,7 @@ pub fn unique_vulnerabilities(findings: &[Finding]) -> Vec<UniqueVulnerability> 
     result.sort_by(|a, b| {
         b.severity
             .cmp(&a.severity)
-            .then_with(|| match (a.score_v3, b.score_v3) {
+            .then_with(|| match (a.score, b.score) {
                 (Some(a), Some(b)) => b.total_cmp(&a),
                 (Some(_), None) => std::cmp::Ordering::Less,
                 (None, Some(_)) => std::cmp::Ordering::Greater,

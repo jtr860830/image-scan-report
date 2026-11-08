@@ -1,3 +1,5 @@
+#[path = "support/reduced_fixtures.rs"]
+mod reduced_fixtures;
 use assert_cmd::cargo::cargo_bin_cmd;
 
 #[test]
@@ -15,6 +17,7 @@ fn write_config(dir: &std::path::Path) -> std::path::PathBuf {
     std::fs::write(&path, format!("source:\n  type: trivy-files\n  path: {}\nreport:\n  language: en\n  organization: Test\n  json: true\n  pdf: false\noutput:\n  - type: filesystem\n    path: {}\n", input.display(), dir.display())).unwrap();
     path
 }
+
 #[test]
 fn run_subcommand_end_to_end() {
     let dir = tempfile::tempdir().unwrap();
@@ -116,5 +119,61 @@ fn scope_for_dot_is_directory_name() {
             .file_name()
             .unwrap()
             .to_string_lossy()
+    );
+}
+
+#[test]
+fn render_data_subcommand_writes_json() {
+    let dir = tempfile::tempdir().unwrap();
+    let config = write_config(dir.path());
+    let path = dir.path().join("data.json");
+    let out = cargo_bin_cmd!("judex")
+        .args(["render-data", "--config"])
+        .arg(config)
+        .arg("--out")
+        .arg(&path)
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let data: serde_json::Value = serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
+    assert!(data.get("strings").is_some());
+    assert!(data.get("theme").is_some());
+    assert_eq!(data["meta"]["product_name"], "judex");
+}
+
+#[test]
+fn run_default_config_produces_pdf() {
+    let dir = tempfile::tempdir().unwrap();
+    let config = write_config(dir.path());
+    let input = reduced_fixtures::input();
+    let original_input = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/trivy");
+    let yaml = std::fs::read_to_string(&config)
+        .unwrap()
+        .replace("  json: true\n  pdf: false\n", "")
+        .replace(
+            original_input.to_str().unwrap(),
+            input.path().to_str().unwrap(),
+        );
+    std::fs::write(&config, yaml).unwrap();
+    let out = cargo_bin_cmd!("judex")
+        .args(["run", "--config"])
+        .arg(config)
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(
+        std::fs::read_dir(dir.path()).unwrap().any(|e| e
+            .unwrap()
+            .path()
+            .extension()
+            .is_some_and(|s| s == "pdf"))
     );
 }

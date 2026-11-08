@@ -18,5 +18,11 @@ pub enum Command {
         #[arg(long, default_value = "/etc/report/config.yaml")]
         config: PathBuf,
     },
+    RenderData {
+        #[arg(long, default_value = "/etc/report/config.yaml")]
+        config: PathBuf,
+        #[arg(long)]
+        out: PathBuf,
+    },
     Version,
 }
