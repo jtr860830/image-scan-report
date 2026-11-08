@@ -110,11 +110,31 @@ compiled, using a single test run:
 /usr/bin/time -l cargo test --offline --release --test perf -- --ignored --nocapture --test-threads=1 fifty
 ```
 
-The 50,000-finding target (52,416 rows) rendered in **14.9 seconds**, producing
-**3,703 pages**. Peak RSS, from `/usr/bin/time -l`'s maximum resident set size,
-was **5.1 GB (5,090,951,168 bytes)**. Extrapolating from this single measurement, memory grows roughly 100 MB per 1,000
-findings with the full template, so a container running the largest realistic
-reports needs about 5 GiB; size the container accordingly. The CI perf job runs the tests one at a time; the 50k peak of 5.1 GB fits the 7 GB runner.
+### Rendering performance (measured 2026-11-08, release build, Apple Silicon, median of three)
+
+| Findings | Pages | Wall time | Peak RSS |
+|---|---|---|---|
+| 30,576 | 2,227 | 8.4 s | 2.89 GB |
+| 52,416 | 3,728 | 11.8 s | 4.39 GB |
+
+Rule of thumb from the two points: **about 0.8 GB plus 70 MB per 1,000 findings**
+(the earlier "100 MB per 1,000" was an extrapolation from one point). A 20,000-finding
+report therefore peaks near 2.2 GB; the Kubernetes examples request 1 GiB and limit
+4 GiB, which covers roughly 45,000 findings. The CI perf job keeps a generous
+150 s budget because GitHub runners are several times slower than this machine.
+
+Four template experiments from the plan-2 deferred list were measured against this
+baseline with the same protocol; none met the keep rule (≥ 5 % time or memory,
+golden text and preview PNGs unchanged), so the templates are as plan 2 left them:
+
+| Experiment | Time | Peak RSS | Output | Verdict |
+|---|---|---|---|---|
+| A — one table-level `stroke` closure instead of six `table.cell` wrappers per row | +18 % | ±0 | unchanged | rejected (the per-cell closure is dearer than the wrappers) |
+| B — flat chip with a ● glyph instead of a nested `circle` | within noise | ±0 | ● enters the extracted text; 9 previews differ | rejected |
+| C + D — `hyphenate: false` once per table; zero-width breaks only in identifiers over 20 characters | ±0 | −3 % | 3,300 pages instead of 3,728 and a changed golden text; previews unchanged | rejected under the rule — the page drop means lines wrap differently in the synthetic data, which the 11-image previews cannot show, so it is unsafe to take blind |
+
+Peak RSS in the table comes from `/usr/bin/time -l`; the `peak_rss_mb=` line the perf
+test prints is authoritative on Linux (`VmHWM`) but only a point sample on macOS.
 
 The complete 11-image, 4,368-finding English report produced by
 `cargo run --offline -- run --config examples/config-trivy-files.yaml` decreased
