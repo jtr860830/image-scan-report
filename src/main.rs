@@ -1,4 +1,4 @@
-use clap::Parser;
+use clap::{CommandFactory, FromArgMatches};
 use image_scan_report::cli::{self, Cli};
 use std::process::ExitCode;
 use tracing_subscriber::EnvFilter;
@@ -15,7 +15,12 @@ fn main() -> ExitCode {
     // Not `fn main() -> Result<..>`: that form always exits with status 1 and
     // prints the error with `Debug`, while this program promises distinct exit
     // codes (2 config, 3 source, 4 render, 5 sinks) and a `Display` message.
-    match dispatch(Cli::parse().command) {
+    let matches = Cli::command()
+        .name(PRODUCT_NAME)
+        .version(PRODUCT_VERSION)
+        .get_matches();
+    let cli = Cli::from_arg_matches(&matches).unwrap_or_else(|e| e.exit());
+    match dispatch(cli.command) {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {
             eprintln!("error: {e}");

@@ -88,7 +88,18 @@ pub fn harbor_mock_with_failure(failure: Option<(&str, u16)>) -> (MockServer, Ha
 pub fn harbor_mock_subset() -> (MockServer, HarborSource) {
     harbor_mock_selected(None, true)
 }
+#[allow(dead_code)]
+pub fn harbor_mock_subset_running() -> (MockServer, HarborSource) {
+    harbor_mock_selected_inner(None, true, true)
+}
 fn harbor_mock_selected(failure: Option<(&str, u16)>, subset: bool) -> (MockServer, HarborSource) {
+    harbor_mock_selected_inner(failure, subset, false)
+}
+fn harbor_mock_selected_inner(
+    failure: Option<(&str, u16)>,
+    subset: bool,
+    running: bool,
+) -> (MockServer, HarborSource) {
     let server = MockServer::start();
     if let Some((path, status)) = failure {
         server.mock(|w, t| {
@@ -134,6 +145,14 @@ fn harbor_mock_selected(failure: Option<(&str, u16)>, subset: bool) -> (MockServ
         let mut values = fixture(&file).as_array().unwrap().clone();
         if subset {
             values.truncate(1);
+        }
+        if running && name == "busybox" {
+            values = vec![serde_json::json!({
+                "type": "IMAGE",
+                "digest": format!("sha256:{}", "a".repeat(64)),
+                "tags": [{"name": "running"}],
+                "scan_overview": {"application/vnd.scanner.adapter.vuln.report.harbor+json; version=1.0": {"scan_status": "Running"}}
+            })];
         }
         artifacts(&server, name, values.clone());
         for a in values {

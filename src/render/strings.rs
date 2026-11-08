@@ -57,6 +57,7 @@ pub const KEYS: &[&str] = &[
     "status_other",
     "inventory_lede",
     "inventory_affected",
+    "image_meta_tags",
     "image_meta_digest",
     "image_meta_platform",
     "image_meta_os",

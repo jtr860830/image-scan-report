@@ -183,9 +183,9 @@ fn run_default_config_produces_pdf() {
 mod harbor_mock;
 
 #[test]
-fn check_against_mock_harbor_reports_counts() {
+fn check_prints_scan_state_counts() {
     use image_scan_report::source::ScanSource;
-    let (server, source) = harbor_mock::harbor_mock_subset();
+    let (server, source) = harbor_mock::harbor_mock_subset_running();
     let expected = source.fetch().unwrap();
     let dir = tempfile::tempdir().unwrap();
     let path = write_config(dir.path());
@@ -205,9 +205,33 @@ fn check_against_mock_harbor_reports_counts() {
         String::from_utf8_lossy(&out.stderr)
     );
     assert!(String::from_utf8_lossy(&out.stdout).contains(&format!(
-        "Harbor {}: demo: {} images, {} findings;",
+        "Harbor {}: demo: {} images (2 scanned, 0 failed, 1 not scanned), {} findings;",
         server.address(),
         expected.images.len(),
         expected.findings.len()
     )));
+}
+
+#[test]
+fn version_flag_prints_product_and_version() {
+    for flag in ["--version", "-V", "version"] {
+        let out = cargo_bin_cmd!("judex").arg(flag).output().unwrap();
+        assert!(out.status.success());
+        assert_eq!(out.stdout, b"judex 0.1.0\n");
+    }
+}
+
+#[test]
+fn default_config_path_is_etc_report() {
+    assert!(!std::path::Path::new("/etc/report/config.yaml").exists());
+    for command in ["run", "check", "render-data"] {
+        let mut cmd = cargo_bin_cmd!("judex");
+        cmd.env_remove("HOME").arg(command);
+        if command == "render-data" {
+            cmd.args(["--out", "/tmp/judex-unused.json"]);
+        }
+        let out = cmd.output().unwrap();
+        assert_eq!(out.status.code(), Some(2));
+        assert!(String::from_utf8_lossy(&out.stderr).contains("/etc/report/config.yaml"));
+    }
 }

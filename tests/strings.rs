@@ -67,3 +67,14 @@ fn placeholders_match_between_locales() {
         assert_eq!(placeholders(&zh[*key]), placeholders(&en[*key]), "{key}");
     }
 }
+
+#[test]
+fn zh_tw_fact_sentences_read_naturally() {
+    let strings = load(Language::ZhTw);
+    assert_eq!(strings["fact_fixable"], "個弱點（{percent}%）已有修補版本");
+    assert_eq!(
+        strings["fact_high_or_worse"],
+        "個映像檔（共 {total} 個）含 Critical 或 High 等級弱點"
+    );
+    assert_eq!(strings["image_meta_digest"], "Digest");
+}

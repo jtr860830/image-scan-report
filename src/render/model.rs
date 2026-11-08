@@ -102,6 +102,8 @@ pub struct RemediationRow {
 }
 #[derive(Serialize, Debug, Clone, PartialEq)]
 pub struct ImageDetail {
+    pub tags: Vec<String>,
+    pub show_tags: bool,
     pub reference: String,
     pub digest: String,
     pub platform: String,
@@ -481,7 +483,23 @@ fn image_details(
                     )
                     .then_with(|| a.id.cmp(&b.id))
             });
+            let reference = image
+                .reference
+                .split(" (")
+                .next()
+                .unwrap_or(&image.reference);
+            let reference_tag = reference
+                .rsplit_once(':')
+                .filter(|(name, tag)| !name.contains('@') && !tag.contains('/'))
+                .map(|(_, tag)| tag);
+            let show_tags = image.tags.len() > 1
+                || image
+                    .tags
+                    .first()
+                    .is_some_and(|tag| Some(tag.as_str()) != reference_tag);
             Some(ImageDetail {
+                tags: image.tags.iter().map(|tag| sanitize(tag)).collect(),
+                show_tags,
                 reference: sanitize(&image.reference),
                 digest: display(image.digest.as_deref()),
                 platform: display(image.platform.as_deref()),

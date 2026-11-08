@@ -76,7 +76,7 @@ fn check_reports_counts() {
     assert_eq!(
         check(&cfg, &product()).unwrap(),
         format!(
-            "Trivy (files): {}: 11 images, {} findings; theme: judex; product: judex 0.1.0",
+            "Trivy (files): {}: 11 images (11 scanned, 0 failed, 0 not scanned), {} findings; theme: judex; product: judex 0.1.0",
             fixtures().display(),
             summary.findings
         )
