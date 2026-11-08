@@ -2,7 +2,7 @@
 use super::{ParseError, ScanSource, SourceError, files::fetch_directory};
 use crate::{
     model::*,
-    severity::{CvssScores, ScoreInput, classify, clean_score},
+    severity::{CvssSourceScores, ScoreInput, classify, cvss_from_map},
 };
 use chrono::{DateTime, Utc};
 use serde::Deserialize;
@@ -70,7 +70,7 @@ struct Vulnerability {
     #[serde(default, rename = "Severity")]
     severity: Option<String>,
     #[serde(default, rename = "CVSS")]
-    cvss: BTreeMap<String, Scores>,
+    cvss: BTreeMap<String, CvssSourceScores>,
     #[serde(default, rename = "Title")]
     title: Option<String>,
     #[serde(default, rename = "Description")]
@@ -82,14 +82,6 @@ struct Vulnerability {
     #[serde(default, rename = "PublishedDate")]
     published_date: Option<DateTime<Utc>>,
 }
-#[derive(Default, Deserialize)]
-struct Scores {
-    #[serde(default, rename = "V2Score")]
-    v2_score: Option<f64>,
-    #[serde(default, rename = "V3Score")]
-    v3_score: Option<f64>,
-}
-
 pub struct TrivyFileSource {
     pub dir: PathBuf,
 }
@@ -170,19 +162,7 @@ pub fn parse_trivy_report(
             continue;
         }
         for v in result.vulnerabilities.unwrap_or_default() {
-            let cvss: Vec<_> = v
-                .cvss
-                .into_iter()
-                .map(|(source, s)| {
-                    (
-                        source,
-                        CvssScores {
-                            v3: clean_score(s.v3_score),
-                            v2: clean_score(s.v2_score),
-                        },
-                    )
-                })
-                .collect();
+            let cvss = cvss_from_map(v.cvss);
             let c = classify(&ScoreInput {
                 cvss: &cvss,
                 scanner_label: v.severity.as_deref(),

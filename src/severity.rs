@@ -108,3 +108,28 @@ pub fn classify(input: &ScoreInput) -> Classification {
         score_source: None,
     }
 }
+
+/// CVSS fields shared by Trivy and Harbor reports.
+#[derive(Default, Clone, serde::Deserialize)]
+pub struct CvssSourceScores {
+    #[serde(rename = "V3Score")]
+    pub v3_score: Option<f64>,
+    #[serde(rename = "V2Score")]
+    pub v2_score: Option<f64>,
+}
+
+pub fn cvss_from_map(
+    map: std::collections::BTreeMap<String, CvssSourceScores>,
+) -> Vec<(String, CvssScores)> {
+    map.into_iter()
+        .map(|(name, scores)| {
+            (
+                name,
+                CvssScores {
+                    v3: clean_score(scores.v3_score),
+                    v2: clean_score(scores.v2_score),
+                },
+            )
+        })
+        .collect()
+}

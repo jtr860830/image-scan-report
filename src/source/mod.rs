@@ -1,5 +1,6 @@
 //! Scanner input sources and shared file parsing errors.
 pub mod files;
+pub mod harbor;
 pub mod http;
 pub mod neuvector;
 pub mod neuvector_file;
@@ -14,6 +15,8 @@ pub enum SourceError {
     Unreadable(PathBuf, std::io::Error),
     #[error("no scan results found in {0}")]
     Empty(PathBuf),
+    #[error("no images found in {0}")]
+    NoImages(String),
     #[error("{0}")]
     Other(String),
 }
