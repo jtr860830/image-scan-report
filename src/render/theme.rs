@@ -23,7 +23,8 @@ pub struct Theme {
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct Product {
-    /// Product name in the appendix credit and `check` output; `judex` in the default theme.
+    /// Product name shown in the appendix credit and in `check` output; the default theme
+    /// carries the upstream product's name, a company edition overrides it.
     pub name: String,
     /// Product URL appended to the appendix credit; `None` or empty omits it.
     pub url: Option<String>,

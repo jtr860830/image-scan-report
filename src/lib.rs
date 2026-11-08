@@ -1,4 +1,4 @@
-//! Library behind the `judex` binary: it collects container-image vulnerability scans from
+//! Library behind the report binary: it collects container-image vulnerability scans from
 //! Harbor, NeuVector or Trivy files, classifies severity on one CVSS v3 scale, renders a
 //! bilingual audit PDF with Typst and stores the artifacts in filesystem or HTTP sinks.
 

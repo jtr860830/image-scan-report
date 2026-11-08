@@ -138,7 +138,8 @@ impl RunError {
 /// Name and version of the application producing the report.
 #[derive(Clone, Debug)]
 pub struct ProductInfo {
-    /// Application name, `judex` for the binary, passed to the render options.
+    /// Application name as the binary reports it (`PRODUCT_NAME` in `main.rs`), passed to
+    /// the render options for the appendix credit.
     pub name: String,
     /// Application version, the crate version for the binary.
     pub version: String,
