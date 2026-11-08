@@ -19,6 +19,11 @@ For air-gapped hosts, transfer the image with `podman save` and `podman load`.
 See [container installation](docs/container.md) for the wrapper script, mounts,
 permissions, secrets, local builds, and air-gap commands.
 
+## Kubernetes
+
+See the [Kubernetes deployment examples](deploy/k8s/README.md) for a weekly
+CronJob, a one-off Job, secrets, CA certificates, and report retrieval.
+
 ## Quick start
 
 Install the Rust toolchain pinned in [rust-toolchain.toml](rust-toolchain.toml),
