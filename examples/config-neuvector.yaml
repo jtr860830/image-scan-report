@@ -24,13 +24,12 @@ output:
   # Persist reports to a mounted output directory.
   - type: filesystem
     path: /output
-  # HTTP upload arrives in a later release.
-  # - type: http
-  #   url: https://reports.example.com/upload
-  #   method: PUT
-  #   headers: { Authorization: "Bearer ${UPLOAD_TOKEN}" }
-  #   mode: raw
-  #   timeout_secs: 30
+  - type: http
+    url: https://reports.example.com/upload
+    method: PUT
+    headers: { Authorization: "Bearer ${UPLOAD_TOKEN}" }
+    mode: raw
+    timeout_secs: 30
 
 # Optional directory containing theme.toml and a logo.
 # theme:

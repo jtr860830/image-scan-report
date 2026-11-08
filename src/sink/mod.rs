@@ -1,5 +1,6 @@
 //! Report artifacts and output destinations.
 pub mod filesystem;
+pub mod http;
 
 use crate::config::{ConfigError, OutputConfig};
 
@@ -29,9 +30,33 @@ pub fn build_sinks(cfg: &[OutputConfig]) -> Result<Vec<Box<dyn ReportSink>>, Con
                 Ok(Box::new(filesystem::FilesystemSink { dir: path.clone() })
                     as Box<dyn ReportSink>)
             }
-            OutputConfig::Http { .. } => Err(ConfigError::Invalid(
-                "http output arrives in a later release".into(),
-            )),
+            OutputConfig::Http {
+                url,
+                method,
+                headers,
+                mode,
+                ca_file,
+                insecure_skip_verify,
+                timeout_secs,
+            } => {
+                let client = crate::pipeline::tls_client(
+                    "output",
+                    url,
+                    ca_file.as_deref(),
+                    *timeout_secs,
+                    *insecure_skip_verify,
+                )?;
+                Ok(Box::new(http::HttpSink::new(
+                    url.clone(),
+                    method.to_ascii_uppercase(),
+                    headers
+                        .iter()
+                        .map(|(k, v)| (k.clone(), v.clone()))
+                        .collect(),
+                    *mode,
+                    client,
+                )) as Box<dyn ReportSink>)
+            }
         })
         .collect()
 }

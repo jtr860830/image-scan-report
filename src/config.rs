@@ -85,12 +85,14 @@ pub enum OutputConfig {
         #[serde(default)]
         mode: HttpMode,
         ca_file: Option<PathBuf>,
+        #[serde(default)]
+        insecure_skip_verify: bool,
         #[serde(default = "default_timeout")]
         timeout_secs: u64,
     },
 }
 
-#[derive(Debug, Default, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum HttpMode {
     #[default]
@@ -147,7 +149,11 @@ pub fn load(path: &Path) -> Result<Config, ConfigError> {
         serde_yaml_ng::from_str(&yaml).map_err(|error| ConfigError::Parse(error.to_string()))?;
     config.validate()?;
     for output in &mut config.output {
-        if let OutputConfig::Http { headers, .. } = output {
+        if let OutputConfig::Http {
+            headers, method, ..
+        } = output
+        {
+            *method = method.to_ascii_uppercase();
             for value in headers.values_mut() {
                 *value = resolve_env(value)?;
             }
@@ -243,13 +249,46 @@ impl Config {
             ));
         }
         for output in &self.output {
-            if let OutputConfig::Http { method, .. } = output
-                && !method.eq_ignore_ascii_case("PUT")
-                && !method.eq_ignore_ascii_case("POST")
+            if let OutputConfig::Http {
+                method,
+                url,
+                ca_file,
+                insecure_skip_verify,
+                timeout_secs,
+                ..
+            } = output
             {
-                return Err(ConfigError::Invalid(
-                    "HTTP method must be PUT or POST".into(),
-                ));
+                if !method.eq_ignore_ascii_case("PUT") && !method.eq_ignore_ascii_case("POST") {
+                    return Err(ConfigError::Invalid(
+                        "output.method must be PUT or POST".into(),
+                    ));
+                }
+                let parsed = url::Url::parse(url)
+                    .map_err(|e| ConfigError::Invalid(format!("output.url: {e}")))?;
+                if !matches!(parsed.scheme(), "http" | "https")
+                    || parsed.host_str().is_none()
+                    || url.split_once("://").is_some_and(|(_, rest)| {
+                        rest.split(['/', '?', '#'])
+                            .next()
+                            .is_some_and(|authority| authority.contains('@'))
+                    })
+                    || !parsed.username().is_empty()
+                    || parsed.password().is_some()
+                {
+                    return Err(ConfigError::Invalid(
+                        "output.url: expected HTTP(S) URL without userinfo".into(),
+                    ));
+                }
+                if ca_file.is_some() && *insecure_skip_verify {
+                    return Err(ConfigError::Invalid(
+                        "output.ca_file and output.insecure_skip_verify cannot be combined".into(),
+                    ));
+                }
+                if *timeout_secs == 0 {
+                    return Err(ConfigError::Invalid(
+                        "output.timeout_secs must be greater than zero".into(),
+                    ));
+                }
             }
         }
         if self.report.organization.trim().is_empty() {

@@ -1,7 +1,12 @@
 //! Shared synchronous HTTP transport for API scan sources.
 use super::SourceError;
 use serde::{Serialize, de::DeserializeOwned};
-use std::{collections::BTreeMap, path::PathBuf, sync::Arc, time::Duration};
+use std::{
+    collections::BTreeMap,
+    path::{Path, PathBuf},
+    sync::Arc,
+    time::Duration,
+};
 use ureq::tls::{PemItem, RootCerts, TlsConfig, parse_pem};
 
 pub const USER_AGENT: &str = concat!("image-scan-report/", env!("CARGO_PKG_VERSION"));
@@ -52,6 +57,19 @@ pub struct HttpClient {
     retry_delays: [Duration; 2],
 }
 
+pub fn client_from_tls(
+    ca_file: Option<&Path>,
+    insecure_skip_verify: bool,
+    timeout: Duration,
+) -> Result<HttpClient, HttpError> {
+    HttpClient::new(&HttpOptions {
+        ca_file: ca_file.map(Path::to_owned),
+        insecure_skip_verify,
+        timeout,
+        user_agent: USER_AGENT.into(),
+    })
+}
+
 impl HttpClient {
     pub fn new(opts: &HttpOptions) -> Result<Self, HttpError> {
         if opts.ca_file.is_some() && opts.insecure_skip_verify {
@@ -96,6 +114,31 @@ impl HttpClient {
     pub fn with_backoff(mut self, delays: [Duration; 2]) -> Self {
         self.retry_delays = delays;
         self
+    }
+
+    /// Send raw bytes using the shared retry policy.
+    pub fn send_bytes(
+        &self,
+        method: &str,
+        url: &str,
+        headers: &[(&str, &str)],
+        content_type: &str,
+        body: &[u8],
+    ) -> Result<Response<Vec<u8>>, HttpError> {
+        let method = method.to_ascii_uppercase();
+        if !matches!(method.as_str(), "PUT" | "POST") {
+            return Err(HttpError::InvalidRequest(
+                format!("{method} {url}"),
+                "expected PUT or POST".into(),
+            ));
+        }
+        let mut headers: Vec<_> = headers
+            .iter()
+            .copied()
+            .filter(|(k, _)| !k.eq_ignore_ascii_case("content-type"))
+            .collect();
+        headers.push(("Content-Type", content_type));
+        self.request(&method, url, &Auth::None, &headers, Some(body))
     }
 
     pub fn get_json<T: DeserializeOwned>(
@@ -217,7 +260,11 @@ impl HttpClient {
                 }
                 request = request.header(*key, value);
             }
-            if body.is_some() {
+            if body.is_some()
+                && !headers
+                    .iter()
+                    .any(|(k, _)| k.eq_ignore_ascii_case("content-type"))
+            {
                 request = request.header("Content-Type", "application/json");
             }
             let request = request

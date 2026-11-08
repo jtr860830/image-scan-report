@@ -4,7 +4,7 @@ judex turns existing container-image vulnerability scans into audit reports.
 It normalises Trivy and NeuVector scanner JSON and results from the Harbor and NeuVector APIs into a shared model without scanning images itself.
 
 Sources: Trivy and NeuVector scanner files, the Harbor API and the NeuVector controller API.
-Outputs: PDF and JSON to the filesystem.
+Outputs: PDF and JSON to filesystem directories and HTTP endpoints.
 
 ## Quick start
 
@@ -161,10 +161,34 @@ theme:
 | `headers` | Map of string header names to string values; HTTP only | `{}` |
 | `mode` | `raw` or `multipart`; HTTP only | `raw` |
 | `ca_file` | Optional certificate file path; HTTP only | `null` |
-| `timeout_secs` | Unsigned 64-bit integer; HTTP only | `30` |
+| `timeout_secs` | Positive timeout in seconds; HTTP only | `30` |
+| `insecure_skip_verify` | Disable TLS verification; cannot combine with `ca_file` | `false` |
 
-HTTP outputs are accepted by the parser but rejected by both `check` and `run`
-with an unsupported-output error. Both validate outputs before fetching the source.
+HTTP outputs upload each artifact separately. Both validate outputs before fetching
+the source. URLs must use HTTP(S) without embedded credentials.
+Raw mode sends the artifact bytes with its media type and
+`Content-Disposition: attachment; filename="<name>"`:
+
+```sh
+curl -X PUT -H 'Content-Type: application/pdf' -H 'Content-Disposition: attachment; filename="report.pdf"' --data-binary @report.pdf https://reports.example.com/upload
+```
+
+Multipart mode sends one form-data part named `file`, including filename and media type:
+
+```sh
+curl -X POST -F 'file=@report.pdf;type=application/pdf' https://reports.example.com/upload
+```
+
+Transport errors and HTTP 5xx responses retry twice (after 1 and 2 seconds),
+resending the body; HTTP 4xx responses fail immediately. Partial output success
+exits zero; exit 5 means every artifact write failed.
+Mount the endpoint's exported CA certificate as a PEM bundle and set `ca_file`
+to its path. Invalid or unreadable CA files fail with exit code 2. As a last
+resort for endpoints whose CA cannot be exported, remove `ca_file` and set
+`insecure_skip_verify: true`. This disables certificate verification and prints
+`output <authority>: TLS certificate verification is disabled` once per check/run.
+The two settings cannot be combined.
+
 Header values expand `${VAR}` placeholders when configuration is loaded; an unset
 variable fails with its name. Valid names use ASCII letters or underscore first,
 then letters, digits or underscores. Expansion is one pass, malformed placeholders
@@ -176,7 +200,7 @@ strings do not receive this substitution. Keep credentials in environment variab
 | Code | Meaning |
 | --- | --- |
 | `0` | Success (including partial output success) |
-| `2` | Configuration or CLI argument error; includes unsupported outputs (HTTP upload arrives in a later release) |
+| `2` | Configuration or CLI argument error |
 | `3` | Source failure, including no usable input reports |
 | `4` | Rendering / JSON serialisation failure |
 | `5` | Every artifact write failed |
