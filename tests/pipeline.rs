@@ -301,9 +301,11 @@ mod harbor_mock;
 mod neuvector_mock;
 
 fn api_config(kind: &str, url: &str, output: &Path) -> Config {
+    static INIT: std::sync::Once = std::sync::Once::new();
+    INIT.call_once(|| unsafe { std::env::set_var("JUDEX_TASK5_MOCK_PASSWORD", "secret-password") });
     let mut cfg = config(output, output);
     cfg.source = serde_yaml_ng::from_str(&format!(
-        "type: {kind}\nurl: {url}\nusername: {}\npassword_env: PATH\ntimeout_secs: 1\n{}",
+        "type: {kind}\nurl: {url}\nusername: {}\npassword_env: JUDEX_TASK5_MOCK_PASSWORD\ntimeout_secs: 1\n{}",
         if kind == "harbor" { "robot" } else { "admin" },
         if kind == "harbor" {
             "project: demo"
@@ -329,6 +331,7 @@ fn missing_password_env_exits_2() {
         }
         let err = check(&cfg, &product()).unwrap_err();
         assert_eq!(err.exit_code(), 2);
+        assert!(err.to_string().contains("JUDEX_TASK5_UNSET_PASSWORD_49382"));
         assert!(
             matches!(err, RunError::Config(image_scan_report::config::ConfigError::MissingEnv(ref n)) if n == "JUDEX_TASK5_UNSET_PASSWORD_49382")
         );
@@ -362,6 +365,7 @@ fn unreachable_scanner_exits_3() {
     let start = std::time::Instant::now();
     let err = check(&api_config("harbor", &url, dir.path()), &product()).unwrap_err();
     assert_eq!(err.exit_code(), 3);
+    assert!(err.to_string().contains(url.trim_start_matches("http://")));
     assert!(matches!(err, RunError::Source(_)));
     assert!(start.elapsed() < std::time::Duration::from_secs(5));
 }
@@ -379,12 +383,8 @@ fn run_against_mock_neuvector_writes_pdf() {
 }
 
 fn run_api_mock(kind: &str, url: &str, images: Option<usize>) {
-    // Password changes are serialized within this integration-test process.
-    static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
-    let _guard = LOCK.lock().unwrap();
     let dir = tempfile::tempdir().unwrap();
     let mut cfg = api_config(kind, url, dir.path());
-    unsafe { std::env::set_var("JUDEX_TASK5_MOCK_PASSWORD", "secret-password") };
     match &mut cfg.source {
         image_scan_report::config::SourceConfig::Harbor { password_env, .. }
         | image_scan_report::config::SourceConfig::Neuvector { password_env, .. } => {
@@ -394,7 +394,6 @@ fn run_api_mock(kind: &str, url: &str, images: Option<usize>) {
     }
     cfg.report.pdf = true;
     let result = run(&cfg, now(), &product());
-    unsafe { std::env::remove_var("JUDEX_TASK5_MOCK_PASSWORD") };
     let summary = result.unwrap();
     assert_eq!(summary.stored.len(), 2);
     for entry in std::fs::read_dir(dir.path()).unwrap() {
@@ -404,6 +403,14 @@ fn run_api_mock(kind: &str, url: &str, images: Option<usize>) {
             assert!(pdf::page_count(&bytes) >= 6);
         } else {
             let report: Report = serde_json::from_slice(&bytes).unwrap();
+            if kind == "neuvector" {
+                let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+                assert_eq!(json["source"]["kind"], "neuvector");
+                assert_eq!(
+                    report.scope,
+                    format!("{}/harbor-lab", url.trim_start_matches("http://"))
+                );
+            }
             if let Some(n) = images {
                 assert_eq!(report.images.len(), n);
             }

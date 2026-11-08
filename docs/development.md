@@ -128,10 +128,10 @@ API integration tests use httpmock with fixture-serving helpers in
 `tests/support/harbor_mock.rs` and `tests/support/neuvector_mock.rs`. Point the
 pipeline configuration or binary at the mock server and supply test credentials
 through the environment. The Harbor subset helper serves three repositories
-and one artifact each to keep PDF tests small. Captures remain unchanged; see
+and one artifact each to keep PDF tests small. Use the captured fixture files without editing them; see
 [fixture capture instructions](../fixtures/README.md).
 
 Mock servers bind loopback sockets. These tests, including the closed-port
-connection test, run under the controller outside the Codex sandbox because
-loopback binding is denied there. Compile them with `cargo test --offline --no-run`
-and run socket-free tests inside the sandbox.
+connection test, must run where loopback binding is permitted (some sandboxes deny it).
+Compile them with `cargo test --offline --no-run` and run socket-free tests
+where loopback binding is unavailable.

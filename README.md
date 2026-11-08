@@ -3,7 +3,8 @@
 judex turns existing container-image vulnerability scans into audit reports.
 It normalises Trivy and NeuVector scanner JSON into a shared model without scanning images itself.
 
-File sources and Harbor and NeuVector APIs support PDF and JSON output to the filesystem.
+Sources: Trivy and NeuVector scanner files, the Harbor API and the NeuVector controller API.
+Outputs: PDF and JSON to the filesystem.
 
 ## Quick start
 
@@ -51,7 +52,7 @@ optional fields default to `null`. `output` must contain at least one destinatio
 | `source.username` | String; either API source | Required for API sources |
 | `source.password_env` | String naming the password environment variable; either API source | Required for API sources |
 | `source.ca_file` | Optional PEM CA bundle path; either API source | `null` |
-| `source.insecure_skip_verify` | Boolean; disables TLS verification | `false` |
+| `source.insecure_skip_verify` | Boolean; either API source; disables TLS verification | `false` |
 | `source.timeout_secs` | Positive unsigned integer; request timeout in seconds | `30` |
 
 File sources recursively discover JSON files. Invalid reports are skipped with a
@@ -62,7 +63,7 @@ Use the [Harbor example](examples/config.yaml) or [NeuVector example](examples/c
 with `judex check --config <file>` or `judex run --config <file>`.
 `url` must use HTTP or HTTPS. `password_env` names an environment variable,
 not the password itself; a missing variable fails with exit code 2.
-Use a least-privilege read-only account: project guest/limited guest in Harbor,
+Use a least-privilege read-only account: a read-only project member in Harbor (Guest is sufficient; Limited Guest should work but was not verified),
 or a reader role in NeuVector.
 
 Harbor scope is `<authority>/<project>`; omit `project` to include all accessible
@@ -70,14 +71,14 @@ projects (scope `<authority> (all projects)`). NeuVector scope is
 `<authority>/<registry>`; `registry` is the configured scanner registry name,
 not a registry endpoint URL. Harbor multi-arch indexes produce one row per
 platform child, such as `repo:tag (linux/arm64)`; attestation children are skipped.
-A failing artifact becomes a Failed row; only authentication failures abort
-artifact processing. Connection or discovery failures still fail the source.
+Authentication/authorisation failures (HTTP 401/403) abort the whole source with
+exit 3; any other per-artifact failure becomes a Failed row. Connection or discovery failures still fail the source.
 
 Mount the appliance's exported CA certificate as a PEM bundle and set `ca_file`
 to its path. Invalid or unreadable CA files fail with exit code 2. As a last
 resort for appliances whose CA cannot be exported, remove `ca_file` and set
 `insecure_skip_verify: true`. This disables certificate verification and prints
-`source <url>: TLS certificate verification is disabled` once when built.
+`source <authority>: TLS certificate verification is disabled` once per check/run.
 The two settings cannot be combined.
 
 Harbor scan states:
@@ -158,7 +159,7 @@ strings do not receive this substitution. Keep credentials in environment variab
 | Code | Meaning |
 | --- | --- |
 | `0` | Success (including partial output success) |
-| `2` | Configuration or CLI argument error; includes unsupported sources/outputs |
+| `2` | Configuration or CLI argument error; includes unsupported outputs (HTTP upload arrives in a later release) |
 | `3` | Source failure, including no usable input reports |
 | `4` | Rendering / JSON serialisation failure |
 | `5` | Every artifact write failed |

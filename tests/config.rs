@@ -306,7 +306,12 @@ fn report_length_settings() {
 }
 
 fn api_source(kind: &str, extra: &str) -> SourceConfig {
-    serde_yaml_ng::from_str(&format!("type: {kind}\nurl: https://scanner.test\nusername: reader\npassword_env: PASSWORD\nregistry: production\n{extra}" ).replace(if kind == "harbor" { "registry: production\n" } else { "#unused" }, "")).unwrap()
+    let registry = if kind == "neuvector" {
+        "registry: production\n"
+    } else {
+        ""
+    };
+    serde_yaml_ng::from_str(&format!("type: {kind}\nurl: https://scanner.test\nusername: reader\npassword_env: PASSWORD\n{registry}{extra}")).unwrap()
 }
 
 #[test]
@@ -315,7 +320,13 @@ fn api_sources_accept_timeout_and_reject_bad_url() {
         let mut cfg = minimal();
         cfg.source = api_source(kind, "timeout_secs: 7");
         cfg.validate().unwrap();
-        for bad in ["ftp://x", "not a url"] {
+        for bad in [
+            "ftp://x",
+            "not a url",
+            "https://user@scanner.test",
+            "https://user:secret@scanner.test",
+            "https://:secret@scanner.test",
+        ] {
             match &mut cfg.source {
                 SourceConfig::Harbor { url, .. } | SourceConfig::Neuvector { url, .. } => {
                     *url = bad.into()

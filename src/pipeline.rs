@@ -27,7 +27,12 @@ pub fn build_source(cfg: &SourceConfig) -> Result<Box<dyn ScanSource>, ConfigErr
             insecure_skip_verify,
         } => {
             let password = crate::config::secret_from_env(password_env)?;
-            let client = source_client(url, ca_file, *timeout_secs, *insecure_skip_verify)?;
+            let client = source_client(
+                url,
+                ca_file.as_deref(),
+                *timeout_secs,
+                *insecure_skip_verify,
+            )?;
             Ok(Box::new(crate::source::harbor::HarborSource::from_config(
                 &crate::source::harbor::HarborParams {
                     url: url.clone(),
@@ -48,7 +53,12 @@ pub fn build_source(cfg: &SourceConfig) -> Result<Box<dyn ScanSource>, ConfigErr
             insecure_skip_verify,
         } => {
             let password = crate::config::secret_from_env(password_env)?;
-            let client = source_client(url, ca_file, *timeout_secs, *insecure_skip_verify)?;
+            let client = source_client(
+                url,
+                ca_file.as_deref(),
+                *timeout_secs,
+                *insecure_skip_verify,
+            )?;
             Ok(Box::new(
                 crate::source::neuvector_api::NeuvectorSource::from_config(
                     &crate::source::neuvector_api::NeuvectorParams {
@@ -66,19 +76,22 @@ pub fn build_source(cfg: &SourceConfig) -> Result<Box<dyn ScanSource>, ConfigErr
 
 fn source_client(
     url: &str,
-    ca_file: &Option<PathBuf>,
+    ca_file: Option<&Path>,
     timeout_secs: u64,
     insecure_skip_verify: bool,
 ) -> Result<crate::source::http::HttpClient, ConfigError> {
     let client = crate::source::http::HttpClient::new(&crate::source::http::HttpOptions {
-        ca_file: ca_file.clone(),
+        ca_file: ca_file.map(Path::to_owned),
         insecure_skip_verify,
         timeout: std::time::Duration::from_secs(timeout_secs),
         user_agent: format!("image-scan-report/{}", env!("CARGO_PKG_VERSION")),
     })
     .map_err(|e| ConfigError::Invalid(format!("source.ca_file: {e}")))?;
     if insecure_skip_verify {
-        tracing::warn!("source {}: TLS certificate verification is disabled", url);
+        tracing::warn!(
+            "source {}: TLS certificate verification is disabled",
+            crate::source::http::url_authority(url)
+        );
     }
     Ok(client)
 }

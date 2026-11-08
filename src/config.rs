@@ -208,6 +208,11 @@ impl Config {
         {
             let parsed = url::Url::parse(url)
                 .map_err(|e| ConfigError::Invalid(format!("source.url: {e}")))?;
+            if !parsed.username().is_empty() || parsed.password().is_some() {
+                return Err(ConfigError::Invalid(
+                    "source.url must not embed credentials; use username/password_env".into(),
+                ));
+            }
             if !matches!(parsed.scheme(), "http" | "https") {
                 return Err(ConfigError::Invalid(
                     "source.url: scheme must be http or https".into(),

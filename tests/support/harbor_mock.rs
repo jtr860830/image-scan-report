@@ -1,3 +1,4 @@
+const AUTHORIZATION: &str = "Basic cm9ib3Q6c2VjcmV0LXBhc3N3b3Jk";
 use httpmock::{Mock, MockServer};
 use image_scan_report::source::{
     harbor::{HarborParams, HarborSource},
@@ -41,6 +42,7 @@ pub fn paged<'a>(server: &'a MockServer, path: &str, values: Vec<Value>) -> Vec<
     for (i, chunk) in values.chunks(100).enumerate() {
         mocks.push(server.mock(|w, t| {
             let w = w
+                .header("Authorization", AUTHORIZATION)
                 .method("GET")
                 .path(path)
                 .query_param("page", (i + 1).to_string())
@@ -56,7 +58,10 @@ pub fn paged<'a>(server: &'a MockServer, path: &str, values: Vec<Value>) -> Vec<
     }
     if values.is_empty() {
         mocks.push(server.mock(|w, t| {
-            let w = w.method("GET").path(path);
+            let w = w
+                .header("Authorization", AUTHORIZATION)
+                .method("GET")
+                .path(path);
             if path.ends_with("/artifacts") {
                 w.query_param("with_scan_overview", "true")
                     .query_param("with_tag", "true");
@@ -87,14 +92,15 @@ fn harbor_mock_selected(failure: Option<(&str, u16)>, subset: bool) -> (MockServ
     let server = MockServer::start();
     if let Some((path, status)) = failure {
         server.mock(|w, t| {
-            w.path(path);
+            w.header("Authorization", AUTHORIZATION).path(path);
             t.status(status);
         });
     }
     paged(&server, "/api/v2.0/projects/library/repositories", vec![]);
 
     server.mock(|w, t| {
-        w.path("/api/v2.0/projects");
+        w.header("Authorization", AUTHORIZATION)
+            .path("/api/v2.0/projects");
         t.status(200).json_body(fixture("projects.json"));
     });
     let mut repos = fixture("repositories-after.json")
@@ -136,11 +142,12 @@ fn harbor_mock_selected(failure: Option<(&str, u16)>, subset: bool) -> (MockServ
                     let digest = r["child_digest"].as_str().unwrap();
                     let short = &digest[7..19];
                     server.mock(|w, t| {
-                        w.path(format!(
-                            "/api/v2.0/projects/demo/repositories/{name}/artifacts/{digest}"
-                        ))
-                        .query_param("with_scan_overview", "true")
-                        .query_param("with_tag", "true");
+                        w.header("Authorization", AUTHORIZATION)
+                            .path(format!(
+                                "/api/v2.0/projects/demo/repositories/{name}/artifacts/{digest}"
+                            ))
+                            .query_param("with_scan_overview", "true")
+                            .query_param("with_tag", "true");
                         t.status(200)
                             .json_body(fixture(&format!("multiarch/child-{short}.json")));
                     });
@@ -167,5 +174,5 @@ fn harbor_mock_selected(failure: Option<(&str, u16)>, subset: bool) -> (MockServ
     (server, src)
 }
 fn vulnerability(server: &MockServer, repo: &str, digest: &str, value: Value) {
-    server.mock(|w,t| { w.path(format!("/api/v2.0/projects/demo/repositories/{repo}/artifacts/{digest}/additions/vulnerabilities")).header("X-Accept-Vulnerabilities","application/vnd.security.vulnerability.report; version=1.1"); t.status(200).json_body(value); });
+    server.mock(|w,t| { w.header("Authorization", AUTHORIZATION).path(format!("/api/v2.0/projects/demo/repositories/{repo}/artifacts/{digest}/additions/vulnerabilities")).header("X-Accept-Vulnerabilities","application/vnd.security.vulnerability.report; version=1.1"); t.status(200).json_body(value); });
 }
