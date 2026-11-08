@@ -6,6 +6,19 @@ It normalises Trivy and NeuVector scanner JSON and results from the Harbor and N
 Sources: Trivy and NeuVector scanner files, the Harbor API and the NeuVector controller API.
 Outputs: PDF and JSON to filesystem directories and HTTP endpoints.
 
+## Container installation
+
+Use `ghcr.io/jtr860830/judex:<ver>` with a release tag, a config whose filesystem
+output points to `/output`, and a writable `./out` directory:
+
+```sh
+podman run --rm --read-only --security-opt no-new-privileges -v ./config.yaml:/etc/report/config.yaml:ro,Z -v ./out:/output:Z -e HARBOR_PASSWORD ghcr.io/jtr860830/judex:<ver>
+```
+
+For air-gapped hosts, transfer the image with `podman save` and `podman load`.
+See [container installation](docs/container.md) for the wrapper script, mounts,
+permissions, secrets, local builds, and air-gap commands.
+
 ## Quick start
 
 Install the Rust toolchain pinned in [rust-toolchain.toml](rust-toolchain.toml),

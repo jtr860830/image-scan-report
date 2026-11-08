@@ -11,7 +11,7 @@ jobs:
   check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Install Rust toolchain
         run: rustup toolchain install
       - uses: Swatinem/rust-cache@v2
@@ -24,8 +24,43 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Install Rust toolchain
         run: rustup toolchain install
       - uses: Swatinem/rust-cache@v2
       - run: cargo test --release --test perf -- --ignored --nocapture --test-threads=1
+
+  container-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: Containerfile
+          load: true
+          tags: judex:ci
+          build-args: |
+            VERSION=ci
+            REVISION=${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Prepare smoke inputs
+        run: |
+          sed -e 's|path: ./fixtures/trivy|path: /fixtures/trivy|' \
+              -e 's|path: ./out|path: /output|' \
+              examples/config-trivy-files.yaml > smoke-config.yaml
+          mkdir -p smoke-out
+          chmod 777 smoke-out
+      - name: Check and render with a read-only root filesystem
+        run: |
+          for command in check run; do
+            docker run --rm --read-only --user 65532:65532 \
+              -v "$PWD/fixtures:/fixtures:ro" \
+              -v "$PWD/smoke-config.yaml:/etc/report/config.yaml:ro" \
+              -v "$PWD/smoke-out:/output" \
+              judex:ci "$command" --config /etc/report/config.yaml
+          done
+          test -n "$(find smoke-out -type f -name '*.pdf' -print -quit)"
+          docker run --rm judex:ci --version | grep '^judex '

@@ -1,0 +1,32 @@
+FROM docker.io/library/rust:1.99-trixie AS build
+ARG BIN=judex
+WORKDIR /src
+COPY Cargo.toml Cargo.lock rust-toolchain.toml ./
+# Warm dependencies for both targets before copying application sources.
+RUN mkdir src && printf 'fn main(){}\n' > src/main.rs && touch src/lib.rs \
+    && cargo build --release --locked --bin "$BIN" && rm -rf src
+COPY src/ src/
+COPY assets/ assets/
+COPY templates/ templates/
+COPY strings/ strings/
+COPY themes/ themes/
+# Invalidate the stub fingerprints even when COPY preserves older timestamps.
+RUN find src -type f -exec touch {} + \
+    && cargo build --release --locked --bin "$BIN"
+
+FROM gcr.io/distroless/cc-debian13:nonroot AS runtime
+ARG BIN=judex
+ARG VERSION=dev
+ARG REVISION=unknown
+LABEL org.opencontainers.image.source="https://github.com/jtr860830/image-scan-report" \
+      org.opencontainers.image.version="$VERSION" \
+      org.opencontainers.image.revision="$REVISION" \
+      org.opencontainers.image.licenses="Apache-2.0" \
+      org.opencontainers.image.description="Turns container image vulnerability scans into audit reports"
+COPY --from=build /src/target/release/${BIN} /usr/local/bin/judex
+COPY LICENSE THIRD_PARTY_NOTICES.md /usr/share/doc/${BIN}/
+USER 65532:65532
+WORKDIR /output
+VOLUME ["/output"]
+ENTRYPOINT ["/usr/local/bin/judex"]
+CMD ["run", "--config", "/etc/report/config.yaml"]
