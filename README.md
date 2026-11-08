@@ -164,8 +164,7 @@ theme:
 | `timeout_secs` | Positive timeout in seconds; HTTP only | `30` |
 | `insecure_skip_verify` | Disable TLS verification; cannot combine with `ca_file` | `false` |
 
-HTTP outputs upload each artifact separately. Both validate outputs before fetching
-the source. URLs must use HTTP(S) without embedded credentials.
+HTTP outputs upload each artifact separately. `check` and `run` validate outputs before fetching the source. URLs must use HTTP(S) without embedded credentials.
 Raw mode sends the artifact bytes with its media type and
 `Content-Disposition: attachment; filename="<name>"`:
 
@@ -178,6 +177,8 @@ Multipart mode sends one form-data part named `file`, including filename and med
 ```sh
 curl -X POST -F 'file=@report.pdf;type=application/pdf' https://reports.example.com/upload
 ```
+
+HTTP outputs do not follow 3xx responses. `timeout_secs` covers the whole upload; large PDFs may need a larger value.
 
 Transport errors and HTTP 5xx responses retry twice (after 1 and 2 seconds),
 resending the body; HTTP 4xx responses fail immediately. Partial output success

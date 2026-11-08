@@ -128,7 +128,7 @@ impl HttpClient {
         let method = method.to_ascii_uppercase();
         if !matches!(method.as_str(), "PUT" | "POST") {
             return Err(HttpError::InvalidRequest(
-                format!("{method} {url}"),
+                format!("{method} {}", redact_url(url)),
                 "expected PUT or POST".into(),
             ));
         }
@@ -157,8 +157,9 @@ impl HttpClient {
         body: &B,
         headers: &[(&str, &str)],
     ) -> Result<Response<T>, HttpError> {
-        let bytes = serde_json::to_vec(body)
-            .map_err(|e| HttpError::InvalidRequest(format!("POST {url}"), e.to_string()))?;
+        let bytes = serde_json::to_vec(body).map_err(|e| {
+            HttpError::InvalidRequest(format!("POST {}", redact_url(url)), e.to_string())
+        })?;
         self.json_response(
             "POST",
             url,
@@ -192,7 +193,7 @@ impl HttpClient {
         url: &str,
         response: Response<Vec<u8>>,
     ) -> Result<Response<T>, HttpError> {
-        let context = format!("{method} {url}");
+        let context = format!("{method} {}", redact_url(url));
         let headers = response.headers;
         let body = serde_json::from_slice(&response.body).map_err(|e| {
             HttpError::Decode(
@@ -224,11 +225,11 @@ impl HttpClient {
         let once = method == "DELETE_ONCE";
         let method = if once { "DELETE" } else { method };
         let uri: ureq::http::Uri = url.parse().map_err(|e: ureq::http::uri::InvalidUri| {
-            HttpError::InvalidRequest(format!("{method} {url}"), e.to_string())
+            HttpError::InvalidRequest(format!("{method} {}", redact_url(url)), e.to_string())
         })?;
         if !matches!(uri.scheme_str(), Some("http" | "https")) || uri.authority().is_none() {
             return Err(HttpError::InvalidRequest(
-                format!("{method} {url}"),
+                format!("{method} {}", redact_url(url)),
                 "expected an absolute HTTP(S) URL".into(),
             ));
         }
@@ -240,9 +241,9 @@ impl HttpClient {
             )),
             Auth::Bearer(token) => Some(format!("Bearer {token}")),
         };
-        let context = format!("{method} {url}");
+        let context = format!("{method} {}", redact_url(url));
         for attempt in 0..3 {
-            tracing::debug!(method, url);
+            tracing::debug!(method, url = redact_url(url));
             let mut request = ureq::http::Request::builder().method(method).uri(url);
             if let Some(value) = &authorization {
                 let mut value = ureq::http::HeaderValue::from_str(value)
@@ -432,5 +433,51 @@ mod url_tests {
         );
         assert_eq!(url_authority("https://example.test/"), "example.test");
         assert_eq!(url_authority(""), "");
+    }
+}
+
+pub fn tls_client(
+    role: &str,
+    url: &str,
+    ca_file: Option<&Path>,
+    timeout_secs: u64,
+    insecure_skip_verify: bool,
+) -> Result<crate::source::http::HttpClient, crate::config::ConfigError> {
+    let client = crate::source::http::client_from_tls(
+        ca_file,
+        insecure_skip_verify,
+        std::time::Duration::from_secs(timeout_secs),
+    )
+    .map_err(|e| crate::config::ConfigError::Invalid(format!("{role}.ca_file: {e}")))?;
+    if insecure_skip_verify {
+        tracing::warn!(
+            "{} {}: TLS certificate verification is disabled",
+            role,
+            redact_url(url)
+        );
+    }
+    Ok(client)
+}
+
+/// Strip query and fragment secrets from diagnostic URLs.
+pub fn redact_url(url: &str) -> String {
+    match url::Url::parse(url) {
+        Ok(mut parsed) => {
+            parsed.set_query(None);
+            parsed.set_fragment(None);
+            parsed.to_string()
+        }
+        Err(_) => url.split(['?', '#']).next().unwrap_or_default().to_owned(),
+    }
+}
+#[cfg(test)]
+mod redaction_tests {
+    #[test]
+    fn redact_url_removes_secrets() {
+        assert_eq!(
+            super::redact_url("https://h/p?X-Amz-Signature=abc#f"),
+            "https://h/p"
+        );
+        assert_eq!(super::redact_url("invalid?secret#fragment"), "invalid");
     }
 }

@@ -441,7 +441,28 @@ fn one_failed_sink_keeps_exit_zero_and_hides_headers() {
     assert_eq!(summary.failed_sinks.len(), 1);
     assert!(!summary.failed_sinks[0].contains("Bearer"));
     assert_eq!(summary.stored.len(), 1);
-    m.assert_calls(1);
+    use image_scan_report::sink::ReportSink;
+    let direct = image_scan_report::sink::http::HttpSink::new(
+        server.url("/upload"),
+        "PUT".into(),
+        vec![("Authorization".into(), "Bearer pipeline-secret".into())],
+        image_scan_report::config::HttpMode::Raw,
+        image_scan_report::source::http::client_from_tls(
+            None,
+            false,
+            std::time::Duration::from_secs(1),
+        )
+        .unwrap(),
+    );
+    let error = direct
+        .store(&image_scan_report::sink::Artifact {
+            file_name: "test.pdf".into(),
+            media_type: "application/pdf",
+            bytes: vec![],
+        })
+        .unwrap_err();
+    assert!(!error.to_string().contains("pipeline-secret"));
+    m.assert_calls(2);
 }
 #[test]
 fn all_sinks_failed_exits_5() {

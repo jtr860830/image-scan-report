@@ -161,3 +161,33 @@ fn describe_hides_headers() {
         "HTTP PUT https://example.test/upload"
     );
 }
+
+#[test]
+fn connection_refused_is_transport_after_retries() {
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let url = format!("http://{}/upload", listener.local_addr().unwrap());
+    drop(listener);
+    let e = sink(url, HttpMode::Raw, "PUT")
+        .store(&artifact())
+        .unwrap_err()
+        .to_string();
+    assert!(e.contains("failed"));
+    assert!(!e.contains("Bearer t"));
+}
+#[test]
+fn upload_query_is_redacted() {
+    let s = httpmock::MockServer::start();
+    s.mock(|w, t| {
+        w.any_request();
+        t.status(403);
+    });
+    let sink = sink(s.url("/upload?token=SECRET"), HttpMode::Raw, "PUT");
+    assert!(!sink.describe().contains("SECRET"));
+    assert!(
+        !sink
+            .store(&artifact())
+            .unwrap_err()
+            .to_string()
+            .contains("SECRET")
+    );
+}

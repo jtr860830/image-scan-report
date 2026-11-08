@@ -39,7 +39,7 @@ pub fn build_sinks(cfg: &[OutputConfig]) -> Result<Vec<Box<dyn ReportSink>>, Con
                 insecure_skip_verify,
                 timeout_secs,
             } => {
-                let client = crate::pipeline::tls_client(
+                let client = crate::source::http::tls_client(
                     "output",
                     url,
                     ca_file.as_deref(),
@@ -48,7 +48,7 @@ pub fn build_sinks(cfg: &[OutputConfig]) -> Result<Vec<Box<dyn ReportSink>>, Con
                 )?;
                 Ok(Box::new(http::HttpSink::new(
                     url.clone(),
-                    method.to_ascii_uppercase(),
+                    method.clone(),
                     headers
                         .iter()
                         .map(|(k, v)| (k.clone(), v.clone()))

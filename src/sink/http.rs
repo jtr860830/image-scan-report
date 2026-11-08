@@ -1,6 +1,9 @@
 //! HTTP artifact uploads.
 use super::{Artifact, ReportSink, SinkError};
-use crate::{config::HttpMode, source::http::HttpClient};
+use crate::{
+    config::HttpMode,
+    source::http::{HttpClient, redact_url},
+};
 use std::{
     sync::atomic::{AtomicU64, Ordering},
     time::{SystemTime, UNIX_EPOCH},
@@ -55,7 +58,7 @@ pub fn multipart_body(
 }
 impl ReportSink for HttpSink {
     fn describe(&self) -> String {
-        format!("HTTP {} {}", self.method, self.url)
+        format!("HTTP {} {}", self.method, redact_url(&self.url))
     }
     fn store(&self, artifact: &Artifact) -> Result<(), SinkError> {
         let mut headers: Vec<_> = self
@@ -64,9 +67,8 @@ impl ReportSink for HttpSink {
             .map(|(k, v)| (k.as_str(), v.as_str()))
             .collect();
         let disposition = format!("attachment; filename=\"{}\"", artifact.file_name);
-        let b = boundary();
-        let content_type = format!("multipart/form-data; boundary={b}");
-        let body;
+        // naming::slug guarantees filenames contain no header delimiters.
+        debug_assert!(!artifact.file_name.contains(['"', '\r', '\n']));
         let result = match self.mode {
             HttpMode::Raw => {
                 headers.push(("Content-Disposition", &disposition));
@@ -79,7 +81,9 @@ impl ReportSink for HttpSink {
                 )
             }
             HttpMode::Multipart => {
-                body = multipart_body(
+                let b = boundary();
+                let content_type = format!("multipart/form-data; boundary={b}");
+                let body = multipart_body(
                     &b,
                     "file",
                     &artifact.file_name,
@@ -90,8 +94,12 @@ impl ReportSink for HttpSink {
                     .send_bytes(&self.method, &self.url, &headers, &content_type, &body)
             }
         };
-        result
-            .map(|_| ())
-            .map_err(|e| SinkError::Other(format!("HTTP {} {}: {e}", self.method, self.url)))
+        result.map(|_| ()).map_err(|e| {
+            SinkError::Other(format!(
+                "HTTP {} {}: {e}",
+                self.method,
+                redact_url(&self.url)
+            ))
+        })
     }
 }

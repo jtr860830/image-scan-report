@@ -27,7 +27,7 @@ pub fn build_source(cfg: &SourceConfig) -> Result<Box<dyn ScanSource>, ConfigErr
             insecure_skip_verify,
         } => {
             let password = crate::config::secret_from_env(password_env)?;
-            let client = tls_client(
+            let client = crate::source::http::tls_client(
                 "source",
                 url,
                 ca_file.as_deref(),
@@ -54,7 +54,7 @@ pub fn build_source(cfg: &SourceConfig) -> Result<Box<dyn ScanSource>, ConfigErr
             insecure_skip_verify,
         } => {
             let password = crate::config::secret_from_env(password_env)?;
-            let client = tls_client(
+            let client = crate::source::http::tls_client(
                 "source",
                 url,
                 ca_file.as_deref(),
@@ -74,29 +74,6 @@ pub fn build_source(cfg: &SourceConfig) -> Result<Box<dyn ScanSource>, ConfigErr
             ))
         }
     }
-}
-
-pub(crate) fn tls_client(
-    role: &str,
-    url: &str,
-    ca_file: Option<&Path>,
-    timeout_secs: u64,
-    insecure_skip_verify: bool,
-) -> Result<crate::source::http::HttpClient, ConfigError> {
-    let client = crate::source::http::client_from_tls(
-        ca_file,
-        insecure_skip_verify,
-        std::time::Duration::from_secs(timeout_secs),
-    )
-    .map_err(|e| ConfigError::Invalid(format!("{role}.ca_file: {e}")))?;
-    if insecure_skip_verify {
-        tracing::warn!(
-            "{} {}: TLS certificate verification is disabled",
-            role,
-            crate::source::http::url_authority(url)
-        );
-    }
-    Ok(client)
 }
 
 pub fn assemble_report(set: ScanSet, cfg: &ReportConfig, now: DateTime<Utc>) -> Report {

@@ -267,11 +267,6 @@ impl Config {
                     .map_err(|e| ConfigError::Invalid(format!("output.url: {e}")))?;
                 if !matches!(parsed.scheme(), "http" | "https")
                     || parsed.host_str().is_none()
-                    || url.split_once("://").is_some_and(|(_, rest)| {
-                        rest.split(['/', '?', '#'])
-                            .next()
-                            .is_some_and(|authority| authority.contains('@'))
-                    })
                     || !parsed.username().is_empty()
                     || parsed.password().is_some()
                 {
