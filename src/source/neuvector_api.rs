@@ -4,31 +4,30 @@ use super::neuvector::api::{
     AuthRequest, AuthResponse, Credentials, ImageReport, ImageSummary, RegistryImages,
     RegistrySummary,
 };
-
 use super::{ScanSource, SourceError};
 use crate::model::{Image, ScanSet, ScanState, ScanStatus, SourceInfo, SourceKind};
 use chrono::{DateTime, Utc};
 
-/// Endpoint, registry scope, and account settings for a NeuVector source.
+/// Connection settings for [`NeuvectorSource::from_config`], apart from the password.
 pub struct NeuvectorParams {
-    /// Endpoint or external product URL used by this configuration.
+    /// NeuVector controller API base URL.
     pub url: String,
-    /// Registry name used to scope NeuVector API requests.
+    /// Name of the NeuVector registry configuration to report on.
     pub registry: String,
-    /// Account name used to authenticate API requests.
+    /// Account name sent to `POST /v1/auth`.
     pub username: String,
 }
 /// NeuVector registry input with session authentication and image report retrieval.
 pub struct NeuvectorSource {
-    /// API endpoint with trailing slashes removed.
+    /// Controller API base URL with trailing slashes removed.
     pub base_url: String,
-    /// Registry name used to scope NeuVector API requests.
+    /// Name of the NeuVector registry configuration to report on.
     pub registry: String,
-    /// Account name used to authenticate API requests.
+    /// Account name sent to `POST /v1/auth`.
     pub username: String,
-    /// Secret used to authenticate API requests.
+    /// Password sent to `POST /v1/auth`.
     password: String,
-    /// Shared HTTP transport used for API requests.
+    /// HTTP transport used for every request.
     pub client: HttpClient,
     host: String,
 }
@@ -52,7 +51,7 @@ fn timestamp(value: Option<&str>) -> Option<DateTime<Utc>> {
         .and_then(|s| DateTime::parse_from_rfc3339(s).ok())
         .map(|t| t.with_timezone(&Utc))
 }
-/// Normalize scanner state while retaining available timestamps and failure details.
+/// Map NeuVector's `status` and `result` to a scan state, with the scan time and version.
 pub fn scan_status(image: &ImageSummary) -> ScanStatus {
     let status = image.status.as_deref().unwrap_or_default();
     let result = image.result.as_deref().unwrap_or_default();

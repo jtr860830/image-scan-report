@@ -1,7 +1,6 @@
 //! Fetch scan results, assemble reports, and store artifacts.
 use crate::config::{Config, ConfigError, ReportConfig, SourceConfig};
 use crate::model::{Report, ScanSet};
-
 use crate::sink::{Artifact, ReportSink};
 use crate::source::neuvector_file::NeuvectorFileSource;
 use crate::source::trivy_file::TrivyFileSource;
@@ -9,11 +8,12 @@ use crate::source::{ScanSource, SourceError};
 use chrono::{DateTime, Utc};
 use std::path::{Path, PathBuf};
 
-/// Construct the configured scanner source and its transport.
+/// Construct the configured scan source, reading its password and building its transport.
 ///
 /// # Errors
 ///
-/// Fails if connection settings or certificate roots cannot initialize the selected source.
+/// Fails if a Harbor or NeuVector password variable is unset, or the TLS options conflict or
+/// name an unusable CA file.
 pub fn build_source(cfg: &SourceConfig) -> Result<Box<dyn ScanSource>, ConfigError> {
     match cfg {
         SourceConfig::TrivyFiles { path } => Ok(Box::new(TrivyFileSource { dir: path.clone() })),
@@ -92,16 +92,16 @@ pub fn assemble_report(set: ScanSet, cfg: &ReportConfig, now: DateTime<Utc>) -> 
     }
 }
 
-/// Descriptions of stored artifacts and any failed output destinations.
+/// Outcome of [`run`]: report totals plus the successful and failed writes.
 #[derive(Debug)]
 pub struct RunSummary {
-    /// Images included in this scan or vulnerability group.
+    /// Number of images in the report.
     pub images: usize,
-    /// Normalized vulnerabilities associated with scanned images.
+    /// Number of findings in the report.
     pub findings: usize,
-    /// Artifact and destination descriptions for successful writes. An empty list indicates no entries.
+    /// One `<sink description>: <file name>` entry per artifact written.
     pub stored: Vec<String>,
-    /// Destination descriptions paired with their storage errors. An empty list indicates no entries.
+    /// Descriptions of sinks that rejected at least one artifact; the errors are only logged.
     pub failed_sinks: Vec<String>,
 }
 
@@ -109,22 +109,22 @@ pub struct RunSummary {
 #[derive(thiserror::Error, Debug)]
 #[must_use]
 pub enum RunError {
-    /// Configuration loading or validation failed.
+    /// Configuration, theme, logo, credential or TLS setup failed.
     #[error(transparent)]
     Config(#[from] ConfigError),
     /// Scan data collection failed.
     #[error(transparent)]
     Source(#[from] SourceError),
-    /// Report rendering failed.
+    /// Serialisation, PDF rendering, or writing the render-data file failed.
     #[error("rendering failed: {0}")]
     Render(String),
-    /// Every configured output destination rejected the generated artifacts.
+    /// No artifact was stored anywhere; carries the failed sink descriptions.
     #[error("every output failed: {0:?}")]
     AllSinksFailed(Vec<String>),
 }
 
 impl RunError {
-    /// Map a pipeline failure to its command-line exit status.
+    /// Map a failure to its exit status: 2 config, 3 source, 4 render, 5 all sinks failed.
     pub fn exit_code(&self) -> i32 {
         match self {
             Self::Config(_) => 2,
@@ -135,12 +135,12 @@ impl RunError {
     }
 }
 
-/// Product identity supplied by the application.
+/// Name and version of the application producing the report.
 #[derive(Clone, Debug)]
 pub struct ProductInfo {
-    /// Display name supplied by the scanner or theme.
+    /// Application name, `judex` for the binary, passed to the render options.
     pub name: String,
-    /// Schema or component version supplied by the producer.
+    /// Application version, the crate version for the binary.
     pub version: String,
 }
 
@@ -194,22 +194,22 @@ fn load_inputs(cfg: &Config, now: DateTime<Utc>) -> Result<Inputs, RunError> {
     })
 }
 
-/// Descriptions of the serialized template input produced for inspection.
+/// Outcome of [`write_render_data`]: the output file and the report totals.
 #[derive(Debug)]
 pub struct RenderDataSummary {
-    /// Filesystem location of the configured resource.
+    /// File the render data was written to.
     pub path: PathBuf,
-    /// Images included in this scan or vulnerability group.
+    /// Number of images in the render data.
     pub images: usize,
-    /// Normalized vulnerabilities associated with scanned images.
+    /// Number of findings in the render data.
     pub findings: usize,
 }
 
-/// Write display-ready JSON for template iteration.
+/// Write the template input as pretty-printed JSON to `out`, for template iteration.
 ///
 /// # Errors
 ///
-/// Fails if scan collection, theme loading, serialization, or writing the destination fails.
+/// Fails for the reasons [`render_data`] does, or if serialising or writing `out` fails.
 pub fn write_render_data(
     cfg: &Config,
     now: DateTime<Utc>,
@@ -231,7 +231,7 @@ pub fn write_render_data(
 ///
 /// # Errors
 ///
-/// Fails if scan collection, theme loading, or template-data serialization fails.
+/// Fails if the theme, customer logo, sinks or source cannot be set up, or collection fails.
 pub fn render_data(
     cfg: &Config,
     now: DateTime<Utc>,
@@ -257,7 +257,8 @@ pub fn render_data(
 ///
 /// # Errors
 ///
-/// Fails if inputs or themes cannot be loaded, rendering fails, or every output destination fails.
+/// Fails if the theme, customer logo, sinks or source cannot be set up, collection fails,
+/// JSON serialisation or PDF rendering fails, or no artifact could be stored anywhere.
 pub fn run(
     cfg: &Config,
     now: DateTime<Utc>,
@@ -332,11 +333,11 @@ pub fn run(
     Ok(summary)
 }
 
-/// Validate inputs and summarize scan availability without storing a report.
+/// Load every input as [`run`] does and summarise scan states, without rendering or storing.
 ///
 /// # Errors
 ///
-/// Fails if configuration, theme assets, or scan data cannot be loaded or validated.
+/// Fails if the theme, customer logo, sinks or source cannot be set up, or collection fails.
 pub fn check(cfg: &Config, product: &ProductInfo) -> Result<String, RunError> {
     let inputs = load_inputs(cfg, Utc::now())?;
     let mut scanned = 0usize;

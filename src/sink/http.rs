@@ -14,7 +14,7 @@ pub struct HttpSink {
     client: HttpClient,
 }
 impl HttpSink {
-    /// Configure an upload destination with its endpoint, headers, encoding, and transport.
+    /// Create an upload sink; `{filename}` in `url` is replaced by the encoded artifact name.
     pub fn new(
         url: String,
         method: String,

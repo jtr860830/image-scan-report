@@ -1,17 +1,10 @@
-//! Scanner input sources and shared file parsing errors.
-/// Shared discovery, timestamps, and stable deduplication.
+//! Scan sources (Harbor, NeuVector, Trivy files, NeuVector files) behind [`ScanSource`].
 pub mod files;
-/// Harbor v2 API source.
 pub mod harbor;
-/// Shared synchronous HTTP transport for API scan sources.
 pub mod http;
-/// NeuVector report types shared by file and controller API sources.
 pub mod neuvector;
-/// Provide neuvector api types and operations.
 pub mod neuvector_api;
-/// Provide neuvector file types and operations.
 pub mod neuvector_file;
-/// Provide trivy file types and operations.
 pub mod trivy_file;
 
 use crate::model::ScanSet;
@@ -21,38 +14,41 @@ use std::path::PathBuf;
 #[derive(thiserror::Error, Debug)]
 #[must_use]
 pub enum SourceError {
-    /// The input directory cannot be read.
+    /// The input directory is missing, is not a directory, or cannot be traversed.
     #[error("input directory {0} is not readable: {1}")]
     Unreadable(PathBuf, std::io::Error),
-    /// No supported scan result files were found in the directory.
+    /// No file in the directory was a recognised, parseable scan report.
     #[error("no scan results found in {0}")]
     Empty(PathBuf),
-    /// The source returned no usable image records.
+    /// An API source found no images in its scope, which the message names.
     #[error("no images found in {0}")]
     NoImages(String),
-    /// Preserve an unrecognized value or an additional diagnostic.
+    /// Free-form message, such as an HTTP failure, a missing project, or a NeuVector login problem.
     #[error("{0}")]
     Other(String),
 }
-/// Provider of normalized image and vulnerability records.
+/// Source of normalised images and findings for one configured scope.
 pub trait ScanSource {
-    /// Describe the configured endpoint or directory for diagnostics.
+    /// One-line label for logs and `check` output, such as `Harbor host: project`.
     fn describe(&self) -> String;
-    /// Collect normalized images and findings from the configured source.
+    /// Collect, normalise and deduplicate every image and finding in scope.
     ///
     /// # Errors
     ///
-    /// Fails when input cannot be read or decoded, configuration is invalid, or a downstream operation fails.
+    /// File sources fail if the directory is unreadable or holds no usable report. API sources
+    /// fail on TLS setup, authentication or any failed listing request (including a missing
+    /// Harbor project or NeuVector registry), on NeuVector login problems, or when the scope
+    /// has no images; other per-image request failures mark that image as failed instead.
     fn fetch(&self) -> Result<ScanSet, SourceError>;
 }
-/// Failure to decode JSON or recognize the expected scanner document shape.
+/// Failure to decode one scan report file; the directory walk logs it and skips the file.
 #[derive(thiserror::Error, Debug)]
 #[must_use]
 pub enum ParseError {
-    /// The input is not valid JSON for the expected representation.
+    /// The file is not valid JSON or does not match the expected field types.
     #[error("invalid JSON: {0}")]
     Json(#[from] serde_json::Error),
-    /// The JSON document does not have the required scanner structure.
+    /// The JSON lacks a required value, such as Trivy's `ArtifactName`.
     #[error("{0}")]
     Shape(String),
 }

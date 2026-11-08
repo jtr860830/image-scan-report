@@ -1,24 +1,27 @@
-//! Normalized vulnerability severity bands.
+//! Normalised vulnerability severity bands.
 use serde::{Deserialize, Serialize};
 
-/// Normalized vulnerability risk bands ordered from critical to unrated.
+/// Normalised severity band, ordered `Unrated < Low < Medium < High < Critical`.
+///
+/// The derived `Ord` follows declaration order, so the views sort descending to list the
+/// worst findings first and use `max` to keep the worst band of a group.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Copy, Hash)]
 #[serde(rename_all = "lowercase")]
 pub enum Severity {
-    /// No recognized severity evidence is available.
+    /// No usable CVSS score and no recognised scanner label.
     Unrated,
-    /// The vulnerability has low impact.
+    /// CVSS score from 0.1 to 3.9, or the scanner label `low`.
     Low,
-    /// The vulnerability has moderate impact.
+    /// CVSS score from 4.0 to 6.9, or the scanner label `medium`.
     Medium,
-    /// The vulnerability has high impact.
+    /// CVSS v3 score from 7.0 to 8.9, any CVSS v2 score from 7.0, or the label `high`.
     High,
-    /// The vulnerability has critical impact.
+    /// CVSS v3 score of 9.0 or more, or the scanner label `critical`.
     Critical,
 }
 
 impl Severity {
-    /// Select the English display label for a severity band.
+    /// Return the English label, such as `Critical`; lowercased, it is the template severity key.
     pub fn label(self) -> &'static str {
         match self {
             Self::Critical => "Critical",

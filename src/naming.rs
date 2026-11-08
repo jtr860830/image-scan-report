@@ -1,8 +1,8 @@
-//! Stable report artifact names.
+//! Deterministic file names for report artifacts.
 use crate::model::SourceKind;
 use chrono::NaiveDate;
 
-/// Normalize text into a safe filename component.
+/// Reduce text to lowercase ASCII letters and digits joined by single hyphens, or `report`.
 #[must_use]
 pub fn slug(s: &str) -> String {
     let mut result = String::new();
@@ -25,7 +25,7 @@ pub fn slug(s: &str) -> String {
     }
 }
 
-/// Compose a deterministic artifact basename from scope, source kind, and date.
+/// Compose the artifact basename `<slug(scope)>-<source kind>-<YYYY-MM-DD>`, without extension.
 #[must_use]
 pub fn artifact_base_name(scope: &str, kind: SourceKind, date: NaiveDate) -> String {
     let kind = match kind {

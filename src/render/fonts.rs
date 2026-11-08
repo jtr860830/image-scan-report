@@ -3,10 +3,10 @@
 use typst::foundations::Bytes;
 use typst::text::{Font, FontBook, FontInfo};
 
-/// Font family names available to report templates.
+/// Family names that theme font lists may use; all are embedded in the binary.
 pub const FAMILIES: [&str; 3] = ["Inter", "Noto Sans TC", "Maple Mono NL"];
 
-/// Return the bundled files in a stable order, independent of the host system.
+/// Return the embedded font files as `(file name, bytes)` pairs in a fixed order.
 pub fn embedded_fonts() -> &'static [(&'static str, &'static [u8])] {
     &[
         (
@@ -44,7 +44,7 @@ pub fn embedded_fonts() -> &'static [(&'static str, &'static [u8])] {
     ]
 }
 
-/// Build a font book from every face in the bundled files.
+/// Index every face in the embedded font files.
 pub fn font_book() -> FontBook {
     let infos: Vec<FontInfo> = embedded_fonts()
         .iter()

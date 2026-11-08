@@ -2,44 +2,47 @@
 
 use crate::model::{Severity, SeverityBasis};
 
-/// Validated CVSS v3 and v2 measurements from one vendor source.
+/// CVSS v3 and v2 scores from one vendor source, already passed through [`clean_score`].
 pub struct CvssScores {
-    /// CVSS v3 score in the inclusive range zero to ten. None indicates that the value is unavailable.
+    /// CVSS v3 score, rounded to one decimal and greater than zero, as reported.
     pub v3: Option<f32>,
-    /// CVSS v2 score in the inclusive range zero to ten. None indicates that the value is unavailable.
+    /// CVSS v2 score, rounded to one decimal and greater than zero, as reported.
     pub v2: Option<f32>,
 }
 
-/// Vendor CVSS measurements and an optional scanner severity label.
+/// Vendor CVSS scores and the scanner's severity label for one vulnerability.
 pub struct ScoreInput<'a> {
-    /// CVSS measurements indexed by their vendor source names.
+    /// `(vendor, scores)` pairs; `nvd` is preferred, then `redhat`, then others by name.
     pub cvss: &'a [(String, CvssScores)],
-    /// Raw severity label supplied by the scanner. None indicates that the value is unavailable.
+    /// Scanner's raw severity label, used when no source has a usable score.
     pub scanner_label: Option<&'a str>,
 }
 
 /// Selected severity and the score evidence that determined it.
 pub struct Classification {
-    /// Normalized vulnerability severity band.
+    /// Selected severity band.
     pub severity: Severity,
-    /// Rule that determined the effective severity.
+    /// Evidence that selected the band.
     pub basis: SeverityBasis,
-    /// CVSS v3 score in the inclusive range zero to ten, or None when unavailable.
+    /// CVSS v3 score of the selected source as cleaned; `None` unless v3 decided.
     pub score_v3: Option<f32>,
-    /// CVSS v2 score in the inclusive range zero to ten, or None when unavailable.
+    /// CVSS v2 score of the selected source as cleaned; `None` when the label decided.
     pub score_v2: Option<f32>,
-    /// Vendor source selected for the effective CVSS score. None indicates that the value is unavailable.
+    /// Vendor key of the selected source; `None` when the label decided or nothing did.
     pub score_source: Option<String>,
 }
 
-/// Keep finite CVSS scores in the inclusive range from zero to ten.
+/// Round a raw CVSS score to one decimal, dropping missing, non-finite and non-positive
+/// values.
+///
+/// Scores are not capped, so a value above 10 passes through as reported.
 #[must_use]
 pub fn clean_score(raw: Option<f64>) -> Option<f32> {
     raw.map(|score| ((score * 10.0).round() / 10.0) as f32)
         .filter(|score| score.is_finite() && *score > 0.0)
 }
 
-/// Classify a validated CVSS v3 score by its severity thresholds.
+/// Band a CVSS v3 score: 9.0 or more is critical, anything lower as [`band_v2`].
 #[must_use]
 pub fn band_v3(score: f32) -> Severity {
     if score >= 9.0 {
@@ -49,7 +52,7 @@ pub fn band_v3(score: f32) -> Severity {
     }
 }
 
-/// Classify a validated CVSS v2 score by its severity thresholds.
+/// Band a CVSS v2 score: high from 7.0, medium from 4.0, low above zero, else unrated.
 #[must_use]
 pub fn band_v2(score: f32) -> Severity {
     if score >= 7.0 {
@@ -63,7 +66,7 @@ pub fn band_v2(score: f32) -> Severity {
     }
 }
 
-/// Recognize scanner severity labels, ignoring letter case.
+/// Map `critical`, `high`, `medium` or `low` in any case to a band; other labels give `None`.
 #[must_use]
 pub fn label_to_severity(label: &str) -> Option<Severity> {
     match label.to_ascii_lowercase().as_str() {
@@ -83,7 +86,9 @@ fn source_priority(source: &str) -> (u8, &str) {
     }
 }
 
-/// Choose a severity using CVSS v3, CVSS v2, then the scanner label.
+/// Choose a severity from the preferred v3 score, else the preferred v2 score, else the label.
+///
+/// Sources are preferred in the order `nvd`, `redhat`, then the others by name.
 #[must_use]
 pub fn classify(input: &ScoreInput) -> Classification {
     // Select across v3 sources first, regardless of any v2 source's priority.
@@ -131,18 +136,18 @@ pub fn classify(input: &ScoreInput) -> Classification {
     }
 }
 
-/// CVSS fields shared by Trivy and Harbor reports.
+/// Per-vendor `V3Score` and `V2Score` as found in Trivy and Harbor `CVSS` maps.
 #[derive(Default, Clone, serde::Deserialize)]
 pub struct CvssSourceScores {
-    /// Raw CVSS v3 measurement supplied by the scanner. None indicates that the value is unavailable.
+    /// Raw `V3Score`, before [`clean_score`].
     #[serde(rename = "V3Score")]
     pub v3_score: Option<f64>,
-    /// Raw CVSS v2 measurement supplied by the scanner. None indicates that the value is unavailable.
+    /// Raw `V2Score`, before [`clean_score`].
     #[serde(rename = "V2Score")]
     pub v2_score: Option<f64>,
 }
 
-/// Collect vendor CVSS scores in deterministic source order.
+/// Clean each vendor's scores with [`clean_score`], in vendor-name order.
 #[must_use]
 pub fn cvss_from_map(
     map: &std::collections::BTreeMap<String, CvssSourceScores>,

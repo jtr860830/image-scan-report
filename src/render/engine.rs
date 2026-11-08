@@ -43,21 +43,22 @@ const SOURCES: &[(&str, &str)] = &[
     ),
 ];
 
-/// Failure to build template data, compile templates, or encode rendered output.
+/// Failure to serialise template input, compile templates, or encode rendered output.
 #[derive(thiserror::Error, Debug)]
+#[must_use]
 pub enum RenderError {
-    /// Embedded template compilation failed.
+    /// Typst compilation failed; the message lists `file:line: message` diagnostics.
     #[error("template compilation failed:\n{0}")]
     Compile(String),
-    /// PDF export failed after template compilation.
+    /// PDF export failed after compilation.
     #[error("PDF export failed: {0}")]
     Pdf(String),
-    /// Template input conversion or preview encoding failed.
+    /// Serialising the template input, converting the timestamp, or a preview request failed.
     #[error("{0}")]
     Data(String),
 }
 
-/// Reusable embedded template sources for deterministic document compilation.
+/// Typst renderer holding the embedded template sources.
 pub struct Renderer {
     sources: Vec<(&'static str, String)>,
 }
@@ -67,7 +68,8 @@ impl Default for Renderer {
     }
 }
 impl Renderer {
-    /// Initialize the embedded report templates and attempt to configure a single rendering thread.
+    /// Load the embedded templates and, once per process, try to limit the global rayon pool
+    /// to one thread.
     pub fn new() -> Self {
         static POOL: Once = Once::new();
         POOL.call_once(|| {
@@ -178,15 +180,13 @@ impl Renderer {
             })
     }
 
-    /// Compile the report templates and export a PDF with the supplied metadata.
+    /// Compile the templates with `data` and the logos, and export a PDF stamped with
+    /// `generated_at`.
     ///
     /// # Errors
     ///
-    /// Fails if template compilation, generation-time conversion, or PDF export fails.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the renderer sources omit the required `report.typ` template.
+    /// Fails if `data` cannot be serialised, compilation fails, `generated_at` is outside
+    /// Typst's date range, or PDF export fails.
     pub fn render_pdf(
         &self,
         data: &RenderData,
@@ -223,15 +223,12 @@ impl Renderer {
         .map_err(|diagnostics| RenderError::Pdf(self.diagnostics(&diagnostics)))
     }
 
-    /// Render a one-based page number at the requested pixels per inch.
+    /// Render one page, numbered from one, as PNG at `ppi` pixels per inch.
     ///
     /// # Errors
     ///
-    /// Fails if pixels per inch are invalid, the page is out of range, template compilation fails, or PNG encoding fails.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the renderer sources omit the required `report.typ` template.
+    /// Fails if `ppi` is not finite and positive, compilation fails, `page` is out of range, or
+    /// PNG encoding fails.
     #[cfg(feature = "preview")]
     pub fn render_png(
         &self,

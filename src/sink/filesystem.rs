@@ -4,9 +4,9 @@ use std::fs;
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-/// Artifact destination that writes files atomically within a directory.
+/// Sink that writes each artifact to a temporary file and renames it into place.
 pub struct FilesystemSink {
-    /// Directory containing input scans or generated artifacts.
+    /// Output directory from `output[].path`, created on first write.
     pub dir: PathBuf,
 }
 

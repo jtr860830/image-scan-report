@@ -3,7 +3,7 @@ use super::api::{ExtraAttrs, Platform, ScanOverview, Vuln};
 use crate::model::{Finding, FixStatus, ScanState, ScanStatus};
 use crate::severity::ScoreInput;
 
-/// Join operating system, architecture, and any variant into a platform label.
+/// Format `os/architecture[/variant]`, ignoring an empty variant.
 #[must_use]
 pub fn platform_string(p: &Platform) -> String {
     let mut value = format!("{}/{}", p.os, p.architecture);
@@ -13,11 +13,8 @@ pub fn platform_string(p: &Platform) -> String {
     }
     value
 }
-/// Choose the smallest tag or a shortened digest and append any platform label.
-///
-/// # Panics
-///
-/// Panics only if formatting into an owned string fails.
+/// Build `repository:tag` from the lexicographically smallest tag, or
+/// `repository@<first 12 digest hex digits>` when untagged, plus ` (platform)` if given.
 #[must_use]
 pub fn image_reference(
     repository: &str,
@@ -37,7 +34,7 @@ pub fn image_reference(
     }
     value
 }
-/// Normalize scanner state while retaining available timestamps and failure details.
+/// Map Harbor's `scan_status` to a scan state, with the scan end time and scanner version.
 #[must_use]
 pub fn scan_status(overview: Option<&ScanOverview>) -> ScanStatus {
     let status = overview.map(|o| o.scan_status.as_str()).unwrap_or("");
@@ -59,7 +56,7 @@ pub fn scan_status(overview: Option<&ScanOverview>) -> ScanStatus {
             .and_then(|s| s.version.clone()),
     }
 }
-/// Normalize a Harbor vulnerability and select its effective severity.
+/// Normalise a Harbor vulnerability and select its effective severity.
 #[must_use]
 pub fn finding(v: &Vuln, image_reference: &str) -> Finding {
     let cvss = v
@@ -90,7 +87,8 @@ pub fn finding(v: &Vuln, image_reference: &str) -> Finding {
     }
 }
 
-/// Infer a usable platform from child or single-manifest metadata.
+/// Build a platform label from artifact attributes; `None` if the OS or architecture is
+/// empty or `unknown`.
 #[must_use]
 pub fn platform_from_attrs(attrs: &ExtraAttrs) -> Option<String> {
     let os = attrs

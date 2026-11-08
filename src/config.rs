@@ -7,133 +7,140 @@ use serde::Deserialize;
 
 use crate::model::{Language, Severity};
 
-/// Validated settings for input collection, report generation, and output storage.
+/// Parsed configuration file; [`load`] validates it before returning it.
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
-    /// Colors, fonts, and product branding supplied to report templates.
+    /// Theme override; when omitted, the embedded default theme is used.
     #[serde(default)]
     pub theme: ThemeConfig,
-    /// Scanner identity and origin of the input data.
+    /// Scan source to collect from.
     pub source: SourceConfig,
-    /// Report content or generation settings for this operation.
+    /// Report content, language and enabled formats.
     pub report: ReportConfig,
-    /// Destinations to which generated artifacts are written. An empty list indicates no entries.
+    /// Artifact destinations, each receiving every artifact; `validate` rejects an empty list.
     pub output: Vec<OutputConfig>,
 }
 
-/// Connection or filesystem settings for the selected input source.
+/// Scan source selected by the YAML `type` key (`trivy-files`, `neuvector-files`, `harbor`,
+/// `neuvector`).
 #[derive(Debug, Deserialize)]
 #[serde(tag = "type", rename_all = "kebab-case", deny_unknown_fields)]
 pub enum SourceConfig {
-    /// Read Trivy scan reports from a directory.
+    /// Read Trivy JSON reports from a directory tree.
     TrivyFiles {
-        /// Filesystem location of the configured resource.
+        /// Directory searched recursively for Trivy `*.json` reports.
         path: PathBuf,
     },
-    /// Read NeuVector scan results from a directory.
+    /// Read NeuVector scanner JSON results from a directory tree.
     NeuvectorFiles {
-        /// Filesystem location of the configured resource.
+        /// Directory searched recursively for NeuVector scanner `*.json` results.
         path: PathBuf,
     },
     /// Collect scan data through the Harbor v2 API.
     Harbor {
-        /// Endpoint or external product URL used by this configuration.
+        /// Harbor base URL; `validate` requires `http` or `https` without embedded credentials.
         url: String,
-        /// Harbor project filter; None includes all accessible projects.
+        /// Harbor project to report on; `None` walks every project the account can list.
         project: Option<String>,
-        /// Account name used for API authentication.
+        /// Harbor account name, sent with HTTP Basic authentication.
         username: String,
-        /// Environment variable containing the API password.
+        /// Name of the environment variable holding the Harbor password, read when connecting.
         password_env: String,
-        /// Optional PEM root certificate bundle; None uses the built-in roots.
+        /// PEM bundle that replaces the built-in roots; cannot be combined with
+        /// `insecure_skip_verify`.
         ca_file: Option<PathBuf>,
-        /// Maximum HTTP request duration in seconds.
+        /// Timeout for each HTTP request in seconds; defaults to 30 and must be greater than zero.
         #[serde(default = "default_timeout")]
         timeout_secs: u64,
-        /// Whether to disable TLS certificate verification.
+        /// Whether to skip TLS certificate verification, with a warning; defaults to `false`.
         #[serde(default)]
         insecure_skip_verify: bool,
     },
-    /// Collect scan data through the NeuVector API.
+    /// Collect scan data through the NeuVector controller REST API.
     Neuvector {
-        /// Endpoint or external product URL used by this configuration.
+        /// NeuVector controller API base URL; `validate` requires `http` or `https` without
+        /// embedded credentials.
         url: String,
-        /// Registry name used to scope NeuVector API requests.
+        /// Name of the NeuVector registry configuration to report on.
         registry: String,
-        /// Account name used for API authentication.
+        /// NeuVector account name, sent in the login request.
         username: String,
-        /// Environment variable containing the API password.
+        /// Name of the environment variable holding the NeuVector password, read when connecting.
         password_env: String,
-        /// Optional PEM root certificate bundle; None uses the built-in roots.
+        /// PEM bundle that replaces the built-in roots; cannot be combined with
+        /// `insecure_skip_verify`.
         ca_file: Option<PathBuf>,
-        /// Maximum HTTP request duration in seconds.
+        /// Timeout for each HTTP request in seconds; defaults to 30 and must be greater than zero.
         #[serde(default = "default_timeout")]
         timeout_secs: u64,
-        /// Whether to disable TLS certificate verification.
+        /// Whether to skip TLS certificate verification, with a warning; defaults to `false`.
         #[serde(default)]
         insecure_skip_verify: bool,
     },
 }
 
-/// Content limits, localization, and artifact formats for report generation.
+/// Content limits, language, branding and artifact formats of the report.
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ReportConfig {
-    /// Severity bands whose findings include descriptions in the report. An empty list indicates no entries.
+    /// Bands whose findings show their description in the image tables; defaults to critical
+    /// and high.
     #[serde(default = "default_describe_severities")]
     pub describe_severities: Vec<Severity>,
-    /// Maximum number of characters shown in each finding description.
+    /// Characters kept from each description before `…` is appended; defaults to 600, minimum 50.
     #[serde(default = "default_description_chars")]
     pub description_chars: usize,
-    /// Maximum number of remediation groups displayed as cards.
+    /// Remediation groups shown as cards before the rest move to a table; defaults to 30.
     #[serde(default = "default_remediation_cards")]
     pub remediation_cards: usize,
-    /// Language selected for report labels and explanatory text.
+    /// Report language, `en` or `zh-TW`, selecting the bundled strings.
     pub language: Language,
-    /// Organization name displayed on the report cover.
+    /// Organisation name printed on the cover; must not be blank.
     pub organization: String,
-    /// Optional branding asset to embed in the report. None indicates that the value is unavailable.
+    /// Customer logo (`.png` or `.svg`) printed on the cover; `None` prints no customer logo.
     pub logo: Option<PathBuf>,
-    /// Scan age threshold in days used to flag stale images.
+    /// Successful scans older than this many days are listed as stale; defaults to 30.
     #[serde(default = "default_stale")]
     pub stale_after_days: u32,
-    /// Whether to emit the normalized report as JSON.
+    /// Whether to also store the normalised report as a JSON artifact; defaults to `false`.
     #[serde(default)]
     pub json: bool,
-    /// Whether to produce a PDF report.
+    /// Whether to render the PDF artifact; defaults to `true`.
     #[serde(default = "default_pdf")]
     pub pdf: bool,
 }
 
-/// Settings for a filesystem or HTTP artifact destination.
+/// Artifact destination selected by the YAML `type` key (`filesystem` or `http`).
 #[derive(Debug, Deserialize)]
 #[serde(tag = "type", rename_all = "kebab-case", deny_unknown_fields)]
 pub enum OutputConfig {
-    /// Store artifacts in a local directory.
+    /// Write artifacts atomically into a local directory.
     Filesystem {
-        /// Filesystem location of the configured resource.
+        /// Directory that receives the artifacts, created if missing.
         path: PathBuf,
     },
-    /// Upload artifacts to an HTTP endpoint.
+    /// Upload each artifact to an HTTP endpoint.
     Http {
-        /// Endpoint or external product URL used by this configuration.
+        /// Upload URL; `{filename}` is replaced by the encoded artifact name. `validate` requires
+        /// `http` or `https` with a host and no credentials.
         url: String,
-        /// HTTP upload method, restricted to PUT or POST.
+        /// Upload method, `PUT` (default) or `POST` in any case; `load` uppercases it.
         #[serde(default = "default_put")]
         method: String,
-        /// Additional HTTP header names and values attached to uploads.
+        /// Extra request headers; `load` expands `${VAR}` references in their values.
         #[serde(default)]
         headers: BTreeMap<String, String>,
-        /// Encoding used to upload each artifact.
+        /// Body encoding of each upload; defaults to `raw`.
         #[serde(default)]
         mode: HttpMode,
-        /// Optional PEM root certificate bundle; None uses the built-in roots.
+        /// PEM bundle that replaces the built-in roots; cannot be combined with
+        /// `insecure_skip_verify`.
         ca_file: Option<PathBuf>,
-        /// Whether to disable TLS certificate verification.
+        /// Whether to skip TLS certificate verification, with a warning; defaults to `false`.
         #[serde(default)]
         insecure_skip_verify: bool,
-        /// Maximum HTTP request duration in seconds.
+        /// Timeout for each HTTP request in seconds; defaults to 30 and must be greater than zero.
         #[serde(default = "default_timeout")]
         timeout_secs: u64,
     },
@@ -143,27 +150,27 @@ pub enum OutputConfig {
 #[derive(Debug, Clone, Copy, Default, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum HttpMode {
-    /// Send artifact bytes directly as the request body.
+    /// Send the artifact bytes as the body, with a `Content-Disposition` header.
     #[default]
     Raw,
-    /// Wrap the artifact in a multipart form upload.
+    /// Send a `multipart/form-data` body carrying the artifact in the `file` field.
     Multipart,
 }
 
-/// Failure to read, decode, or validate configuration settings.
+/// Failure to read, decode, or validate the configuration or the inputs it names.
 #[derive(thiserror::Error, Debug)]
 #[must_use]
 pub enum ConfigError {
-    /// A required resource could not be read.
+    /// The configuration file could not be read.
     #[error("cannot read {0}: {1}")]
     Read(PathBuf, std::io::Error),
-    /// A resource could not be decoded into the expected format.
+    /// The YAML could not be decoded into [`Config`].
     #[error("invalid configuration: {0}")]
     Parse(String),
-    /// A required environment variable is absent.
+    /// A referenced environment variable is unset or not valid Unicode.
     #[error("environment variable {0} is not set")]
     MissingEnv(String),
-    /// A decoded configuration value violates a validation constraint.
+    /// A value failed validation, or the theme, logo or TLS setup it names is unusable.
     #[error("{0}")]
     Invalid(String),
 }
@@ -202,7 +209,8 @@ fn default_timeout() -> u64 {
 ///
 /// # Errors
 ///
-/// Fails if the file cannot be read or decoded, settings fail validation, or a header references a missing environment variable.
+/// Fails if the file cannot be read or decoded, [`Config::validate`] rejects it, or a header
+/// references an unset environment variable.
 pub fn load(path: &Path) -> Result<Config, ConfigError> {
     let yaml =
         std::fs::read_to_string(path).map_err(|error| ConfigError::Read(path.to_owned(), error))?;
@@ -266,11 +274,15 @@ pub fn secret_from_env(name: &str) -> Result<String, ConfigError> {
 }
 
 impl Config {
-    /// Check that configuration values satisfy the pipeline constraints.
+    /// Check the constraints that deserialisation cannot express.
     ///
     /// # Errors
     ///
-    /// Fails when configuration cannot be read, decoded, or validated, or a required environment variable is missing.
+    /// Returns [`ConfigError::Invalid`] if a source or HTTP output URL is not a credential-free
+    /// `http` or `https` URL, `ca_file` is combined with `insecure_skip_verify`, a timeout is
+    /// zero, `description_chars` is below 50, `output` is empty, neither `pdf` nor `json` is
+    /// enabled, an output method is not PUT or POST, a PUT output lacks `{filename}` while
+    /// `json` is enabled, or `organization` is blank.
     pub fn validate(&self) -> Result<(), ConfigError> {
         if let SourceConfig::Harbor {
             url,
@@ -378,10 +390,11 @@ impl Config {
     }
 }
 
-/// Optional directory override for the embedded report theme.
+/// Optional theme directory that replaces the embedded report theme.
 #[derive(Deserialize, Debug, Clone, PartialEq, Default)]
 #[serde(deny_unknown_fields)]
 pub struct ThemeConfig {
-    /// Filesystem location of the configured resource. None indicates that the value is unavailable.
+    /// Directory holding `theme.toml` and an optional `logo.png` or `logo.svg`; `None` uses the
+    /// embedded default theme.
     pub path: Option<PathBuf>,
 }

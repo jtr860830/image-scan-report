@@ -1,18 +1,16 @@
 //! Report artifacts and output destinations.
-/// Atomic filesystem artifact storage.
 pub mod filesystem;
-/// HTTP artifact uploads.
 pub mod http;
 
 use crate::config::{ConfigError, OutputConfig};
 
-/// Encoded report bytes with a destination filename and media type.
+/// One encoded report file, handed to every configured sink.
 pub struct Artifact {
-    /// Artifact basename, including its format extension.
+    /// Basename such as `<scope>-<kind>-<date>.pdf`, built with [`crate::naming`].
     pub file_name: String,
-    /// MIME type describing the encoded artifact.
+    /// MIME type: `application/pdf` or `application/json`.
     pub media_type: &'static str,
-    /// Raw bytes of the encoded artifact or branding asset. An empty list indicates no entries.
+    /// Encoded file contents.
     pub bytes: Vec<u8>,
 }
 
@@ -20,27 +18,29 @@ pub struct Artifact {
 #[derive(thiserror::Error, Debug)]
 #[must_use]
 pub enum SinkError {
-    /// A filesystem operation failed.
+    /// Creating, writing or renaming a file in a filesystem sink failed.
     #[error("{0}")]
     Io(#[from] std::io::Error),
-    /// Preserve an unrecognized value or an additional diagnostic.
+    /// Free-form message, such as a failed HTTP upload or an unusable system clock.
     #[error("{0}")]
     Other(String),
 }
 
 /// Destination capable of storing encoded report artifacts.
 pub trait ReportSink {
-    /// Describe the configured endpoint or directory for diagnostics.
+    /// One-line label for logs and the run summary, such as `Filesystem: /out`.
     fn describe(&self) -> String;
-    /// Write an artifact to the configured destination.
-    ///
-    /// # Panics
-    ///
-    /// In debug builds, HTTP destinations panic if a filename contains quotes or line breaks.
+    /// Write one artifact; a filesystem sink replaces any file of the same name.
     ///
     /// # Errors
     ///
-    /// Fails when input cannot be read or decoded, configuration is invalid, or a downstream operation fails.
+    /// Filesystem sinks fail if the directory cannot be created or the temporary file cannot be
+    /// written or renamed into place. HTTP sinks fail if the request cannot be built or sent,
+    /// or the server answers with a status of 300 or more.
+    ///
+    /// # Panics
+    ///
+    /// In debug builds, the HTTP sink panics if `file_name` contains a quote or a line break.
     fn store(&self, artifact: &Artifact) -> Result<(), SinkError>;
 }
 

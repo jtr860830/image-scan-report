@@ -4,40 +4,40 @@ use crate::severity::{CvssScores, ScoreInput};
 use chrono::{DateTime, Utc};
 use serde::Deserialize;
 
-/// NeuVector vulnerability fields preserved for normalization.
+/// NeuVector vulnerability record, shared by scanner files and controller reports.
 #[derive(Deserialize)]
 pub struct NvVulnerability {
-    /// Display name supplied by the scanner or theme.
+    /// CVE identifier, which becomes `Finding::id`.
     pub name: String,
-    /// Normalized vulnerability severity band.
+    /// NeuVector's raw severity label, passed to `classify` and kept as `scanner_severity`.
     pub severity: String,
-    /// Effective CVSS score selected for severity classification. None indicates that the value is unavailable.
+    /// NeuVector's CVSS v2 score, used when `score_v3` is missing or unusable.
     pub score: Option<f64>,
-    /// CVSS v3 score in the inclusive range zero to ten, or None when unavailable.
+    /// NeuVector's CVSS v3 score, preferred by `classify`.
     pub score_v3: Option<f64>,
-    /// Affected software package identifier supplied by NeuVector.
+    /// Name of the affected package.
     pub package_name: String,
-    /// Installed software version supplied by NeuVector.
+    /// Installed package version.
     pub package_version: String,
-    /// Package version containing the fix, when the scanner supplies one. None indicates that the value is unavailable.
+    /// Fixed version; `None` or empty when NeuVector lists no fix.
     pub fixed_version: Option<String>,
-    /// External advisory URL supplied by the scanner. None indicates that the value is unavailable.
+    /// Advisory URL; an empty string is dropped.
     pub link: Option<String>,
-    /// Human-readable explanation of the vulnerability. None indicates that the value is unavailable.
+    /// Advisory text; `None` becomes an empty description.
     pub description: Option<String>,
-    /// Advisory publication time in Unix seconds. None indicates that the value is unavailable.
+    /// Advisory publication time in Unix seconds; zero means unknown.
     pub published_timestamp: Option<i64>,
-    /// File path identifying the affected package, or None when the scanner omits it.
+    /// Path of the file that holds the package, when NeuVector reports it; not read.
     pub file_name: Option<String>,
 }
 
-/// Convert optional Unix seconds to UTC, using None for missing or invalid timestamps.
+/// Convert Unix seconds to UTC, treating `None`, zero and out-of-range values as unknown.
 pub fn nv_timestamp(secs: Option<i64>) -> Option<DateTime<Utc>> {
     secs.filter(|s| *s != 0)
         .and_then(|s| DateTime::from_timestamp(s, 0))
 }
 
-/// Normalize a NeuVector vulnerability for the supplied image reference.
+/// Normalise a NeuVector vulnerability for `image_reference`, under the `neuvector` source.
 pub fn finding_from_nv(v: &NvVulnerability, image_reference: &str) -> Finding {
     let cvss = [(
         "neuvector".into(),
@@ -69,7 +69,8 @@ pub fn finding_from_nv(v: &NvVulnerability, image_reference: &str) -> Finding {
     }
 }
 
-/// Compose the same image reference for scanner files and controller results.
+/// Build `registry/repository[:tag]`, without the registry's scheme or trailing slashes, so
+/// file and API sources produce the same reference.
 pub fn compose_reference(registry: &str, repository: &str, tag: &str) -> String {
     let registry = registry
         .strip_prefix("https://")

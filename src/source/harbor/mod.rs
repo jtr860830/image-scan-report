@@ -1,7 +1,5 @@
 //! Harbor v2 API source.
-/// Serde mirrors of Harbor API responses; unrelated fields are ignored.
 pub mod api;
-/// Conversion of Harbor responses into scanner-independent rows.
 pub mod map;
 use super::http::{Auth, HttpClient, HttpError};
 use super::{ScanSource, SourceError};
@@ -10,23 +8,23 @@ use api::{Artifact, Project, Repository, Scanner, VulnReport};
 use serde::de::DeserializeOwned;
 use std::collections::{BTreeMap, BTreeSet};
 
-/// Connection fields kept independent of pipeline configuration.
+/// Connection settings for [`HarborSource::from_config`], apart from the password.
 pub struct HarborParams {
-    /// Endpoint or external product URL used by this configuration.
+    /// Harbor base URL; API paths under `/api/v2.0` are appended to it.
     pub url: String,
-    /// Harbor project filter; None includes all accessible projects.
+    /// Harbor project to report on; `None` walks every project the account can list.
     pub project: Option<String>,
-    /// Account name used to authenticate API requests.
+    /// Account name for HTTP Basic authentication.
     pub username: String,
 }
 /// Harbor v2 API input with project filtering and authenticated transport.
 pub struct HarborSource {
-    /// API endpoint with trailing slashes removed.
+    /// Harbor base URL with trailing slashes removed.
     pub base_url: String,
-    /// Harbor project filter; None includes all accessible projects.
+    /// Harbor project to report on; `None` walks every project the account can list.
     pub project: Option<String>,
     auth: Auth,
-    /// Shared HTTP transport used for API requests.
+    /// HTTP transport used for every request.
     pub client: HttpClient,
     host: String,
 }

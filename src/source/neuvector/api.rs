@@ -5,122 +5,122 @@ use serde::{Deserialize, Serialize};
 /// Account name and password encoded in a NeuVector login request.
 #[derive(Serialize)]
 pub struct Credentials<'a> {
-    /// Account name used to authenticate API requests.
+    /// NeuVector account name.
     pub username: &'a str,
-    /// Secret credential used to authenticate the request.
+    /// NeuVector account password.
     pub password: &'a str,
 }
-/// NeuVector login payload wrapping account credentials.
+/// Body of `POST /v1/auth`.
 #[derive(Serialize)]
 pub struct AuthRequest<'a> {
-    /// Secret credential used to authenticate the request.
+    /// Account credentials, sent under NeuVector's `password` key.
     pub password: Credentials<'a>,
 }
 /// Session token issued after a successful NeuVector login.
 #[derive(Default, Deserialize)]
 #[serde(default)]
 pub struct TokenInfo {
-    /// Session credential issued by the NeuVector authentication endpoint.
+    /// Token sent as `X-Auth-Token` on later requests.
     pub token: String,
 }
 /// NeuVector login response containing a token or reset-password diagnostic.
 #[derive(Default, Deserialize)]
 #[serde(default)]
 pub struct AuthResponse {
-    /// Session credential issued by the NeuVector authentication endpoint. None indicates that the value is unavailable.
+    /// Issued session; `None` or an empty token fails the fetch.
     pub token: Option<TokenInfo>,
-    /// Whether the API requires a password reset before further requests. None indicates that the value is unavailable.
+    /// `Some(true)` when the account must change its password first, which fails the fetch.
     pub need_to_reset_password: Option<bool>,
-    /// Numeric error code supplied by the API. None indicates that the value is unavailable.
+    /// NeuVector error code; deserialised but not read.
     pub code: Option<i64>,
-    /// Diagnostic message supplied by the API. None indicates that the value is unavailable.
+    /// NeuVector error message; deserialised but not read.
     pub message: Option<String>,
 }
-/// NeuVector response wrapper around registry scan metadata.
+/// Response of `GET /v1/scan/registry/{name}`.
 #[derive(Default, Deserialize)]
 #[serde(default)]
 pub struct RegistrySummary {
-    /// Aggregate scan counts and ranked findings for the report overview.
+    /// Registry configuration, supplying the registry URL and the database facts.
     pub summary: RegistryConfigSummary,
 }
 /// Registry identity and scan progress reported by NeuVector.
 #[derive(Default, Deserialize)]
 #[serde(default)]
 pub struct RegistryConfigSummary {
-    /// Display name supplied by the scanner or theme.
+    /// Name of the registry configuration.
     pub name: String,
-    /// Registry name used to scope NeuVector API requests.
+    /// Registry URL whose host prefixes every image reference.
     pub registry: String,
-    /// Raw status label supplied by the API.
+    /// Registry scan status label; not read.
     pub status: String,
-    /// Version of the scanner vulnerability database. None indicates that the value is unavailable.
+    /// Vulnerability database version, copied to `SourceInfo::db_version`.
     pub cvedb_version: Option<String>,
-    /// Creation timestamp of the scanner vulnerability database. None indicates that the value is unavailable.
+    /// RFC 3339 database build time, copied to `SourceInfo::db_updated_at`.
     pub cvedb_create_time: Option<String>,
-    /// Time at which the registry scan began. None indicates that the value is unavailable.
+    /// RFC 3339 time at which the registry scan began; not read.
     pub started_at: Option<String>,
-    /// Number of successfully scanned images.
+    /// Number of images scanned, as NeuVector counts them; not read.
     pub scanned: u64,
-    /// Number of images whose scans failed.
+    /// Number of images whose scan failed, as NeuVector counts them; not read.
     pub failed: u64,
 }
-/// NeuVector response containing image summary records.
+/// Response of `GET /v1/scan/registry/{name}/images`.
 #[derive(Default, Deserialize)]
 #[serde(default)]
 pub struct RegistryImages {
-    /// Images included in this scan or vulnerability group. An empty list indicates no entries.
+    /// One summary per scanned repository tag.
     pub images: Vec<ImageSummary>,
 }
-/// Severity totals for one image reference.
+/// NeuVector's scan summary of one image in the registry.
 #[derive(Default, Deserialize)]
 #[serde(default)]
 pub struct ImageSummary {
-    /// Repository path within the registry.
+    /// Repository path, joined to the registry host to form the image reference.
     pub repository: String,
-    /// Tag used to identify the repository image.
+    /// Image tag; empty when the image is untagged.
     pub tag: String,
-    /// Scanner identifier used to retrieve image details.
+    /// NeuVector image id used to fetch the vulnerability report.
     pub image_id: String,
-    /// Content digest reported by the registry. None indicates that the value is unavailable.
+    /// Manifest digest; an empty string is treated as missing.
     pub digest: Option<String>,
-    /// Operating system identified in the image layers. None indicates that the value is unavailable.
+    /// Base operating system detected by NeuVector.
     pub base_os: Option<String>,
-    /// Image size reported by the scanner, in bytes before display formatting. None indicates that the value is unavailable.
+    /// Image size in bytes.
     pub size: Option<u64>,
-    /// Creation time of the scanned image. None indicates that the value is unavailable.
+    /// RFC 3339 image creation time.
     pub created_at: Option<String>,
-    /// Time of the most recent vulnerability scan. None indicates that the value is unavailable.
+    /// RFC 3339 scan time, preferred over `scanned_timestamp`.
     pub scanned_at: Option<String>,
-    /// Time of the most recent scan in Unix seconds. None indicates that the value is unavailable.
+    /// Scan time in Unix seconds; zero means unknown.
     pub scanned_timestamp: Option<i64>,
-    /// Raw status label supplied by the API. None indicates that the value is unavailable.
+    /// Scan status label, such as `finished`, `scheduled` or `scanning`.
     pub status: Option<String>,
-    /// Raw scanner result label retained for status normalization. None indicates that the value is unavailable.
+    /// Scan result label; with a `finished` status, only `succeeded` counts as success.
     pub result: Option<String>,
-    /// Version of the scanner that generated this result. None indicates that the value is unavailable.
+    /// Scanner version; the most common value becomes the report's scanner version.
     pub scanner_version: Option<String>,
-    /// Scanner state for the image operating-system scan. None indicates that the value is unavailable.
+    /// Status of the operating-system scan; not read.
     pub os_scan_status: Option<String>,
-    /// Number of findings in the critical severity band. None indicates that the value is unavailable.
+    /// Critical finding count as NeuVector reports it; the report recounts from findings.
     pub critical: Option<u64>,
-    /// Number of findings in the high severity band. None indicates that the value is unavailable.
+    /// High finding count as NeuVector reports it; the report recounts from findings.
     pub high: Option<u64>,
-    /// Number of findings in the medium severity band. None indicates that the value is unavailable.
+    /// Medium finding count as NeuVector reports it; the report recounts from findings.
     pub medium: Option<u64>,
-    /// Number of findings in the low severity band. None indicates that the value is unavailable.
+    /// Low finding count as NeuVector reports it; the report recounts from findings.
     pub low: Option<u64>,
 }
-/// NeuVector response wrapper around an optional vulnerability report.
+/// Response of `GET /v1/scan/registry/{name}/image/{id}`.
 #[derive(Default, Deserialize)]
 #[serde(default)]
 pub struct ImageReport {
-    /// Report content or generation settings for this operation. None indicates that the value is unavailable.
+    /// Vulnerability report; `None` marks the image as failed.
     pub report: Option<ReportBody>,
 }
 /// NeuVector vulnerability records contained in an image report.
 #[derive(Default, Deserialize)]
 #[serde(default)]
 pub struct ReportBody {
-    /// Vulnerability records included in this scanner response. None indicates that the value is unavailable. An empty list indicates no entries.
+    /// Vulnerabilities found; `None` marks the image as failed, while an empty list means none.
     pub vulnerabilities: Option<Vec<NvVulnerability>>,
 }

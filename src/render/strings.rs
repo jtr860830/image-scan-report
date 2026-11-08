@@ -4,7 +4,7 @@ use std::collections::BTreeMap;
 
 use crate::model::Language;
 
-/// Every supported translation key, in report order.
+/// Every translation key, in report order; each bundled locale must define exactly these.
 pub const KEYS: &[&str] = &[
     "report_title",
     "cover_scope",
@@ -96,11 +96,12 @@ pub const KEYS: &[&str] = &[
     "scan_state_not_scanned",
 ];
 
-/// Load the bundled translations for a report language.
+/// Parse the bundled `en` or `zh-TW` strings into a key-to-text map.
 ///
 /// # Panics
 ///
-/// Panics if a bundled locale is not valid JSON containing string values.
+/// Panics if the bundled locale file is not a JSON object of strings, which would be a
+/// build defect rather than a caller error.
 pub fn load(language: Language) -> BTreeMap<String, String> {
     let source = match language {
         Language::ZhTw => include_str!("../../strings/zh-TW.json"),

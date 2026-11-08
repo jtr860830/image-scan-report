@@ -6,30 +6,30 @@ use crate::views::{self, SeverityCounts};
 use chrono::SecondsFormat;
 use serde::Serialize;
 use std::collections::{BTreeMap, HashMap};
-/// Display text used when a report value is unavailable.
+/// Em dash shown in place of a missing value.
 pub const PLACEHOLDER: &str = "—";
-/// Content limits and presentation choices supplied to report generation.
+/// Report settings from the `report:` configuration plus the summary ranking sizes.
 #[derive(Clone, Debug)]
 pub struct RenderOptions {
-    /// Severity bands whose findings include descriptions in the report. An empty list indicates no entries.
+    /// Bands whose findings show their description in the image tables.
     pub describe_severities: Vec<Severity>,
-    /// Maximum number of characters shown in each finding description.
+    /// Characters kept from each sanitised description before `…` is appended.
     pub description_chars: usize,
-    /// Maximum number of remediation groups displayed as cards.
+    /// Remediation groups shown as cards; the rest are listed in a table.
     pub remediation_cards: usize,
-    /// Optional organization branding embedded in the report. None indicates that the value is unavailable.
+    /// Customer logo for the cover, from `report.logo`.
     pub customer_logo: Option<super::theme::Logo>,
-    /// Language selected for report labels and explanatory text.
+    /// Report language, written to `Meta::language`.
     pub language: Language,
-    /// Scan age threshold in days used to flag stale images.
+    /// Successful scans older than this many days are listed as stale.
     pub stale_after_days: u32,
-    /// Application name displayed in report branding.
+    /// Application name, written to `Meta::product_name`.
     pub product_name: String,
-    /// Application version displayed in report branding.
+    /// Application version, printed with the theme's product name in the appendix.
     pub product_version: String,
-    /// Maximum number of images included in the summary ranking.
+    /// Number of images in the summary ranking; the pipeline uses 10.
     pub top_images: usize,
-    /// Maximum number of vulnerabilities included in the summary ranking.
+    /// Number of vulnerabilities in the summary ranking; the pipeline uses 15.
     pub top_findings: usize,
 }
 impl Default for RenderOptions {
@@ -48,236 +48,240 @@ impl Default for RenderOptions {
         }
     }
 }
-/// Display-ready sections serialized as input to embedded templates.
+/// Template input, serialised to `data.json` for the Typst templates.
 #[derive(Serialize, Debug, Clone, PartialEq)]
 pub struct RenderData {
-    /// Generation, language, and organization facts displayed in the report.
+    /// Cover and generation facts.
     pub meta: Meta,
-    /// Scanner identity and origin of the input data.
+    /// Scanner provenance as display strings.
     pub source: SourceFacts,
-    /// Human-readable registry, project, or directory scope of the scan.
+    /// Sanitised scope label.
     pub scope: String,
-    /// Aggregate scan counts and ranked findings for the report overview.
+    /// Totals, the severity bar, and the top-ranked images and vulnerabilities.
     pub summary: Summary,
-    /// Grouped package upgrades and counts of findings without fixes.
+    /// Upgrade groups and counts of findings without a fix.
     pub remediation: Remediation,
-    /// Deduplicated vulnerability rows for the inventory table. An empty list indicates no entries.
+    /// One row per vulnerability id, worst first.
     pub inventory: Vec<UniqueRow>,
-    /// Images included in this scan or vulnerability group. An empty list indicates no entries.
+    /// Per-image detail sections, most affected image first.
     pub images: Vec<ImageDetail>,
-    /// Supplementary scan limitations and diagnostic tables.
+    /// Method, failed and stale scans, score sources, and limitation keys.
     pub appendix: Appendix,
-    /// Localized report text indexed by stable template keys.
+    /// Bundled strings for the report language, keyed by [`super::strings::KEYS`].
     pub strings: BTreeMap<String, String>,
-    /// Colors, fonts, and product branding supplied to report templates.
+    /// Theme from [`super::theme::Theme::to_render_value`].
     pub theme: serde_json::Value,
 }
-/// Product, generation, organization, and localization facts for the report cover.
+/// Product, generation, organisation and language facts for the cover.
 #[derive(Serialize, Debug, Clone, PartialEq)]
 pub struct Meta {
-    /// Application name displayed in report branding.
+    /// Sanitised application name.
     pub product_name: String,
-    /// Application version displayed in report branding.
+    /// Sanitised application version.
     pub product_version: String,
-    /// UTC instant at which the report was generated.
+    /// Generation time as RFC 3339 UTC with whole seconds.
     pub generated_at: String,
-    /// Calendar date displayed in the report metadata.
+    /// Generation date as `YYYY-MM-DD`, also part of the PDF identifier.
     pub generated_date: String,
-    /// Language selected for report labels and explanatory text.
+    /// Language tag, `en` or `zh-TW`.
     pub language: String,
-    /// Organization name displayed on the report cover.
+    /// Sanitised organisation name for the cover.
     pub organisation: String,
-    /// Optional branding asset to embed in the report. None indicates that the value is unavailable.
+    /// Template file name of the customer logo, `report-logo.<ext>`; `None` without one.
     pub logo: Option<String>,
 }
 /// Display-ready scanner identity and vulnerability database provenance.
 #[derive(Serialize, Debug, Clone, PartialEq)]
 pub struct SourceFacts {
-    /// Human-readable source label displayed in the report.
+    /// Sanitised source label.
     pub display_name: String,
-    /// Name of the scanner that generated this result.
+    /// Scanner name, or [`PLACEHOLDER`].
     pub scanner_name: String,
-    /// Version of the scanner that generated this result.
+    /// Scanner version, or [`PLACEHOLDER`].
     pub scanner_version: String,
-    /// Version of the vulnerability database used by the scanner.
+    /// Vulnerability database version, or [`PLACEHOLDER`].
     pub db_version: String,
-    /// Timestamp of the scanner vulnerability database update.
+    /// Vulnerability database build time as RFC 3339, or [`PLACEHOLDER`].
     pub db_updated_at: String,
 }
 /// Aggregate counts and rankings used in the report overview.
 #[derive(Serialize, Debug, Clone, PartialEq)]
 pub struct Summary {
-    /// Total number of distinct scanned image records.
+    /// Number of images in the report.
     pub images_total: usize,
-    /// Total number of image-specific vulnerability findings.
+    /// Number of findings across all images.
     pub findings_total: usize,
-    /// Number of distinct vulnerability identifiers.
+    /// Number of distinct vulnerability ids.
     pub unique_total: usize,
-    /// Finding totals grouped by normalized severity.
+    /// Findings per severity band.
     pub counts: SeverityCounts,
-    /// Number of findings with an available fixed version.
+    /// Number of findings that list a fixed version.
     pub fixable: usize,
-    /// Integer percentage of findings with an available fix.
+    /// `fixable` as a percentage of all findings, rounded half up; 0 without findings.
     pub fixable_percent: usize,
-    /// Number of images containing high or critical findings.
+    /// Number of images with at least one high or critical finding.
     pub images_with_high_or_worse: usize,
-    /// Severity distribution segments for the summary chart. An empty list indicates no entries.
+    /// Severity bar segments for each non-empty band, worst first.
     pub bar: Vec<BarSegment>,
-    /// Maximum number of images included in the summary ranking. An empty list indicates no entries.
+    /// Ranked rows of the most affected images, at most `top_images` of them.
     pub top_images: Vec<ImageRow>,
-    /// Maximum number of vulnerabilities included in the summary ranking. An empty list indicates no entries.
+    /// Ranked inventory rows of the worst vulnerabilities, at most `top_findings` of them.
     pub top_findings: Vec<UniqueRow>,
 }
-/// One severity band's label and percentage in the distribution chart.
+/// One severity band's share of the findings in the severity bar.
 #[derive(Serialize, Debug, Clone, PartialEq)]
 pub struct BarSegment {
-    /// Stable severity key used to select styles and translations.
+    /// Lowercase band key, such as `critical`, that selects colours and translated labels.
     pub severity_key: String,
-    /// Localized severity label displayed in the report.
+    /// English band label from `Severity::label`; templates translate via `severity_key`.
     pub severity_label: String,
-    /// Share of the total, expressed as a percentage from zero to one hundred.
+    /// Share of all findings in this band, from 0 to 100.
     pub percent: f32,
 }
-/// Image reference and severity totals used in a summary ranking.
+/// Image reference and severity totals in the summary ranking.
 #[derive(Serialize, Debug, Clone, PartialEq)]
 pub struct ImageRow {
-    /// Canonical image reference used to associate findings with an image.
+    /// Sanitised image reference.
     pub reference: String,
-    /// Finding totals grouped by normalized severity.
+    /// Findings per severity band.
     pub counts: SeverityCounts,
 }
-/// Display-ready deduplicated vulnerability and affected-package details.
+/// Display-ready vulnerability grouped across packages and images.
 #[derive(Serialize, Debug, Clone, PartialEq)]
 pub struct UniqueRow {
-    /// Stable severity key used to select styles and translations.
+    /// Lowercase band key, such as `critical`, that selects colours and translated labels.
     pub severity_key: String,
-    /// Scanner-provided vulnerability identifier.
+    /// Sanitised vulnerability id.
     pub id: String,
-    /// Localized severity label displayed in the report.
+    /// English band label from `Severity::label`, shown as is in the inventory chip.
     pub severity_label: String,
-    /// Effective CVSS score selected for severity classification.
+    /// Highest score to one decimal, or [`PLACEHOLDER`].
     pub score: String,
-    /// Affected package names in this vulnerability group.
+    /// Comma-separated affected packages.
     pub packages: String,
-    /// Package versions that resolve the grouped vulnerabilities.
+    /// Comma-separated fixed versions, or [`PLACEHOLDER`] when none.
     pub fixed_versions: String,
-    /// Images included in this scan or vulnerability group. An empty list indicates no entries.
+    /// Sanitised references of the affected images.
     pub images: Vec<String>,
-    /// Number of affected image references in this group.
+    /// Number of affected images.
     pub image_count: usize,
 }
-/// Upgrade groups and counts of findings without available fixes.
+/// Upgrade groups and counts of findings without an available fix.
 #[derive(Serialize, Debug, Clone, PartialEq)]
 pub struct Remediation {
-    /// Maximum number of remediation cards to display.
+    /// Number of groups shown as cards, from `remediation_cards`.
     pub cards: usize,
-    /// Package and target-version groups that can be remediated together. An empty list indicates no entries.
+    /// Upgrade groups ranked by the critical, high, medium and low counts they resolve.
     pub groups: Vec<RemediationRow>,
-    /// Number of findings without an available fixed version.
+    /// Number of findings without a fixed version.
     pub unfixable_total: usize,
-    /// Counts of findings without fixes, grouped by scanner fix status. An empty list indicates no entries.
+    /// `(fix status, count)` pairs for findings without a fix, most frequent first; a missing
+    /// status counts as `unknown`.
     pub unfixable_by_status: Vec<(String, usize)>,
 }
-/// Display-ready target upgrade and the findings it resolves.
+/// Display-ready package upgrade and the findings it resolves.
 #[derive(Serialize, Debug, Clone, PartialEq)]
 pub struct RemediationRow {
-    /// Affected software package identifier.
+    /// Sanitised package name.
     pub package: String,
-    /// Package version containing the fix, when the scanner supplies one.
+    /// Sanitised target version.
     pub fixed_version: String,
-    /// Severity counts for findings resolved by this upgrade.
+    /// Severity counts of the findings resolved by this upgrade.
     pub resolves: SeverityCounts,
-    /// Images included in this scan or vulnerability group. An empty list indicates no entries.
+    /// Sanitised references of the images containing the package.
     pub images: Vec<String>,
 }
 /// Display-ready metadata and finding rows for one container image.
 #[derive(Serialize, Debug, Clone, PartialEq)]
 pub struct ImageDetail {
-    /// Alternative tags identifying the same image content. An empty list indicates no entries.
+    /// Sanitised tags of the image.
     pub tags: Vec<String>,
-    /// Whether additional image tags should be displayed.
+    /// Whether to list the tags: there are several, or one that differs from the reference's.
     pub show_tags: bool,
-    /// Canonical image reference used to associate findings with an image.
+    /// Sanitised image reference.
     pub reference: String,
-    /// Content digest reported by the registry.
+    /// Manifest digest, or [`PLACEHOLDER`].
     pub digest: String,
-    /// Operating system and architecture label for the image.
+    /// Platform label, or [`PLACEHOLDER`].
     pub platform: String,
-    /// Operating system identified by the scanner.
+    /// Operating system, or [`PLACEHOLDER`].
     pub os: String,
-    /// Image size reported by the scanner, in bytes before display formatting.
+    /// Size string from [`format_size`], such as `12.3 MB`.
     pub size: String,
-    /// Creation time of the scanned image.
+    /// Creation time as RFC 3339, or [`PLACEHOLDER`].
     pub created_at: String,
-    /// Time of the most recent vulnerability scan.
+    /// Scan time as RFC 3339, or [`PLACEHOLDER`].
     pub scanned_at: String,
-    /// Display label describing whether the image scan succeeded.
+    /// Scan state key, `ok`, `failed` or `not_scanned`, that the template maps to a localised
+    /// label.
     pub scan_state: String,
-    /// Display text explaining an unsuccessful scan.
+    /// Sanitised scan error, or [`PLACEHOLDER`].
     pub scan_error: String,
-    /// Version of the scanner that generated this result.
+    /// Scanner version, or [`PLACEHOLDER`].
     pub scanner_version: String,
-    /// Finding totals grouped by normalized severity.
+    /// Findings per severity band for this image.
     pub counts: SeverityCounts,
-    /// Normalized vulnerabilities associated with scanned images. An empty list indicates no entries.
+    /// The image's findings, worst severity first, then highest score, then id.
     pub findings: Vec<FindingRow>,
 }
-/// Display-ready package vulnerability with localized severity and remediation text.
+/// Display-ready finding in an image's detail table.
 #[derive(Serialize, Debug, Clone, PartialEq)]
 pub struct FindingRow {
-    /// Scanner-provided vulnerability identifier.
+    /// Sanitised vulnerability id.
     pub id: String,
-    /// Localized severity label displayed in the report.
+    /// English band label from `Severity::label`, shown as is in the chip.
     pub severity_label: String,
-    /// Stable severity key used to select styles and translations.
+    /// Lowercase band key, such as `critical`, that selects colours and translated labels.
     pub severity_key: String,
-    /// Effective CVSS score selected for severity classification.
+    /// Score to one decimal, v3 or else v2, or [`PLACEHOLDER`].
     pub score: String,
-    /// Affected software package identifier.
+    /// Sanitised package name.
     pub package: String,
-    /// Package version detected in the scanned image.
+    /// Sanitised installed version.
     pub installed_version: String,
-    /// Package version containing the fix, when the scanner supplies one.
+    /// Fixed version, or [`PLACEHOLDER`].
     pub fixed_version: String,
-    /// Scanner assessment of whether a package fix is available.
+    /// Fix status key such as `will_not_fix`, an unknown status verbatim, or [`PLACEHOLDER`].
     pub fix_status: String,
-    /// Original severity label retained alongside the normalized severity.
+    /// Scanner's raw severity label, or [`PLACEHOLDER`]; shown when the label decided the band.
     pub scanner_severity: String,
-    /// Rule that determined the effective severity.
+    /// Severity basis key: `cvss3`, `cvss2`, `scanner_label` or `none`.
     pub basis: String,
-    /// Human-readable explanation of the vulnerability.
+    /// Sanitised description, cut to `description_chars` characters plus `…`.
     pub description: String,
-    /// Whether the finding description should be visible.
+    /// Whether the finding's band is in `describe_severities`.
     pub show_description: bool,
 }
-/// Image reference and diagnostic for an unsuccessful or incomplete scan.
+/// Image whose scan failed or has not completed, for the appendix.
 #[derive(Serialize, Debug, Clone, PartialEq)]
 pub struct FailedImage {
-    /// Canonical image reference used to associate findings with an image.
+    /// Sanitised image reference.
     pub reference: String,
-    /// Normalized scan outcome used to distinguish success, failure, and unscanned images.
+    /// Scan state key, `failed` or `not_scanned`, that the template translates.
     pub state: String,
-    /// Diagnostic explaining an unsuccessful scan or operation.
+    /// Scan error, or [`PLACEHOLDER`].
     pub error: String,
 }
-/// Supplementary tables covering scan gaps, stale images, and severity rules.
+/// Appendix tables: scan gaps, stale scans, the severity rule and score sources.
 #[derive(Serialize, Debug, Clone, PartialEq)]
 pub struct Appendix {
-    /// Images with unsuccessful or incomplete scans. An empty list indicates no entries.
+    /// Images whose scan state is not `ok`.
     pub failed_images: Vec<FailedImage>,
-    /// Image references paired with their scan dates when older than the configured threshold. An empty list indicates no entries.
+    /// `(reference, scan time)` of successful scans with no scan time or one older than
+    /// `stale_after_days`.
     pub stale_images: Vec<(String, String)>,
-    /// Scan age threshold in days used to flag stale images.
+    /// Staleness threshold in days, shown in the section title.
     pub stale_after_days: u32,
-    /// Explanations of the rules used for severity classification. An empty list indicates no entries.
+    /// `(band, CVSS range)` rows describing the banding rule.
     pub severity_rule: Vec<(String, String)>,
-    /// Finding counts grouped by the selected CVSS vendor source. An empty list indicates no entries.
+    /// `(score source, finding count)` pairs, most frequent first; findings without a score
+    /// count under [`PLACEHOLDER`].
     pub score_sources: Vec<(String, usize)>,
-    /// Explanations of incomplete coverage and scanner constraints. An empty list indicates no entries.
+    /// Translation keys of the limitation notes, in display order.
     pub limitations: Vec<String>,
 }
 
-/// Remove control characters that cannot be displayed in the report.
+/// Normalise line endings to `\n` and drop control characters other than newline and tab.
 pub fn sanitize(text: &str) -> String {
     text.replace("\r\n", "\n")
         .replace('\r', "\n")
@@ -287,7 +291,8 @@ pub fn sanitize(text: &str) -> String {
         })
         .collect()
 }
-/// Format a byte count for display, using a placeholder when unknown.
+/// Format a byte count in decimal units with one decimal, such as `1.5 MB`, or
+/// [`PLACEHOLDER`] for `None`.
 pub fn format_size(bytes: Option<u64>) -> String {
     let Some(bytes) = bytes else {
         return PLACEHOLDER.into();
@@ -367,7 +372,7 @@ fn finding_row(f: &Finding, opts: &RenderOptions) -> FindingRow {
         show_description: opts.describe_severities.contains(&f.severity),
     }
 }
-/// Build display-ready report sections from normalized scan data.
+/// Build the template input from a report, its options, bundled strings and the theme.
 pub fn build(
     report: &Report,
     opts: &RenderOptions,

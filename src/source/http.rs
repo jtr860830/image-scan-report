@@ -1,4 +1,4 @@
-//! Shared synchronous HTTP transport for API scan sources.
+//! Synchronous HTTP transport shared by the API scan sources and the HTTP sink.
 use super::SourceError;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
@@ -8,7 +8,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use ureq::tls::{PemItem, RootCerts, TlsConfig};
 
-/// Default HTTP client identification including the package version.
+/// `User-Agent` sent by default: `image-scan-report/<crate version>`.
 pub const USER_AGENT: &str = concat!("image-scan-report/", env!("CARGO_PKG_VERSION"));
 
 /// Maximum accepted response body size in bytes (512 MiB).
@@ -17,11 +17,11 @@ pub const MAX_RESPONSE_BYTES: u64 = 512 * 1024 * 1024;
 /// TLS trust, timeout, and client identification settings for HTTP requests.
 #[derive(Debug, Clone)]
 pub struct HttpOptions {
-    /// Optional PEM certificate bundle; None uses the built-in trust roots.
+    /// PEM bundle that replaces the built-in roots; `None` uses the built-in roots.
     pub ca_file: Option<PathBuf>,
-    /// Whether TLS certificate verification is disabled.
+    /// Whether TLS certificate verification is disabled; conflicts with `ca_file`.
     pub insecure_skip_verify: bool,
-    /// Maximum duration of a request, including connection and response handling.
+    /// Overall deadline for one request attempt, from connecting to reading the body.
     pub timeout: Duration,
     /// HTTP User-Agent value sent with each request.
     pub user_agent: String,
@@ -40,16 +40,16 @@ impl Default for HttpOptions {
 
 /// Authentication credentials attached to an HTTP request.
 pub enum Auth {
-    /// No value or additional policy is supplied.
+    /// Send no `Authorization` header; NeuVector authenticates with `X-Auth-Token` instead.
     None,
-    /// Authenticate with an account name and password.
+    /// HTTP Basic authentication, as used for Harbor.
     Basic {
-        /// Account name used for API authentication.
+        /// Account name encoded into the Basic credential.
         username: String,
-        /// Secret used to authenticate API requests.
+        /// Password encoded into the Basic credential.
         password: String,
     },
-    /// Authenticate with a bearer token.
+    /// Send `Authorization: Bearer <token>`.
     Bearer(String),
 }
 
@@ -66,28 +66,28 @@ pub enum HttpError {
     /// Custom roots and disabled certificate verification were both requested.
     #[error("ca_file and insecure_skip_verify cannot be combined")]
     ConflictingTls,
-    /// The remote service rejected authentication or authorization.
+    /// The server answered 401 or 403.
     #[error("authentication failed for {0}")]
     Unauthorized(String),
-    /// The server returned an unsuccessful HTTP status.
+    /// The server answered with another status of 300 or more; redirects are not followed.
     #[error("{0} returned HTTP {1}")]
     Status(String, u16),
-    /// The URL, headers, method, or request serialization is invalid.
+    /// The URL, method, header values or body could not form a valid request.
     #[error("invalid request {0}: {1}")]
     InvalidRequest(String, String),
     /// The request failed before a usable response was received.
     #[error("request to {0} failed: {1}")]
     Transport(String, String),
-    /// The response could not be decoded or exceeded the size limit.
+    /// The response body exceeded 512 MiB or was not the expected JSON.
     #[error("invalid response from {0}: {1}")]
     Decode(String, String),
 }
 
 /// Decoded HTTP payload paired with response headers.
 pub struct Response<T> {
-    /// Decoded response payload, separate from HTTP headers.
+    /// Decoded response body.
     pub body: T,
-    /// Response header values indexed by their header names.
+    /// Response headers with visible-ASCII values, keyed by lowercase name.
     pub headers: BTreeMap<String, String>,
 }
 
@@ -97,7 +97,7 @@ pub struct HttpClient {
     retry_delays: [Duration; 2],
 }
 
-/// Build an HTTP transport from optional certificate roots and verification settings.
+/// Build an HTTP transport with the default `User-Agent` and the given TLS settings.
 ///
 /// # Errors
 ///
@@ -166,11 +166,12 @@ impl HttpClient {
         self
     }
 
-    /// Send raw bytes, retrying PUT uploads but sending POST uploads only once.
+    /// Upload a body as `content_type`, retrying a PUT up to three attempts; a POST is sent once.
     ///
     /// # Errors
     ///
-    /// Fails for unsupported methods, invalid request metadata, transport or authentication errors, unsuccessful HTTP status, or an oversized response.
+    /// Fails if the method is not PUT or POST, the URL or headers are invalid, the request
+    /// fails in transport, or the server answers with a status of 300 or more.
     pub fn send_bytes(
         &self,
         method: &str,
@@ -202,11 +203,12 @@ impl HttpClient {
         )
     }
 
-    /// Fetch and decode a JSON response, retrying transient failures up to three attempts.
+    /// GET and decode JSON, retrying transport errors and 5xx responses up to three attempts.
     ///
     /// # Errors
     ///
-    /// Fails for invalid request metadata, transport or authentication errors, unsuccessful HTTP status, oversized bodies, or invalid response JSON.
+    /// Fails if the URL or headers are invalid, the last attempt fails in transport, the status
+    /// is 300 or more, the body exceeds 512 MiB, or it is not valid JSON for `T`.
     pub fn get_json<T: DeserializeOwned>(
         &self,
         url: &str,
@@ -220,11 +222,12 @@ impl HttpClient {
         )
     }
 
-    /// Serialize and post JSON, retrying transient failures up to three attempts.
+    /// POST a JSON body and decode the JSON reply, retrying like [`HttpClient::get_json`].
     ///
     /// # Errors
     ///
-    /// Fails if body serialization, request validation, transport, authentication, HTTP status, or response decoding fails.
+    /// Fails if `body` cannot be serialised, or for the same reasons as
+    /// [`HttpClient::get_json`].
     pub fn post_json<B: Serialize, T: DeserializeOwned>(
         &self,
         url: &str,
@@ -242,11 +245,12 @@ impl HttpClient {
         )
     }
 
-    /// Delete a resource, retrying transient failures up to three attempts.
+    /// Send a DELETE, retrying transport errors and 5xx responses up to three attempts.
     ///
     /// # Errors
     ///
-    /// Fails for invalid request metadata, transport or authentication errors, or unsuccessful HTTP status.
+    /// Fails if the URL or headers are invalid, the last attempt fails in transport, or the
+    /// status is 300 or more.
     pub fn delete(
         &self,
         url: &str,
@@ -257,11 +261,12 @@ impl HttpClient {
         Ok(())
     }
 
-    /// Delete a resource with a single request attempt.
+    /// Send a DELETE once, as used for the best-effort NeuVector logout.
     ///
     /// # Errors
     ///
-    /// Fails for invalid request metadata, transport or authentication errors, or unsuccessful HTTP status.
+    /// Fails if the URL or headers are invalid, the request fails in transport, or the status
+    /// is 300 or more.
     pub fn delete_once(
         &self,
         url: &str,
@@ -435,7 +440,7 @@ impl From<HttpError> for SourceError {
     }
 }
 
-/// Encode one URL path segment.
+/// Percent-encode every byte except ASCII letters, digits and `-._~`.
 #[must_use]
 pub fn encode_segment(s: &str) -> String {
     s.bytes()
@@ -457,11 +462,11 @@ pub fn url_authority(url: &str) -> String {
         .and_then(|u| u.authority().map(|a| a.as_str().to_owned()))
         .unwrap_or_default()
 }
-/// Authentication errors abort a source; other errors describe a failed row.
+/// Turn a per-image HTTP error into a diagnostic message, propagating authentication failures.
 ///
 /// # Errors
 ///
-/// Fails only for authentication or authorization errors; other errors become row diagnostics.
+/// Returns the error unchanged if it is [`HttpError::Unauthorized`].
 pub fn row_failure(error: HttpError) -> Result<String, HttpError> {
     match error {
         error @ HttpError::Unauthorized(_) => Err(error),
@@ -526,11 +531,12 @@ mod url_tests {
     }
 }
 
-/// Build a transport and emit a warning when certificate verification is disabled.
+/// Build a transport for `role` (`source` or `output`), warning if verification is disabled.
 ///
 /// # Errors
 ///
-/// Fails if TLS options conflict or a custom certificate file cannot be read or parsed.
+/// Fails with [`crate::config::ConfigError::Invalid`], prefixed by `role`, if TLS options
+/// conflict or the CA file cannot be read or holds no certificate.
 pub fn tls_client(
     role: &str,
     url: &str,
@@ -554,7 +560,7 @@ pub fn tls_client(
     Ok(client)
 }
 
-/// Strip query and fragment secrets from diagnostic URLs.
+/// Drop the query and fragment, which may carry signatures or tokens, from a logged URL.
 #[must_use]
 pub fn redact_url(url: &str) -> String {
     match url::Url::parse(url) {

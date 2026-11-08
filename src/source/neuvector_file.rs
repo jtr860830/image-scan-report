@@ -125,11 +125,14 @@ fn map_report(report: NvReport, scanned_at: Option<DateTime<Utc>>) -> (Image, Ve
     (image, findings)
 }
 
-/// Decode a NeuVector result into a normalized image and its findings.
+/// Decode one NeuVector scanner result file into an image and its findings.
+///
+/// Returns `Ok(None)` when the file has neither a `report` nor an `error_message`.
+/// `scanned_at` is the fallback scan time.
 ///
 /// # Errors
 ///
-/// Fails if JSON decoding fails or the document is not a supported NeuVector result.
+/// Fails if the bytes are not JSON of the expected types.
 pub fn parse_neuvector_result(
     bytes: &[u8],
     scanned_at: Option<DateTime<Utc>>,
@@ -137,9 +140,9 @@ pub fn parse_neuvector_result(
     Ok(read_report(bytes, None, None)?.map(|report| map_report(report, scanned_at)))
 }
 
-/// Input that collects NeuVector JSON reports from a directory.
+/// Scan source that reads NeuVector scanner JSON results from a directory tree.
 pub struct NeuvectorFileSource {
-    /// Directory containing input scans or generated artifacts.
+    /// Directory searched recursively for NeuVector results, from `source.path`.
     pub dir: PathBuf,
 }
 

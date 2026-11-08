@@ -84,9 +84,9 @@ struct Vulnerability {
     #[serde(default, rename = "PublishedDate")]
     published_date: Option<DateTime<Utc>>,
 }
-/// Input that collects Trivy JSON reports from a directory.
+/// Scan source that reads Trivy JSON reports from a directory tree.
 pub struct TrivyFileSource {
-    /// Directory containing input scans or generated artifacts.
+    /// Directory searched recursively for Trivy reports, from `source.path`.
     pub dir: PathBuf,
 }
 impl ScanSource for TrivyFileSource {
@@ -107,11 +107,16 @@ impl ScanSource for TrivyFileSource {
         }))
     }
 }
-/// Decode a Trivy report into normalized images and findings.
+/// Decode one Trivy report into an image and the findings of its `os-pkgs` and `lang-pkgs`
+/// results.
+///
+/// Returns `Ok(None)` for JSON without `SchemaVersion`, which is not a Trivy report.
+/// `scanned_at` is used as the scan time when the report has no `CreatedAt`.
 ///
 /// # Errors
 ///
-/// Fails if JSON decoding fails or the document is not a supported Trivy report.
+/// Fails if the bytes are not JSON of the expected types or `ArtifactName` is missing or
+/// empty.
 pub fn parse_trivy_report(
     bytes: &[u8],
     scanned_at: Option<DateTime<Utc>>,

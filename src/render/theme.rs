@@ -1,95 +1,96 @@
-//! Swappable report colors, fonts, and branding.
+//! Swappable report colours, fonts and branding, loaded from a `theme.toml` directory.
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::{fs, io};
 
-/// Versioned report branding, palette, and bundled font selections.
+/// Report branding, palette and fonts parsed from `theme.toml`.
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct Theme {
-    /// Schema or component version supplied by the producer.
+    /// Theme contract version; must be 1.
     pub version: u32,
-    /// Product identity used for report branding.
+    /// Product name and URL credited in the report appendix.
     pub product: Product,
-    /// Report palette expressed as hexadecimal RGB strings.
+    /// Palette; every entry must be `#` followed by six hex digits.
     pub colors: Colors,
-    /// Ordered font fallback families for body text and code.
+    /// Font fallback lists, limited to the bundled [`super::fonts::FAMILIES`].
     pub fonts: Fonts,
-    /// Optional branding asset to embed in the report. None indicates that the value is unavailable.
+    /// Logo found beside `theme.toml`, shown with the appendix credit; `None` shows no logo.
     #[serde(skip)]
     pub logo: Option<Logo>,
 }
-/// Product identity displayed in report branding.
+/// Product identity credited in the report appendix.
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct Product {
-    /// Display name supplied by the scanner or theme.
+    /// Product name in the appendix credit and `check` output; `judex` in the default theme.
     pub name: String,
-    /// Endpoint or external product URL used by this configuration. None indicates that the value is unavailable.
+    /// Product URL appended to the appendix credit; `None` or empty omits it.
     pub url: Option<String>,
 }
-/// Report palette with colors encoded as six-digit hexadecimal RGB strings.
+/// Report palette; every entry must be `#rrggbb`.
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct Colors {
-    /// Primary text color expressed as a hexadecimal RGB string.
+    /// Primary text colour.
     pub ink: String,
-    /// Color used for secondary text.
+    /// Secondary text colour.
     pub secondary: String,
-    /// Color used for low-emphasis labels.
+    /// Colour of low-emphasis labels.
     pub muted: String,
-    /// Color used for separator lines.
+    /// Colour of separator lines.
     pub rule: String,
-    /// Background color used for report panels.
+    /// Background colour of panels.
     pub surface: String,
-    /// Highlight color used for report accents.
+    /// Accent colour.
     pub accent: String,
-    /// Number of findings in the critical severity band.
+    /// `#rrggbb` colour of the critical band in chips, tiles and the severity bar.
     pub critical: String,
-    /// Number of findings in the high severity band.
+    /// `#rrggbb` colour of the high band in chips, tiles and the severity bar.
     pub high: String,
-    /// Number of findings in the medium severity band.
+    /// `#rrggbb` colour of the medium band in chips, tiles and the severity bar.
     pub medium: String,
-    /// Number of findings in the low severity band.
+    /// `#rrggbb` colour of the low band in chips, tiles and the severity bar.
     pub low: String,
-    /// Number of findings in the unrated severity band.
+    /// `#rrggbb` colour of the unrated band in chips, tiles and the severity bar.
     pub unrated: String,
-    /// Background tint used for critical severity labels.
+    /// Background tint of critical severity chips.
     pub tint_critical: String,
-    /// Background tint used for high severity labels.
+    /// Background tint of high severity chips.
     pub tint_high: String,
-    /// Background tint used for medium severity labels.
+    /// Background tint of medium severity chips.
     pub tint_medium: String,
-    /// Background tint used for low severity labels.
+    /// Background tint of low severity chips.
     pub tint_low: String,
-    /// Background tint used for unrated severity labels.
+    /// Background tint of unrated severity chips.
     pub tint_unrated: String,
 }
-/// Ordered bundled font fallback families for body and monospaced text.
+/// Ordered fallback families for body and monospaced text.
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct Fonts {
-    /// Ordered fallback families for proportional body text. An empty list indicates no entries.
+    /// Body text families in fallback order; must be non-empty and bundled.
     pub text: Vec<String>,
-    /// Ordered fallback families for monospaced text. An empty list indicates no entries.
+    /// Monospaced families in fallback order; must be non-empty and bundled.
     pub mono: Vec<String>,
 }
-/// Validated PNG or SVG branding bytes with their source filename.
+/// Logo image whose PNG signature or SVG prologue has been checked.
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct Logo {
-    /// Artifact basename, including its format extension.
+    /// Source file name with its extension, which decides between PNG and SVG.
     pub file_name: String,
-    /// Raw bytes of the encoded artifact or branding asset. An empty list indicates no entries.
+    /// Validated PNG or SVG file contents, never empty.
     pub bytes: Vec<u8>,
 }
 
 impl Logo {
-    /// Load and validate the configuration or resource at the supplied location.
+    /// Read and validate a `.png` or `.svg` logo file.
     ///
     /// # Errors
     ///
-    /// Fails when files cannot be read or the theme or logo fails validation.
+    /// Fails if the file cannot be read, its extension is not `png` or `svg` (lowercase), or
+    /// its contents do not start like that format.
     pub fn load(path: &Path) -> Result<Self, ThemeError> {
         let bytes = fs::read(path).map_err(|err| ThemeError::Read(path.to_owned(), err))?;
         Self::from_bytes(path, bytes)
@@ -116,7 +117,7 @@ impl Logo {
         })
     }
 
-    /// Choose a report-local logo filename while preserving the extension.
+    /// Name under which templates see the customer logo: `report-logo.<ext>`.
     pub fn report_file_name(&self) -> String {
         format!(
             "report-logo.{}",
@@ -128,19 +129,22 @@ impl Logo {
     }
 }
 
-/// Failure to read or validate a theme or branding asset.
+/// Failure to read or validate a theme or logo.
 #[derive(thiserror::Error, Debug)]
+#[must_use]
 pub enum ThemeError {
-    /// A required resource could not be read.
+    /// `theme.toml`, a logo file or the theme directory could not be read.
     #[error("cannot read {0}: {1}")]
     Read(PathBuf, #[source] io::Error),
-    /// A resource could not be decoded into the expected format.
+    /// `theme.toml` is not valid TOML for [`Theme`].
     #[error("cannot parse {0}: {1}")]
     Parse(PathBuf, String),
-    /// A decoded configuration value violates a validation constraint.
+    /// `theme.toml` breaks a rule: version not 1, a colour not `#rrggbb`, or a font list empty
+    /// or naming an unbundled family.
     #[error("invalid theme {0}: {1}")]
     Invalid(PathBuf, String),
-    /// A branding asset has an unsupported extension or invalid content.
+    /// A logo has the wrong extension or content, or the theme directory holds a `logo.*`
+    /// file other than `logo.png` or `logo.svg`.
     #[error("unsupported logo {0}")]
     UnsupportedLogo(PathBuf),
 }
@@ -150,7 +154,7 @@ impl From<ThemeError> for crate::config::ConfigError {
     }
 }
 impl Theme {
-    /// Serialize theme settings for use by report templates.
+    /// Serialise the theme for templates, exposing the logo by file name only.
     pub fn to_render_value(&self) -> serde_json::Value {
         serde_json::json!({"version": self.version, "product": self.product,
             "colors": self.colors, "fonts": self.fonts,
@@ -209,11 +213,12 @@ fn parse(text: &str, path: &Path) -> Result<Theme, ThemeError> {
     theme.validate(path)?;
     Ok(theme)
 }
-/// Load the validated theme embedded in the executable.
+/// Parse the default theme embedded from `themes/default/theme.toml`, which has no logo.
 ///
 /// # Panics
 ///
-/// Panics if an embedded theme or required template is missing or invalid.
+/// Panics if the embedded `theme.toml` is invalid, which would be a build defect rather
+/// than a caller error.
 pub fn default_theme() -> Theme {
     parse(
         include_str!("../../themes/default/theme.toml"),
@@ -221,11 +226,12 @@ pub fn default_theme() -> Theme {
     )
     .expect("embedded default theme must be valid")
 }
-/// Load and validate the configuration or resource at the supplied location.
+/// Load `theme.toml` and an optional logo from `dir`, or return [`default_theme`] for `None`.
 ///
 /// # Errors
 ///
-/// Fails when files cannot be read or the theme or logo fails validation.
+/// Fails if `theme.toml` or a logo cannot be read or is invalid, or `dir` holds a `logo.*`
+/// file other than `logo.png` or `logo.svg`.
 pub fn load(dir: Option<&Path>) -> Result<Theme, ThemeError> {
     let Some(dir) = dir else {
         return Ok(default_theme());

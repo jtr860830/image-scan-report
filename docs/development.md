@@ -226,3 +226,7 @@ and [Rust API Guidelines](https://rust-lang.github.io/api-guidelines/).
 - Prefer `expect` with context over `unwrap`, use pattern matching for optional
   values, and document panic cases.
 - Mark error types and pure result-producing helpers `#[must_use]`.
+
+Of these rules, CI enforces formatting (`cargo fmt --check`) and Clippy with `-D warnings`,
+which includes `missing_docs`; import scoping, `try_new` naming, `#[must_use]` and the
+nightly-only rustfmt options are checked only in review.
