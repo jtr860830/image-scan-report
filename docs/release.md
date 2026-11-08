@@ -4,7 +4,7 @@
 
 1. Bump `[package].version` in Cargo.toml and the judex package version in
    Cargo.lock together. Keep the Kubernetes image tags in deploy/k8s/*.yaml and
-   deploy/podman/run.sh (including its default image tag) and version examples in README/docs aligned. The current candidate is 1.0.0-rc.1;
+   deploy/podman/run.sh (including its default image tag) and version examples in README/docs aligned. The current candidate is 0.1.0;
    bump to 1.0.0 for the stable release.
 2. Review CHANGELOG.md and replace `unreleased` in the version heading with the
    release date (YYYY-MM-DD). Run the checks in [development.md](development.md).
@@ -66,8 +66,8 @@ On a connected machine, download both tarballs and SHA256SUMS from the release
 
 ```sh
 sha256sum -c SHA256SUMS --ignore-missing
-podman pull ghcr.io/jtr860830/judex:1.0.0-rc.1
-podman save -o judex-image.tar ghcr.io/jtr860830/judex:1.0.0-rc.1
+podman pull ghcr.io/jtr860830/judex:0.1.0
+podman save -o judex-image.tar ghcr.io/jtr860830/judex:0.1.0
 sha256sum judex-image.tar > IMAGE-SHA256SUMS
 ```
 
