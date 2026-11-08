@@ -8,7 +8,11 @@ fn version_prints_product_name_and_semver() {
     assert!(out.status.success());
     let s = String::from_utf8(out.stdout).unwrap();
     assert!(s.starts_with("judex "));
-    assert_eq!(s.trim().split(' ').nth(1).unwrap().split('.').count(), 3);
+    // The version is the crate's own; a pre-release such as 1.0.0-rc.1 is fine.
+    assert_eq!(
+        s.trim().split(' ').nth(1).unwrap(),
+        env!("CARGO_PKG_VERSION")
+    );
 }
 
 fn write_config(dir: &std::path::Path) -> std::path::PathBuf {
@@ -217,7 +221,10 @@ fn version_flag_prints_product_and_version() {
     for flag in ["--version", "-V", "version"] {
         let out = cargo_bin_cmd!("judex").arg(flag).output().unwrap();
         assert!(out.status.success());
-        assert_eq!(out.stdout, b"judex 0.1.0\n");
+        assert_eq!(
+            String::from_utf8(out.stdout).unwrap(),
+            format!("judex {}\n", env!("CARGO_PKG_VERSION"))
+        );
     }
 }
 

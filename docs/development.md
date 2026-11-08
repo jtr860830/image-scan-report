@@ -90,12 +90,8 @@ nginx-1.21.0.json and busybox-1.37.json into temporary directories using
 
 ## Renaming
 
-The product name lives in three places: `Cargo.toml` `[package] name`, the binary
-name, and `PRODUCT_NAME` in `src/main.rs`. Cargo currently derives the binary name
-from the package name (there is no explicit `[[bin]]` override). Renaming judex
-touches exactly these three naming points, plus the literal in `tests/cli.rs` and
-README prose. The library crate stays named `image_scan_report` across product renames.
-Keep the CLI's version text and executable assertions aligned.
+Follow the [release and rename procedure](release.md). The library crate stays
+named `image_scan_report` across product renames.
 
 ## Golden and performance regression checks
 

@@ -29,7 +29,7 @@ spec:
               type: RuntimeDefault
           containers:
             - name: report
-              image: ghcr.io/jtr860830/judex:0.1.0
+              image: ghcr.io/jtr860830/judex:1.0.0-rc.1
               securityContext:
                 allowPrivilegeEscalation: false
                 readOnlyRootFilesystem: true

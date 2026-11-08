@@ -1,12 +1,23 @@
 # judex
 
+[![CI](https://github.com/jtr860830/image-scan-report/actions/workflows/ci.yml/badge.svg)](https://github.com/jtr860830/image-scan-report/actions/workflows/ci.yml)
+[![Latest release](https://img.shields.io/github/v/release/jtr860830/image-scan-report?include_prereleases)](https://github.com/jtr860830/image-scan-report/releases/latest)
+
 judex turns existing container-image vulnerability scans into audit reports.
 It normalises Trivy and NeuVector scanner JSON and results from the Harbor and NeuVector APIs into a shared model without scanning images itself.
 
 Sources: Trivy and NeuVector scanner files, the Harbor API and the NeuVector controller API.
 Outputs: PDF and JSON to filesystem directories and HTTP endpoints.
 
-## Container installation
+## Install
+
+Download the native Linux tarball for x86_64 or aarch64 and `SHA256SUMS` from
+[releases](https://github.com/jtr860830/image-scan-report/releases). Verify it with
+`sha256sum -c SHA256SUMS --ignore-missing`, extract it, and put `judex` on your PATH.
+The container image is `ghcr.io/jtr860830/judex:<ver>`. See the
+[release guide](docs/release.md) for assets and air-gap bundles.
+
+### Container installation
 
 Use `ghcr.io/jtr860830/judex:<ver>` with a release tag, a config whose filesystem
 output points to `/output`, and a writable `./out` directory:
@@ -42,8 +53,8 @@ and writes PDF and JSON to `./out`, creating the directory if needed. Relative p
 resolve from the working directory, not the configuration file's directory.
 See [fixture provenance](fixtures/README.md) for how the scanner inputs were captured.
 
-`--version` (or `-V`) and `version` print `judex 0.1.0`. `check` fetches and parses the source and prints
-`Trivy (files): ./fixtures/trivy: 11 images (11 scanned, 0 failed, 0 not scanned), 4368 findings; theme: judex; product: judex 0.1.0`; it validates output configuration and the theme without
+`--version` (or `-V`) and `version` print `judex 1.0.0-rc.1`. `check` fetches and parses the source and prints
+`Trivy (files): ./fixtures/trivy: 11 images (11 scanned, 0 failed, 0 not scanned), 4368 findings; theme: judex; product: judex 1.0.0-rc.1`; it validates output configuration and the theme without
 writing artifacts. `run` prints `Report: 11 images, 4368 findings`, followed by
 one destination and filename per stored artifact. Counts depend on the inputs.
 The example produces `out/trivy-trivy-files-YYYY-MM-DD.pdf` and a matching JSON file, using the UTC run
