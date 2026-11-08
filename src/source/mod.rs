@@ -31,3 +31,4 @@ pub enum ParseError {
     #[error("{0}")]
     Shape(String),
 }
+pub mod neuvector_api;

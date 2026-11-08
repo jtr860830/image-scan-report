@@ -56,3 +56,22 @@ pub fn finding_from_nv(v: &NvVulnerability, image_reference: &str) -> Finding {
         published_at: nv_timestamp(v.published_timestamp),
     }
 }
+
+/// Compose the same image reference for scanner files and controller results.
+pub fn compose_reference(registry: &str, repository: &str, tag: &str) -> String {
+    let registry = registry
+        .strip_prefix("https://")
+        .or_else(|| registry.strip_prefix("http://"))
+        .unwrap_or(registry)
+        .trim_end_matches('/');
+    let mut reference = if registry.is_empty() {
+        repository.to_owned()
+    } else {
+        format!("{registry}/{repository}")
+    };
+    if !tag.is_empty() {
+        reference.push(':');
+        reference.push_str(tag);
+    }
+    reference
+}

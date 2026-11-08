@@ -2,7 +2,7 @@
 use super::{
     ParseError, ScanSource, SourceError,
     files::fetch_directory,
-    neuvector::report::{NvVulnerability, finding_from_nv, nv_timestamp},
+    neuvector::report::{NvVulnerability, compose_reference, finding_from_nv, nv_timestamp},
 };
 use crate::model::*;
 use chrono::{DateTime, Utc};
@@ -72,21 +72,7 @@ fn read_report(
 }
 
 fn map_report(report: NvReport, scanned_at: Option<DateTime<Utc>>) -> (Image, Vec<Finding>) {
-    let registry = report
-        .registry
-        .strip_prefix("https://")
-        .or_else(|| report.registry.strip_prefix("http://"))
-        .unwrap_or(&report.registry)
-        .trim_end_matches('/');
-    let mut reference = if registry.is_empty() {
-        report.repository.clone()
-    } else {
-        format!("{registry}/{}", report.repository)
-    };
-    if !report.tag.is_empty() {
-        reference.push(':');
-        reference.push_str(&report.tag);
-    }
+    let reference = compose_reference(&report.registry, &report.repository, &report.tag);
     let succeeded = report
         .result
         .as_deref()
