@@ -72,7 +72,10 @@ pub fn dedupe_images_by_reference(items: Vec<(Image, Vec<Finding>)>) -> (Vec<Ima
     let mut positions = HashMap::new();
     let mut selected: Vec<(Image, Vec<Finding>)> = Vec::new();
     for (image, findings) in items {
-        let key = image.reference.clone();
+        // Two rows are the same image only when both the reference and the
+        // digest agree; a reference collision between different digests must
+        // stay visible rather than hide one of the rows.
+        let key = (image.reference.clone(), image.digest.clone());
         if let Some(&index) = positions.get(&key) {
             let existing: &mut (Image, Vec<Finding>) = &mut selected[index];
             if (image.scan.state == crate::model::ScanState::Ok
@@ -200,5 +203,17 @@ mod tests {
             ["a:v1", "b:v1"]
         );
         assert!(images.iter().all(|i| i.scan.state == ScanState::Ok));
+    }
+
+    #[test]
+    fn reference_dedupe_keeps_rows_whose_digests_differ() {
+        let mut other = image("a:v1", ScanState::Ok);
+        other.digest = Some("sha256:other".into());
+        let (images, _) = dedupe_images_by_reference(vec![
+            (image("a:v1", ScanState::Ok), vec![]),
+            (other, vec![]),
+        ]);
+        assert_eq!(images.len(), 2);
+        assert_ne!(images[0].digest, images[1].digest);
     }
 }
