@@ -2,7 +2,7 @@
 use super::{
     ScanSource, SourceError,
     files::dedupe_images,
-    http::{Auth, HttpClient, HttpError},
+    http::{Auth, HttpClient, HttpError, encode_segment, url_authority},
     neuvector::{
         api::*,
         report::{compose_reference, finding_from_nv, nv_timestamp},
@@ -44,39 +44,25 @@ fn timestamp(value: Option<&str>) -> Option<DateTime<Utc>> {
         .and_then(|s| DateTime::parse_from_rfc3339(s).ok())
         .map(|t| t.with_timezone(&Utc))
 }
-fn encode(value: &str) -> String {
-    value
-        .bytes()
-        .map(|b| {
-            if b.is_ascii_alphanumeric() || b"-._~".contains(&b) {
-                (b as char).to_string()
-            } else {
-                format!("%{b:02X}")
-            }
-        })
-        .collect()
-}
 pub fn scan_status(image: &ImageSummary) -> ScanStatus {
-    let (state, error) = if image.result.as_deref() == Some("failed")
-        || (image.status.as_deref() == Some("finished")
-            && image.result.as_deref() != Some("succeeded"))
-    {
-        (
+    let status = image.status.as_deref().unwrap_or_default();
+    let result = image.result.as_deref().unwrap_or_default();
+    let (state, error) = match status.to_ascii_lowercase().as_str() {
+        "finished" if result.eq_ignore_ascii_case("succeeded") => (ScanState::Ok, None),
+        "finished" => (
             ScanState::Failed,
             Some(
-                image
-                    .result
-                    .clone()
-                    .filter(|s| !s.is_empty())
-                    .unwrap_or_else(|| "scan failed".into()),
+                if result.is_empty() {
+                    "scan failed"
+                } else {
+                    result
+                }
+                .into(),
             ),
-        )
-    } else if image.status.as_deref() == Some("finished")
-        && image.result.as_deref() == Some("succeeded")
-    {
-        (ScanState::Ok, None)
-    } else {
-        (ScanState::NotScanned, Some("scan in progress".into()))
+        ),
+        "scheduled" | "scanning" => (ScanState::NotScanned, Some("scan in progress".into())),
+        "" => (ScanState::NotScanned, None),
+        _ => (ScanState::Failed, Some(status.into())),
     };
     ScanStatus {
         state,
@@ -89,12 +75,7 @@ pub fn scan_status(image: &ImageSummary) -> ScanStatus {
 impl NeuvectorSource {
     pub fn from_config(cfg: &NeuvectorParams, client: HttpClient, password: String) -> Self {
         Self {
-            host: cfg
-                .url
-                .parse::<ureq::http::Uri>()
-                .ok()
-                .and_then(|u| u.authority().map(|a| a.as_str().to_owned()))
-                .unwrap_or_default(),
+            host: url_authority(&cfg.url),
             base_url: cfg.url.trim_end_matches('/').into(),
             registry: cfg.registry.clone(),
             username: cfg.username.clone(),
@@ -108,6 +89,7 @@ impl ScanSource for NeuvectorSource {
         format!("NeuVector {}: {}", self.host, self.registry)
     }
     fn fetch(&self) -> Result<ScanSet, SourceError> {
+        // Login retries may create extra sessions; controller sessions expire automatically.
         let auth = self
             .client
             .post_json::<_, AuthResponse>(
@@ -115,8 +97,8 @@ impl ScanSource for NeuvectorSource {
                 &Auth::None,
                 &AuthRequest {
                     password: Credentials {
-                        username: self.username.clone(),
-                        password: self.password.clone(),
+                        username: &self.username,
+                        password: &self.password,
                     },
                 },
                 &[],
@@ -138,7 +120,7 @@ impl ScanSource for NeuvectorSource {
         let path = format!(
             "{}/v1/scan/registry/{}",
             self.base_url,
-            encode(&self.registry)
+            encode_segment(&self.registry)
         );
         let summary = match self
             .client
@@ -168,7 +150,7 @@ impl ScanSource for NeuvectorSource {
             let mut findings = Vec::new();
             if scan.state == ScanState::Ok {
                 match self.client.get_json::<ImageReport>(
-                    &format!("{path}/image/{}", encode(&entry.image_id)),
+                    &format!("{path}/image/{}", encode_segment(&entry.image_id)),
                     &Auth::None,
                     &headers,
                 ) {
@@ -193,7 +175,11 @@ impl ScanSource for NeuvectorSource {
             rows.push((
                 Image {
                     reference,
-                    tags: vec![entry.tag],
+                    tags: if entry.tag.is_empty() {
+                        vec![]
+                    } else {
+                        vec![entry.tag]
+                    },
                     digest: entry.digest,
                     platform: None,
                     os: entry.base_os,

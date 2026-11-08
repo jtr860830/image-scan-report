@@ -3,13 +3,13 @@ use super::report::NvVulnerability;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize)]
-pub struct Credentials {
-    pub username: String,
-    pub password: String,
+pub struct Credentials<'a> {
+    pub username: &'a str,
+    pub password: &'a str,
 }
 #[derive(Serialize)]
-pub struct AuthRequest {
-    pub password: Credentials,
+pub struct AuthRequest<'a> {
+    pub password: Credentials<'a>,
 }
 #[derive(Default, Deserialize)]
 #[serde(default)]

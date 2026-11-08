@@ -3,7 +3,7 @@ mod neuvector_mock;
 use httpmock::MockServer;
 use image_scan_report::{
     model::ScanState,
-    source::{ScanSource, http::Auth},
+    source::{ScanSource, http::url_authority},
 };
 use neuvector_mock::*;
 use serde_json::json;
@@ -17,12 +17,15 @@ fn fetches_registry_images_and_findings() {
         result
             .findings
             .iter()
-            .filter(|f| f.image.ends_with("/demo/centos:7"))
+            .filter(|f| f.image == "harbor.example.test/demo/centos:7")
             .count()
             > 1000
     );
     assert_eq!(result.source.db_version.as_deref(), Some("4.318"));
-    assert!(result.scope.ends_with("/harbor-lab"));
+    assert_eq!(
+        result.scope,
+        format!("{}/harbor-lab", url_authority(&src.base_url))
+    );
 }
 #[test]
 fn rescan_capture_lists_multiarch_as_one_image() {
@@ -129,11 +132,13 @@ fn password_reset_required_is_reported() {
 #[test]
 fn unauthorized_is_reported_without_secrets() {
     let server = MockServer::start();
+    let out = logout(&server);
     auth(&server, json!({"message":"secret-password"}), 401);
     let error = source(&server).fetch().err().unwrap().to_string();
     assert!(error.contains("authentication failed"));
     assert!(!error.contains("secret-password"));
     assert!(!error.contains(TOKEN));
+    out.assert_calls(0);
 }
 #[test]
 fn registry_not_found_is_reported() {
@@ -155,16 +160,8 @@ fn registry_not_found_is_reported() {
 fn auth_header_is_required() {
     let server = MockServer::start();
     let matched = get(&server, ROOT, json!({}), 200);
-    let src = source(&server);
-    assert!(
-        src.client
-            .get_json::<serde_json::Value>(
-                &format!("{}{ROOT}", server.base_url()),
-                &Auth::None,
-                &[]
-            )
-            .is_err()
-    );
+    auth(&server, json!({"token":{"token":"other"}}), 200);
+    assert!(source(&server).fetch().is_err());
     matched.assert_calls(0);
 }
 
@@ -203,6 +200,7 @@ fn captured_payloads_map_without_sockets() {
 #[test]
 fn missing_token_is_reported() {
     let server = MockServer::start();
+    let out = logout(&server);
     auth(&server, json!({}), 200);
     assert!(
         source(&server)
@@ -212,6 +210,7 @@ fn missing_token_is_reported() {
             .to_string()
             .contains("missing token")
     );
+    out.assert_calls(0);
 }
 #[test]
 fn empty_registry_logs_out() {
@@ -249,4 +248,38 @@ fn unauthorized_report_aborts_and_logs_out() {
     assert!(!result.contains(TOKEN));
     assert!(!result.contains("secret-password"));
     out.assert_calls(1);
+}
+#[test]
+fn status_table_without_sockets() {
+    use image_scan_report::source::{neuvector::api::ImageSummary, neuvector_api::scan_status};
+    for (status, result, state, error) in [
+        (Some("failed"), None, ScanState::Failed, Some("failed")),
+        (
+            Some("unsupported"),
+            None,
+            ScanState::Failed,
+            Some("unsupported"),
+        ),
+        (None, None, ScanState::NotScanned, None),
+        (Some(""), None, ScanState::NotScanned, None),
+        (Some("Finished"), Some("Succeeded"), ScanState::Ok, None),
+        (
+            Some("finished"),
+            Some(""),
+            ScanState::Failed,
+            Some("scan failed"),
+        ),
+        (
+            Some("scheduled"),
+            None,
+            ScanState::NotScanned,
+            Some("scan in progress"),
+        ),
+    ] {
+        let entry: ImageSummary =
+            serde_json::from_value(json!({"status":status,"result":result})).unwrap();
+        let scan = scan_status(&entry);
+        assert_eq!(scan.state, state);
+        assert_eq!(scan.error.as_deref(), error);
+    }
 }

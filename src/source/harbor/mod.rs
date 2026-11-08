@@ -4,7 +4,7 @@ pub mod map;
 use super::{
     ScanSource, SourceError,
     files::dedupe_images,
-    http::{Auth, HttpClient, HttpError},
+    http::{Auth, HttpClient, HttpError, encode_segment, url_authority},
 };
 use crate::model::*;
 use api::*;
@@ -24,26 +24,10 @@ pub struct HarborSource {
     pub client: HttpClient,
     host: String,
 }
-fn encode(s: &str) -> String {
-    s.bytes()
-        .map(|b| {
-            if b.is_ascii_alphanumeric() || b"-._~".contains(&b) {
-                (b as char).to_string()
-            } else {
-                format!("%{b:02X}")
-            }
-        })
-        .collect()
-}
 impl HarborSource {
     pub fn from_config(cfg: &HarborParams, client: HttpClient, password: String) -> Self {
         Self {
-            host: cfg
-                .url
-                .parse::<ureq::http::Uri>()
-                .ok()
-                .and_then(|u| u.authority().map(|a| a.as_str().to_owned()))
-                .unwrap_or_default(),
+            host: url_authority(&cfg.url),
             base_url: cfg.url.trim_end_matches('/').into(),
             project: cfg.project.clone(),
             auth: Auth::Basic {
@@ -216,13 +200,16 @@ impl ScanSource for HarborSource {
         let mut rows = Vec::new();
         let mut scanner = None;
         for project in projects {
-            let path = format!("/api/v2.0/projects/{}/repositories", encode(&project.name));
+            let path = format!(
+                "/api/v2.0/projects/{}/repositories",
+                encode_segment(&project.name)
+            );
             for repo in self.pages::<Repository>(&path, "")? {
                 let name = repo
                     .name
                     .strip_prefix(&format!("{}/", project.name))
                     .unwrap_or(&repo.name);
-                let path = format!("{path}/{}/artifacts", encode(&encode(name)));
+                let path = format!("{path}/{}/artifacts", encode_segment(&encode_segment(name)));
                 let artifacts =
                     self.pages::<Artifact>(&path, "&with_tag=true&with_scan_overview=true")?;
                 tracing::info!("repository {}: {} artifacts", repo.name, artifacts.len());

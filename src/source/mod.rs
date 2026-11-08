@@ -3,6 +3,7 @@ pub mod files;
 pub mod harbor;
 pub mod http;
 pub mod neuvector;
+pub mod neuvector_api;
 pub mod neuvector_file;
 pub mod trivy_file;
 
@@ -31,4 +32,3 @@ pub enum ParseError {
     #[error("{0}")]
     Shape(String),
 }
-pub mod neuvector_api;

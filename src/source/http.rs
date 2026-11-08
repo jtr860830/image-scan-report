@@ -327,3 +327,40 @@ mod tests {
         }
     }
 }
+
+/// Encode one URL path segment.
+pub fn encode_segment(s: &str) -> String {
+    s.bytes()
+        .map(|b| {
+            if b.is_ascii_alphanumeric() || b"-._~".contains(&b) {
+                (b as char).to_string()
+            } else {
+                format!("%{b:02X}")
+            }
+        })
+        .collect()
+}
+
+/// Extract the URL authority, including an explicit port.
+pub fn url_authority(url: &str) -> String {
+    url.parse::<ureq::http::Uri>()
+        .ok()
+        .and_then(|u| u.authority().map(|a| a.as_str().to_owned()))
+        .unwrap_or_default()
+}
+#[cfg(test)]
+mod url_tests {
+    use super::*;
+    #[test]
+    fn helpers() {
+        assert_eq!(encode_segment("a/b %é"), "a%2Fb%20%25%C3%A9");
+        assert_eq!(encode_segment(&encode_segment("a/b")), "a%252Fb");
+        assert_eq!(encode_segment("-._~Az09"), "-._~Az09");
+        assert_eq!(
+            url_authority("https://example.test:8443/path"),
+            "example.test:8443"
+        );
+        assert_eq!(url_authority("https://example.test/"), "example.test");
+        assert_eq!(url_authority(""), "");
+    }
+}
