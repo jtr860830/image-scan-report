@@ -1,3 +1,4 @@
+//! Integration checks for config behavior.
 static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
 use std::path::Path;

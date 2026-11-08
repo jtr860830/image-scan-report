@@ -1,3 +1,4 @@
+//! Integration checks for sink http behavior.
 use image_scan_report::{
     config::HttpMode,
     sink::{
@@ -100,18 +101,22 @@ fn multipart_post_has_one_file_part() {
     let b = ct.strip_prefix("multipart/form-data; boundary=").unwrap();
     let body = String::from_utf8(r.body_vec()).unwrap();
     let parts: Vec<_> = body.split(&format!("--{b}")).collect();
-    assert_eq!(parts.len(), 3);
-    assert_eq!(parts[0], "");
+    assert_eq!(parts.len(), 3, "sink_http: parts.len() mismatch");
+    assert_eq!(parts[0], "", "sink_http: parts[0] mismatch");
     assert_eq!(
         parts[1],
         "\r\nContent-Disposition: form-data; name=\"file\"; filename=\"report.pdf\"\r\nContent-Type: application/pdf\r\n\r\n%PDF-test\r\n"
     );
-    assert_eq!(parts[2], "--\r\n");
+    assert_eq!(parts[2], "--\r\n", "sink_http: parts[2] mismatch");
 }
 #[test]
 fn multipart_body_is_well_formed() {
     let b = boundary();
-    assert_eq!(b.len(), "image-scan-report-".len() + 32);
+    assert_eq!(
+        b.len(),
+        "image-scan-report-".len() + 32,
+        "sink_http: b.len() mismatch"
+    );
     assert!(
         b["image-scan-report-".len()..]
             .bytes()
@@ -122,8 +127,16 @@ fn multipart_body_is_well_formed() {
     let body = multipart_body(&b, "file", "r.pdf", "application/pdf", &bytes);
     assert!(body.starts_with(format!("--{b}\r\n").as_bytes()));
     let offset = body.windows(4).position(|w| w == b"\r\n\r\n").unwrap() + 4;
-    assert_eq!(&body[offset..offset + bytes.len()], bytes);
-    assert_eq!(body.windows(4).filter(|w| *w == b"\r\n\r\n").count(), 1);
+    assert_eq!(
+        &body[offset..offset + bytes.len()],
+        bytes,
+        "sink_http: &body[offset..offset + bytes.len()] mismatch"
+    );
+    assert_eq!(
+        body.windows(4).filter(|w| *w == b"\r\n\r\n").count(),
+        1,
+        "sink_http: body.windows(4).filter(|w| *w == b\"\r\n\r\n\").count() mismatch"
+    );
     assert!(body.ends_with(format!("\r\n--{b}--\r\n").as_bytes()));
 }
 #[test]

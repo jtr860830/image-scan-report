@@ -1,10 +1,15 @@
+//! Integration checks for harbor source behavior.
 use image_scan_report::{
     model::*,
     source::harbor::{api::*, map::*},
 };
 #[test]
 fn scan_states_map() {
-    assert_eq!(scan_status(None).state, ScanState::NotScanned);
+    assert_eq!(
+        scan_status(None).state,
+        ScanState::NotScanned,
+        "harbor_source: scan_status(None).state mismatch"
+    );
     let artifact: Artifact =
         serde_json::from_value(serde_json::json!({"scan_overview":{}})).unwrap();
     assert_eq!(
@@ -23,17 +28,32 @@ fn scan_states_map() {
         )
         .unwrap();
         let result = scan_status(Some(&overview));
-        assert_eq!(result.state, state);
-        assert_eq!(result.error.as_deref(), error);
-        assert_eq!(result.scanned_at, overview.end_time);
+        assert_eq!(result.state, state, "harbor_source: result.state mismatch");
+        assert_eq!(
+            result.error.as_deref(),
+            error,
+            "harbor_source: result.error.as_deref() mismatch"
+        );
+        assert_eq!(
+            result.scanned_at, overview.end_time,
+            "harbor_source: result.scanned_at mismatch"
+        );
     }
 }
 #[test]
 fn cvss_map_feeds_classify() {
     let v: Vuln = serde_json::from_value(serde_json::json!({"id":"CVE-test","vendor_attributes":{"CVSS":{"nvd":{"V3Score":10.0},"redhat":{"V3Score":7.4}}}})).unwrap();
     let f = finding(&v, "repo:tag");
-    assert_eq!(f.severity, Severity::Critical);
-    assert_eq!(f.score_source.as_deref(), Some("nvd"));
+    assert_eq!(
+        f.severity,
+        Severity::Critical,
+        "harbor_source: f.severity mismatch"
+    );
+    assert_eq!(
+        f.score_source.as_deref(),
+        Some("nvd"),
+        "harbor_source: f.score_source.as_deref() mismatch"
+    );
 }
 #[test]
 fn references_are_stable() {
@@ -59,7 +79,11 @@ use support::harbor_mock::*;
 fn fetches_project_images_and_findings() {
     let (_s, src) = harbor_mock();
     let result = src.fetch().unwrap();
-    assert_eq!(result.images.len(), 19);
+    assert_eq!(
+        result.images.len(),
+        19,
+        "harbor_source: result.images.len() mismatch"
+    );
     assert!(
         result
             .findings
@@ -68,8 +92,16 @@ fn fetches_project_images_and_findings() {
             .count()
             > 300
     );
-    assert_eq!(result.source.scanner_name.as_deref(), Some("Trivy"));
-    assert_eq!(result.scope, format!("{}/demo", _s.address()));
+    assert_eq!(
+        result.source.scanner_name.as_deref(),
+        Some("Trivy"),
+        "harbor_source: result.source.scanner_name.as_deref() mismatch"
+    );
+    assert_eq!(
+        result.scope,
+        format!("{}/demo", _s.address()),
+        "harbor_source: result.scope mismatch"
+    );
 }
 #[test]
 fn index_children_become_platform_rows() {
@@ -80,14 +112,14 @@ fn index_children_become_platform_rows() {
         .iter()
         .filter(|i| i.reference.starts_with("demo/alpine-multi:3.20 ("))
         .collect();
-    assert_eq!(children.len(), 8);
+    assert_eq!(children.len(), 8, "harbor_source: children.len() mismatch");
     assert!(
         children
             .iter()
             .any(|i| i.reference.ends_with("(linux/amd64)"))
     );
     let digests: std::collections::BTreeSet<_> = children.iter().map(|i| &i.digest).collect();
-    assert_eq!(digests.len(), 8);
+    assert_eq!(digests.len(), 8, "harbor_source: digests.len() mismatch");
     for child in children {
         let digest = child.digest.as_ref().unwrap();
         let report = fixture(&format!("multiarch/vulns-{}.json", &digest[7..19]));
@@ -136,7 +168,11 @@ fn paginates_repositories_and_artifacts() {
                 .collect(),
         ));
     }
-    assert_eq!(source(&s).fetch().unwrap().images.len(), 250);
+    assert_eq!(
+        source(&s).fetch().unwrap().images.len(),
+        250,
+        "harbor_source: source(&s).fetch().unwrap().images.len() mismatch"
+    );
     for mock in mocks {
         mock.assert_calls(1);
     }
@@ -157,9 +193,20 @@ fn multiple_tags_one_row() {
         ],
     );
     let result = source(&s).fetch().unwrap();
-    assert_eq!(result.images.len(), 1);
-    assert_eq!(result.images[0].reference, "demo/repo:latest");
-    assert_eq!(result.images[0].tags, ["latest", "v2"]);
+    assert_eq!(
+        result.images.len(),
+        1,
+        "harbor_source: result.images.len() mismatch"
+    );
+    assert_eq!(
+        result.images[0].reference, "demo/repo:latest",
+        "harbor_source: result.images[0].reference mismatch"
+    );
+    assert_eq!(
+        result.images[0].tags,
+        ["latest", "v2"],
+        "harbor_source: result.images[0].tags mismatch"
+    );
 }
 #[test]
 fn non_image_artifacts_are_skipped() {
@@ -225,8 +272,16 @@ fn all_projects_scope() {
     let (server, mut src) = harbor_mock();
     src.project = None;
     let result = src.fetch().unwrap();
-    assert_eq!(result.images.len(), 19);
-    assert_eq!(result.scope, format!("{} (all projects)", server.address()));
+    assert_eq!(
+        result.images.len(),
+        19,
+        "harbor_source: result.images.len() mismatch"
+    );
+    assert_eq!(
+        result.scope,
+        format!("{} (all projects)", server.address()),
+        "harbor_source: result.scope mismatch"
+    );
 }
 
 #[test]
@@ -242,13 +297,21 @@ fn failing_child_becomes_failed_row() {
     let path = format!("/api/v2.0/projects/demo/repositories/alpine-multi/artifacts/{digest}");
     let (_server, src) = harbor_mock_with_failure(Some((&path, 500)));
     let result = src.fetch().unwrap();
-    assert_eq!(result.images.len(), 19);
+    assert_eq!(
+        result.images.len(),
+        19,
+        "harbor_source: result.images.len() mismatch"
+    );
     let row = result
         .images
         .iter()
         .find(|i| i.digest.as_deref() == Some(digest))
         .unwrap();
-    assert_eq!(row.scan.state, ScanState::Failed);
+    assert_eq!(
+        row.scan.state,
+        ScanState::Failed,
+        "harbor_source: row.scan.state mismatch"
+    );
     assert!(row.scan.error.as_ref().unwrap().contains("500"));
     assert_eq!(
         result
@@ -275,7 +338,11 @@ fn failing_vulnerability_report_becomes_failed_row() {
         .iter()
         .find(|i| i.reference == "demo/nginx:1.21.0")
         .unwrap();
-    assert_eq!(row.scan.state, ScanState::Failed);
+    assert_eq!(
+        row.scan.state,
+        ScanState::Failed,
+        "harbor_source: row.scan.state mismatch"
+    );
     assert!(row.scan.error.as_ref().unwrap().contains("404"));
     assert!(row.scan.scanned_at.is_some());
     assert!(!result.findings.iter().any(|f| f.image == row.reference));
@@ -297,7 +364,10 @@ fn nested_repository_is_double_encoded() {
     values[0]["scan_overview"] = serde_json::json!({});
     let mocks = artifacts(&server, "nested%252Fbusybox", values);
     let result = source(&server).fetch().unwrap();
-    assert_eq!(result.images[0].reference, "demo/nested/busybox:1.37");
+    assert_eq!(
+        result.images[0].reference, "demo/nested/busybox:1.37",
+        "harbor_source: result.images[0].reference mismatch"
+    );
     for mock in mocks {
         mock.assert_calls(1);
     }
@@ -309,7 +379,11 @@ fn platform_attrs_fallback() {
         serde_json::json!({"os":"linux","architecture":"arm","variant":"v7"}),
     )
     .unwrap();
-    assert_eq!(platform_from_attrs(&attrs).as_deref(), Some("linux/arm/v7"));
+    assert_eq!(
+        platform_from_attrs(&attrs).as_deref(),
+        Some("linux/arm/v7"),
+        "harbor_source: platform_from_attrs(&attrs).as_deref() mismatch"
+    );
     assert!(platform_from_attrs(&ExtraAttrs::default()).is_none());
 }
 
@@ -395,7 +469,11 @@ fn shared_digest_in_two_repositories_preserves_both_rows() {
             .unwrap();
         assert!(result.findings.iter().any(|f| f.image == image.reference));
     }
-    assert_eq!(result.images.len(), 2);
+    assert_eq!(
+        result.images.len(),
+        2,
+        "harbor_source: result.images.len() mismatch"
+    );
 }
 
 #[test]
@@ -437,7 +515,11 @@ fn fetch_with_additions(body: serde_json::Value) -> ScanSet {
 #[test]
 fn empty_additions_body_is_failed() {
     let result = fetch_with_additions(serde_json::json!({}));
-    assert_eq!(result.images[0].scan.state, ScanState::Failed);
+    assert_eq!(
+        result.images[0].scan.state,
+        ScanState::Failed,
+        "harbor_source: result.images[0].scan.state mismatch"
+    );
     assert_eq!(
         result.images[0].scan.error.as_deref(),
         Some("vulnerability report missing")
@@ -454,7 +536,11 @@ fn null_vulnerabilities_is_failed() {
         let result = fetch_with_additions(
             serde_json::json!({"application/vnd.security.vulnerability.report; version=1.1":report}),
         );
-        assert_eq!(result.images[0].scan.state, ScanState::Failed);
+        assert_eq!(
+            result.images[0].scan.state,
+            ScanState::Failed,
+            "harbor_source: result.images[0].scan.state mismatch"
+        );
         assert_eq!(
             result.images[0].scan.error.as_deref(),
             Some("vulnerability report missing")
@@ -468,8 +554,15 @@ fn empty_vulnerability_list_is_clean() {
     let result = fetch_with_additions(
         serde_json::json!({"application/vnd.security.vulnerability.report; version=1.1":{"vulnerabilities":[]}}),
     );
-    assert_eq!(result.images[0].scan.state, ScanState::Ok);
-    assert_eq!(result.images[0].scan.error, None);
+    assert_eq!(
+        result.images[0].scan.state,
+        ScanState::Ok,
+        "harbor_source: result.images[0].scan.state mismatch"
+    );
+    assert_eq!(
+        result.images[0].scan.error, None,
+        "harbor_source: result.images[0].scan.error mismatch"
+    );
     assert!(result.findings.is_empty());
 }
 
@@ -500,8 +593,16 @@ fn sibling_children_with_same_platform_get_distinct_references() {
         });
     }
     let result = source(&server).fetch().unwrap();
-    assert_eq!(result.images.len(), 2);
-    assert_eq!(result.findings.len(), 2);
+    assert_eq!(
+        result.images.len(),
+        2,
+        "harbor_source: result.images.len() mismatch"
+    );
+    assert_eq!(
+        result.findings.len(),
+        2,
+        "harbor_source: result.findings.len() mismatch"
+    );
     for (i, expected) in [
         "demo/index:v1 (linux/amd64)",
         "demo/index:v1 (linux/amd64, 222222222222)",
@@ -514,13 +615,19 @@ fn sibling_children_with_same_platform_get_distinct_references() {
             .iter()
             .find(|row| row.digest.as_deref() == Some(digests[i]))
             .unwrap();
-        assert_eq!(&row.reference, expected);
+        assert_eq!(
+            &row.reference, expected,
+            "harbor_source: &row.reference mismatch"
+        );
         let finding = result
             .findings
             .iter()
             .find(|finding| finding.id == format!("CVE-{i}"))
             .unwrap();
-        assert_eq!(finding.image, row.reference);
+        assert_eq!(
+            finding.image, row.reference,
+            "harbor_source: finding.image mismatch"
+        );
     }
     assert_ne!(result.images[0].reference, result.images[1].reference);
 }

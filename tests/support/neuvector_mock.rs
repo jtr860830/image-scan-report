@@ -26,7 +26,7 @@ pub fn source(server: &MockServer) -> NeuvectorSource {
             registry: "harbor-lab".into(),
             username: "admin".into(),
         },
-        HttpClient::new(&HttpOptions {
+        HttpClient::try_new(&HttpOptions {
             ca_file: None,
             insecure_skip_verify: false,
             timeout: Duration::from_secs(5),

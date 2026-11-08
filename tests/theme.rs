@@ -1,3 +1,4 @@
+//! Integration checks for theme behavior.
 use image_scan_report::{
     config::Config,
     render::theme::{self, ThemeError},

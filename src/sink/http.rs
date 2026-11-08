@@ -1,14 +1,11 @@
 //! HTTP artifact uploads.
 use super::{Artifact, ReportSink, SinkError};
-use crate::{
-    config::HttpMode,
-    source::http::{HttpClient, encode_segment, redact_url},
-};
-use std::{
-    sync::atomic::{AtomicU64, Ordering},
-    time::{SystemTime, UNIX_EPOCH},
-};
+use crate::config::HttpMode;
+use crate::source::http::HttpClient;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::{SystemTime, UNIX_EPOCH};
 
+/// Artifact destination that uploads raw or multipart HTTP bodies.
 pub struct HttpSink {
     url: String,
     method: String,
@@ -17,6 +14,7 @@ pub struct HttpSink {
     client: HttpClient,
 }
 impl HttpSink {
+    /// Configure an upload destination with its endpoint, headers, encoding, and transport.
     pub fn new(
         url: String,
         method: String,
@@ -33,6 +31,8 @@ impl HttpSink {
         }
     }
 }
+/// Generate a multipart boundary using nanosecond time and a process-local counter.
+#[must_use]
 pub fn boundary() -> String {
     static COUNTER: AtomicU64 = AtomicU64::new(0);
     let nanos = SystemTime::now()
@@ -44,6 +44,8 @@ pub fn boundary() -> String {
         (nanos << 64) | u128::from(COUNTER.fetch_add(1, Ordering::Relaxed))
     )
 }
+/// Encode one file as a multipart form body, including its closing boundary.
+#[must_use]
 pub fn multipart_body(
     boundary: &str,
     field: &str,
@@ -61,13 +63,14 @@ impl ReportSink for HttpSink {
         format!(
             "HTTP {} {}",
             self.method,
-            redact_url(&self.url).replace("%7Bfilename%7D", "{filename}")
+            crate::source::http::redact_url(&self.url).replace("%7Bfilename%7D", "{filename}")
         )
     }
     fn store(&self, artifact: &Artifact) -> Result<(), SinkError> {
-        let url = self
-            .url
-            .replace("{filename}", &encode_segment(&artifact.file_name));
+        let url = self.url.replace(
+            "{filename}",
+            &crate::source::http::encode_segment(&artifact.file_name),
+        );
         let mut headers: Vec<_> = self
             .headers
             .iter()
@@ -103,7 +106,11 @@ impl ReportSink for HttpSink {
             }
         };
         result.map(|_| ()).map_err(|e| {
-            SinkError::Other(format!("HTTP {} {}: {e}", self.method, redact_url(&url)))
+            SinkError::Other(format!(
+                "HTTP {} {}: {e}",
+                self.method,
+                crate::source::http::redact_url(&url)
+            ))
         })
     }
 }

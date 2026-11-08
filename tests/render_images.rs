@@ -1,3 +1,4 @@
+//! Integration checks for render images behavior.
 use image_scan_report::{
     model::Language,
     render::{

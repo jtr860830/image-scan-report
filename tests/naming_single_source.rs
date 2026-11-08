@@ -1,3 +1,4 @@
+//! Integration checks for naming single source behavior.
 use std::{fs, path::Path};
 use walkdir::WalkDir;
 

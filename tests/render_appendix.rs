@@ -1,3 +1,4 @@
+//! Integration checks for render appendix behavior.
 use image_scan_report::{
     model::Language,
     render::{engine::Renderer, model::RenderData},

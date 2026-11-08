@@ -1,3 +1,4 @@
+//! Integration checks for deploy manifests behavior.
 use image_scan_report::config::Config;
 use serde::Deserialize;
 use serde_yaml_ng::Value;

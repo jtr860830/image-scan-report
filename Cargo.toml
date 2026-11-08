@@ -50,3 +50,6 @@ tempfile = "3"
 lto = "thin"
 codegen-units = 1
 strip = true
+
+[lints.rust]
+missing_docs = "warn"

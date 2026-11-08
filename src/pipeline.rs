@@ -1,16 +1,19 @@
 //! Fetch scan results, assemble reports, and store artifacts.
-use crate::{
-    config::{Config, ConfigError, ReportConfig, SourceConfig},
-    model::{Report, ScanSet},
-    naming::artifact_base_name,
-    sink::{Artifact, ReportSink, build_sinks},
-    source::{
-        ScanSource, SourceError, neuvector_file::NeuvectorFileSource, trivy_file::TrivyFileSource,
-    },
-};
+use crate::config::{Config, ConfigError, ReportConfig, SourceConfig};
+use crate::model::{Report, ScanSet};
+
+use crate::sink::{Artifact, ReportSink};
+use crate::source::neuvector_file::NeuvectorFileSource;
+use crate::source::trivy_file::TrivyFileSource;
+use crate::source::{ScanSource, SourceError};
 use chrono::{DateTime, Utc};
 use std::path::{Path, PathBuf};
 
+/// Construct the configured scanner source and its transport.
+///
+/// # Errors
+///
+/// Fails if connection settings or certificate roots cannot initialize the selected source.
 pub fn build_source(cfg: &SourceConfig) -> Result<Box<dyn ScanSource>, ConfigError> {
     match cfg {
         SourceConfig::TrivyFiles { path } => Ok(Box::new(TrivyFileSource { dir: path.clone() })),
@@ -76,6 +79,7 @@ pub fn build_source(cfg: &SourceConfig) -> Result<Box<dyn ScanSource>, ConfigErr
     }
 }
 
+/// Combine scan results with report settings and a UTC generation time.
 pub fn assemble_report(set: ScanSet, cfg: &ReportConfig, now: DateTime<Utc>) -> Report {
     Report {
         generated_at: now,
@@ -88,27 +92,39 @@ pub fn assemble_report(set: ScanSet, cfg: &ReportConfig, now: DateTime<Utc>) -> 
     }
 }
 
+/// Descriptions of stored artifacts and any failed output destinations.
 #[derive(Debug)]
 pub struct RunSummary {
+    /// Images included in this scan or vulnerability group.
     pub images: usize,
+    /// Normalized vulnerabilities associated with scanned images.
     pub findings: usize,
+    /// Artifact and destination descriptions for successful writes. An empty list indicates no entries.
     pub stored: Vec<String>,
+    /// Destination descriptions paired with their storage errors. An empty list indicates no entries.
     pub failed_sinks: Vec<String>,
 }
 
+/// Configuration, source, rendering, or complete output failure during a run.
 #[derive(thiserror::Error, Debug)]
+#[must_use]
 pub enum RunError {
+    /// Configuration loading or validation failed.
     #[error(transparent)]
     Config(#[from] ConfigError),
+    /// Scan data collection failed.
     #[error(transparent)]
     Source(#[from] SourceError),
+    /// Report rendering failed.
     #[error("rendering failed: {0}")]
     Render(String),
+    /// Every configured output destination rejected the generated artifacts.
     #[error("every output failed: {0:?}")]
     AllSinksFailed(Vec<String>),
 }
 
 impl RunError {
+    /// Map a pipeline failure to its command-line exit status.
     pub fn exit_code(&self) -> i32 {
         match self {
             Self::Config(_) => 2,
@@ -122,7 +138,9 @@ impl RunError {
 /// Product identity supplied by the application.
 #[derive(Clone, Debug)]
 pub struct ProductInfo {
+    /// Display name supplied by the scanner or theme.
     pub name: String,
+    /// Schema or component version supplied by the producer.
     pub version: String,
 }
 
@@ -163,7 +181,7 @@ fn load_inputs(cfg: &Config, now: DateTime<Utc>) -> Result<Inputs, RunError> {
         .map(crate::render::theme::Logo::load)
         .transpose()
         .map_err(|err| ConfigError::Invalid(format!("report.logo: {err}")))?;
-    let sinks = build_sinks(&cfg.output)?;
+    let sinks = crate::sink::build_sinks(&cfg.output)?;
     let source = build_source(&cfg.source)?;
     let source_description = source.describe();
     let report = assemble_report(source.fetch()?, &cfg.report, now);
@@ -176,14 +194,22 @@ fn load_inputs(cfg: &Config, now: DateTime<Utc>) -> Result<Inputs, RunError> {
     })
 }
 
+/// Descriptions of the serialized template input produced for inspection.
 #[derive(Debug)]
 pub struct RenderDataSummary {
+    /// Filesystem location of the configured resource.
     pub path: PathBuf,
+    /// Images included in this scan or vulnerability group.
     pub images: usize,
+    /// Normalized vulnerabilities associated with scanned images.
     pub findings: usize,
 }
 
 /// Write display-ready JSON for template iteration.
+///
+/// # Errors
+///
+/// Fails if scan collection, theme loading, serialization, or writing the destination fails.
 pub fn write_render_data(
     cfg: &Config,
     now: DateTime<Utc>,
@@ -202,6 +228,10 @@ pub fn write_render_data(
 }
 
 /// Build display-ready JSON using the same inputs and options as PDF rendering.
+///
+/// # Errors
+///
+/// Fails if scan collection, theme loading, or template-data serialization fails.
 pub fn render_data(
     cfg: &Config,
     now: DateTime<Utc>,
@@ -223,6 +253,11 @@ pub fn render_data(
     ))
 }
 
+/// Fetch scan results, render enabled artifacts, and store them in each destination.
+///
+/// # Errors
+///
+/// Fails if inputs or themes cannot be loaded, rendering fails, or every output destination fails.
 pub fn run(
     cfg: &Config,
     now: DateTime<Utc>,
@@ -240,7 +275,11 @@ pub fn run(
         artifacts.push(Artifact {
             file_name: format!(
                 "{}.json",
-                artifact_base_name(&report.scope, report.source.kind, now.date_naive())
+                crate::naming::artifact_base_name(
+                    &report.scope,
+                    report.source.kind,
+                    now.date_naive()
+                )
             ),
             media_type: "application/json",
             bytes: serde_json::to_vec_pretty(&report)
@@ -255,7 +294,11 @@ pub fn run(
         artifacts.push(Artifact {
             file_name: format!(
                 "{}.pdf",
-                artifact_base_name(&report.scope, report.source.kind, now.date_naive())
+                crate::naming::artifact_base_name(
+                    &report.scope,
+                    report.source.kind,
+                    now.date_naive()
+                )
             ),
             media_type: "application/pdf",
             bytes,
@@ -289,6 +332,11 @@ pub fn run(
     Ok(summary)
 }
 
+/// Validate inputs and summarize scan availability without storing a report.
+///
+/// # Errors
+///
+/// Fails if configuration, theme assets, or scan data cannot be loaded or validated.
 pub fn check(cfg: &Config, product: &ProductInfo) -> Result<String, RunError> {
     let inputs = load_inputs(cfg, Utc::now())?;
     let mut scanned = 0usize;

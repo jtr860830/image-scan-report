@@ -2,11 +2,14 @@
 use super::{ParseError, SourceError};
 use crate::model::{Finding, Image, ScanSet, SourceInfo};
 use chrono::{DateTime, Utc};
-use std::{
-    collections::{HashMap, HashSet},
-    path::{Path, PathBuf},
-};
+use std::collections::{HashMap, HashSet};
+use std::path::{Path, PathBuf};
 
+/// Find JSON input files recursively in deterministic path order.
+///
+/// # Errors
+///
+/// Fails if the directory is missing or unreadable, or a directory entry cannot be traversed.
 pub fn walk_json_files(dir: &Path) -> Result<Vec<PathBuf>, SourceError> {
     let metadata = std::fs::metadata(dir).map_err(|e| SourceError::Unreadable(dir.into(), e))?;
     if !metadata.is_dir() {
@@ -30,6 +33,7 @@ pub fn walk_json_files(dir: &Path) -> Result<Vec<PathBuf>, SourceError> {
     paths.sort();
     Ok(paths)
 }
+/// Read a file modification time as UTC, or None when metadata is unavailable.
 pub fn file_modified_at(path: &Path) -> Option<DateTime<Utc>> {
     std::fs::metadata(path)
         .ok()?
@@ -37,6 +41,7 @@ pub fn file_modified_at(path: &Path) -> Option<DateTime<Utc>> {
         .ok()
         .map(Into::into)
 }
+/// Merge duplicate image records and retain their associated findings.
 pub fn dedupe_images(items: Vec<(Image, Vec<Finding>)>) -> (Vec<Image>, Vec<Finding>) {
     let mut positions = HashMap::new();
     let mut selected: Vec<(Image, Vec<Finding>)> = Vec::new();
@@ -68,6 +73,7 @@ pub fn dedupe_images(items: Vec<(Image, Vec<Finding>)>) -> (Vec<Image>, Vec<Find
     (images, findings)
 }
 
+/// Merge image records that share a reference and retain associated findings.
 pub fn dedupe_images_by_reference(items: Vec<(Image, Vec<Finding>)>) -> (Vec<Image>, Vec<Finding>) {
     let mut positions = HashMap::new();
     let mut selected: Vec<(Image, Vec<Finding>)> = Vec::new();
@@ -105,12 +111,16 @@ pub fn dedupe_images_by_reference(items: Vec<(Image, Vec<Finding>)>) -> (Vec<Ima
 
 /// Deduplicated scan results and the directory scope shared by file sources.
 pub struct FetchedDirectory {
+    /// Human-readable registry, project, or directory scope of the scan.
     pub scope: String,
+    /// Images included in this scan or vulnerability group. An empty list indicates no entries.
     pub images: Vec<Image>,
+    /// Normalized vulnerabilities associated with scanned images. An empty list indicates no entries.
     pub findings: Vec<Finding>,
 }
 
 impl FetchedDirectory {
+    /// Attach source metadata to the images and findings collected from a directory.
     pub fn into_scan_set(self, source: SourceInfo) -> ScanSet {
         ScanSet {
             source,
@@ -122,6 +132,10 @@ impl FetchedDirectory {
 }
 
 /// Read reports in sorted path order, skipping unrelated or invalid files.
+///
+/// # Errors
+///
+/// Fails if the input directory is unreadable or contains no usable image reports.
 pub fn fetch_directory<F>(dir: &Path, mut parse: F) -> Result<FetchedDirectory, SourceError>
 where
     F: FnMut(

@@ -1,3 +1,4 @@
+//! Integration checks for sink filesystem behavior.
 use image_scan_report::sink::{Artifact, ReportSink, filesystem::FilesystemSink};
 
 #[test]
@@ -18,7 +19,11 @@ fn writes_and_overwrites_file() {
         std::fs::read(dir.path().join("report.json")).unwrap(),
         b"second"
     );
-    assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 1);
+    assert_eq!(
+        std::fs::read_dir(dir.path()).unwrap().count(),
+        1,
+        "sink_filesystem: std::fs::read_dir(dir.path()).unwrap().count() mismatch"
+    );
 }
 
 #[test]
@@ -51,7 +56,11 @@ fn failed_rename_removes_temporary_file() {
         })
         .is_err()
     );
-    assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 1);
+    assert_eq!(
+        std::fs::read_dir(dir.path()).unwrap().count(),
+        1,
+        "sink_filesystem: std::fs::read_dir(dir.path()).unwrap().count() mismatch"
+    );
     assert!(dir.path().join("report.json").is_dir());
 }
 
@@ -73,6 +82,14 @@ fn temporary_file_is_not_reused() {
         std::fs::read(dir.path().join("report.json")).unwrap(),
         b"new"
     );
-    assert_eq!(std::fs::read(stale).unwrap(), b"stale");
-    assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 2);
+    assert_eq!(
+        std::fs::read(stale).unwrap(),
+        b"stale",
+        "sink_filesystem: std::fs::read(stale).unwrap() mismatch"
+    );
+    assert_eq!(
+        std::fs::read_dir(dir.path()).unwrap().count(),
+        2,
+        "sink_filesystem: std::fs::read_dir(dir.path()).unwrap().count() mismatch"
+    );
 }

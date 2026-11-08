@@ -14,7 +14,7 @@ pub fn source(server: &MockServer) -> HarborSource {
             project: Some("demo".into()),
             username: "robot".into(),
         },
-        HttpClient::new(&HttpOptions {
+        HttpClient::try_new(&HttpOptions {
             ca_file: None,
             insecure_skip_verify: false,
             timeout: Duration::from_secs(5),

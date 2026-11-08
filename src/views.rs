@@ -7,20 +7,28 @@ use serde::Serialize;
 
 use crate::model::{Finding, Image, ScanState, Severity};
 
+/// Finding totals for each normalized severity band.
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct SeverityCounts {
+    /// Number of findings in the critical severity band.
     pub critical: usize,
+    /// Number of findings in the high severity band.
     pub high: usize,
+    /// Number of findings in the medium severity band.
     pub medium: usize,
+    /// Number of findings in the low severity band.
     pub low: usize,
+    /// Number of findings in the unrated severity band.
     pub unrated: usize,
 }
 
 impl SeverityCounts {
+    /// Sum the counts across all severity bands.
     pub fn total(&self) -> usize {
         self.critical + self.high + self.medium + self.low + self.unrated
     }
 
+    /// Increment the count for a normalized severity band.
     pub fn add(&mut self, s: Severity) {
         match s {
             Severity::Critical => self.critical += 1,
@@ -31,6 +39,7 @@ impl SeverityCounts {
         }
     }
 
+    /// Sum the critical and high severity counts.
     pub fn high_or_worse(&self) -> usize {
         self.critical + self.high
     }
@@ -40,31 +49,49 @@ impl SeverityCounts {
     }
 }
 
+/// Deduplicated vulnerability with its affected packages and image references.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct UniqueVulnerability {
+    /// Scanner-provided vulnerability identifier.
     pub id: String,
+    /// Normalized vulnerability severity band.
     pub severity: Severity,
+    /// CVSS v3 score in the inclusive range zero to ten, or None when unavailable.
     pub score_v3: Option<f32>,
+    /// Effective CVSS score selected for severity classification. None indicates that the value is unavailable.
     pub score: Option<f32>,
+    /// Affected package names in this vulnerability group. An empty list indicates no entries.
     pub packages: Vec<String>,
+    /// Package versions that resolve the grouped vulnerabilities. An empty list indicates no entries.
     pub fixed_versions: Vec<String>,
+    /// Images included in this scan or vulnerability group. An empty list indicates no entries.
     pub images: Vec<String>,
 }
 
+/// Findings resolved by upgrading one package to a target version.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct RemediationGroup {
+    /// Affected software package identifier.
     pub package: String,
+    /// Package version containing the fix, when the scanner supplies one.
     pub fixed_version: String,
+    /// Severity counts for findings resolved by this upgrade.
     pub resolves: SeverityCounts,
+    /// Images included in this scan or vulnerability group. An empty list indicates no entries.
     pub images: Vec<String>,
 }
 
+/// Severity totals for one image reference.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct ImageSummary {
+    /// Canonical image reference used to associate findings with an image.
     pub reference: String,
+    /// Finding totals grouped by normalized severity.
     pub counts: SeverityCounts,
 }
 
+/// Count findings in each normalized severity band.
+#[must_use]
 pub fn counts(findings: &[Finding]) -> SeverityCounts {
     let mut result = SeverityCounts::default();
     for finding in findings {
@@ -73,6 +100,8 @@ pub fn counts(findings: &[Finding]) -> SeverityCounts {
     result
 }
 
+/// Count findings that provide a nonempty fixed version.
+#[must_use]
 pub fn fixable(findings: &[Finding]) -> usize {
     findings
         .iter()
@@ -85,6 +114,8 @@ fn sort_dedup(values: &mut Vec<String>) {
     values.dedup();
 }
 
+/// Group findings by vulnerability identifier with affected packages and images.
+#[must_use]
 pub fn unique_vulnerabilities(findings: &[Finding]) -> Vec<UniqueVulnerability> {
     let mut groups = BTreeMap::new();
     for f in findings {
@@ -130,6 +161,8 @@ pub fn unique_vulnerabilities(findings: &[Finding]) -> Vec<UniqueVulnerability> 
     result
 }
 
+/// Group fixable findings by package and target version.
+#[must_use]
 pub fn remediation_groups(findings: &[Finding]) -> Vec<RemediationGroup> {
     let mut groups = BTreeMap::new();
     for f in findings {
@@ -161,6 +194,8 @@ pub fn remediation_groups(findings: &[Finding]) -> Vec<RemediationGroup> {
     result
 }
 
+/// Count findings by severity for each image reference.
+#[must_use]
 pub fn image_summaries(images: &[Image], findings: &[Finding]) -> Vec<ImageSummary> {
     let mut by_image = BTreeMap::new();
     for f in findings {
@@ -188,6 +223,8 @@ pub fn image_summaries(images: &[Image], findings: &[Finding]) -> Vec<ImageSumma
     result
 }
 
+/// Count images with at least one high or critical finding.
+#[must_use]
 pub fn images_with_high_or_worse(summaries: &[ImageSummary]) -> usize {
     summaries
         .iter()
@@ -195,6 +232,8 @@ pub fn images_with_high_or_worse(summaries: &[ImageSummary]) -> usize {
         .count()
 }
 
+/// Select images whose scan age exceeds the configured number of days.
+#[must_use]
 pub fn stale_images(images: &[Image], now: DateTime<Utc>, stale_after_days: u32) -> Vec<&Image> {
     // An unrepresentable threshold precedes every representable scan timestamp.
     let threshold = now.checked_sub_signed(Duration::days(i64::from(stale_after_days)));

@@ -1,12 +1,12 @@
 //! Embedded Typst compilation and deterministic PDF export.
-use super::{fonts, model::RenderData, theme::Logo};
-use chrono::{DateTime, Datelike, Timelike, Utc};
+use super::fonts;
+use super::model::RenderData;
+use super::theme::Logo;
+use chrono::{DateTime, Utc};
 use std::sync::Once;
-use typst::{
-    diag::SourceDiagnostic,
-    foundations::{Datetime, Smart},
-};
-use typst_as_lib::{TypstAsLibError, TypstEngine, conversions::IntoSource};
+use typst::diag::SourceDiagnostic;
+use typst::foundations::{Datetime, Smart};
+use typst_as_lib::{TypstAsLibError, TypstEngine};
 use typst_layout::PagedDocument;
 use typst_pdf::{PdfOptions, Timestamp};
 
@@ -43,16 +43,21 @@ const SOURCES: &[(&str, &str)] = &[
     ),
 ];
 
+/// Failure to build template data, compile templates, or encode rendered output.
 #[derive(thiserror::Error, Debug)]
 pub enum RenderError {
+    /// Embedded template compilation failed.
     #[error("template compilation failed:\n{0}")]
     Compile(String),
+    /// PDF export failed after template compilation.
     #[error("PDF export failed: {0}")]
     Pdf(String),
+    /// Template input conversion or preview encoding failed.
     #[error("{0}")]
     Data(String),
 }
 
+/// Reusable embedded template sources for deterministic document compilation.
 pub struct Renderer {
     sources: Vec<(&'static str, String)>,
 }
@@ -62,6 +67,7 @@ impl Default for Renderer {
     }
 }
 impl Renderer {
+    /// Initialize the embedded report templates and attempt to configure a single rendering thread.
     pub fn new() -> Self {
         static POOL: Once = Once::new();
         POOL.call_once(|| {
@@ -95,6 +101,7 @@ impl Renderer {
     }
 
     fn diagnostics(&self, diagnostics: &[SourceDiagnostic]) -> String {
+        use typst_as_lib::conversions::IntoSource;
         diagnostics
             .iter()
             .map(|diagnostic| {
@@ -142,8 +149,8 @@ impl Renderer {
             files.push((&logo.file_name, &logo.bytes));
         }
         let customer_name = customer_logo.map(Logo::report_file_name);
-        if let Some(logo) = customer_logo {
-            files.push((customer_name.as_deref().unwrap(), &logo.bytes));
+        if let (Some(logo), Some(name)) = (customer_logo, customer_name.as_deref()) {
+            files.push((name, &logo.bytes));
         }
         let main = self
             .sources
@@ -171,6 +178,15 @@ impl Renderer {
             })
     }
 
+    /// Compile the report templates and export a PDF with the supplied metadata.
+    ///
+    /// # Errors
+    ///
+    /// Fails if template compilation, generation-time conversion, or PDF export fails.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the renderer sources omit the required `report.typ` template.
     pub fn render_pdf(
         &self,
         data: &RenderData,
@@ -178,6 +194,8 @@ impl Renderer {
         customer_logo: Option<&Logo>,
         generated_at: DateTime<Utc>,
     ) -> Result<Vec<u8>, RenderError> {
+        use chrono::{Datelike, Timelike};
+
         let doc = self.compile(data, logo, customer_logo)?;
         let date = Datetime::from_ymd_hms(
             generated_at.year(),
@@ -206,6 +224,14 @@ impl Renderer {
     }
 
     /// Render a one-based page number at the requested pixels per inch.
+    ///
+    /// # Errors
+    ///
+    /// Fails if pixels per inch are invalid, the page is out of range, template compilation fails, or PNG encoding fails.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the renderer sources omit the required `report.typ` template.
     #[cfg(feature = "preview")]
     pub fn render_png(
         &self,

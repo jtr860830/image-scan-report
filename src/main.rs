@@ -1,4 +1,4 @@
-use clap::{CommandFactory, FromArgMatches};
+//! Command-line entry point for scan report generation.
 use image_scan_report::cli::{self, Cli};
 use std::process::ExitCode;
 use tracing_subscriber::EnvFilter;
@@ -7,6 +7,7 @@ const PRODUCT_NAME: &str = "judex";
 const PRODUCT_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 fn main() -> ExitCode {
+    use clap::{CommandFactory, FromArgMatches};
     tracing_subscriber::fmt()
         .with_env_filter(log_filter(std::env::var("RUST_LOG").ok().as_deref()))
         .with_writer(std::io::stderr)
@@ -72,9 +73,9 @@ fn log_filter(env: Option<&str>) -> EnvFilter {
     let env = env.unwrap_or("info");
     let filter = EnvFilter::try_new(env)
         .unwrap_or_else(|_| EnvFilter::new("info"))
-        .add_directive("ureq_proto=off".parse().unwrap());
+        .add_directive("ureq_proto=off".parse().expect("static directive"));
     if env.contains("trace") {
-        filter.add_directive("ureq=debug".parse().unwrap())
+        filter.add_directive("ureq=debug".parse().expect("static directive"))
     } else {
         filter
     }

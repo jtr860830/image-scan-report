@@ -1,3 +1,4 @@
+//! Integration checks for pipeline behavior.
 #[path = "support/pdf.rs"]
 mod pdf;
 #[path = "support/reduced_fixtures.rs"]

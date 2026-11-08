@@ -2,6 +2,8 @@
 use crate::model::SourceKind;
 use chrono::NaiveDate;
 
+/// Normalize text into a safe filename component.
+#[must_use]
 pub fn slug(s: &str) -> String {
     let mut result = String::new();
     let mut separator = false;
@@ -23,6 +25,8 @@ pub fn slug(s: &str) -> String {
     }
 }
 
+/// Compose a deterministic artifact basename from scope, source kind, and date.
+#[must_use]
 pub fn artifact_base_name(scope: &str, kind: SourceKind, date: NaiveDate) -> String {
     let kind = match kind {
         SourceKind::TrivyFiles => "trivy-files",

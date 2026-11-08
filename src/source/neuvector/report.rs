@@ -1,40 +1,52 @@
 //! Vulnerability mapping shared by NeuVector scanner and controller reports.
-use crate::{
-    model::Finding,
-    severity::{CvssScores, ScoreInput, classify, clean_score},
-};
+use crate::model::Finding;
+use crate::severity::{CvssScores, ScoreInput};
 use chrono::{DateTime, Utc};
 use serde::Deserialize;
 
+/// NeuVector vulnerability fields preserved for normalization.
 #[derive(Deserialize)]
 pub struct NvVulnerability {
+    /// Display name supplied by the scanner or theme.
     pub name: String,
+    /// Normalized vulnerability severity band.
     pub severity: String,
+    /// Effective CVSS score selected for severity classification. None indicates that the value is unavailable.
     pub score: Option<f64>,
+    /// CVSS v3 score in the inclusive range zero to ten, or None when unavailable.
     pub score_v3: Option<f64>,
+    /// Affected software package identifier supplied by NeuVector.
     pub package_name: String,
+    /// Installed software version supplied by NeuVector.
     pub package_version: String,
+    /// Package version containing the fix, when the scanner supplies one. None indicates that the value is unavailable.
     pub fixed_version: Option<String>,
+    /// External advisory URL supplied by the scanner. None indicates that the value is unavailable.
     pub link: Option<String>,
+    /// Human-readable explanation of the vulnerability. None indicates that the value is unavailable.
     pub description: Option<String>,
+    /// Advisory publication time in Unix seconds. None indicates that the value is unavailable.
     pub published_timestamp: Option<i64>,
+    /// File path identifying the affected package, or None when the scanner omits it.
     pub file_name: Option<String>,
 }
 
+/// Convert optional Unix seconds to UTC, using None for missing or invalid timestamps.
 pub fn nv_timestamp(secs: Option<i64>) -> Option<DateTime<Utc>> {
     secs.filter(|s| *s != 0)
         .and_then(|s| DateTime::from_timestamp(s, 0))
 }
 
+/// Normalize a NeuVector vulnerability for the supplied image reference.
 pub fn finding_from_nv(v: &NvVulnerability, image_reference: &str) -> Finding {
     let cvss = [(
         "neuvector".into(),
         CvssScores {
-            v3: clean_score(v.score_v3),
-            v2: clean_score(v.score),
+            v3: crate::severity::clean_score(v.score_v3),
+            v2: crate::severity::clean_score(v.score),
         },
     )];
-    let c = classify(&ScoreInput {
+    let c = crate::severity::classify(&ScoreInput {
         cvss: &cvss,
         scanner_label: Some(&v.severity),
     });

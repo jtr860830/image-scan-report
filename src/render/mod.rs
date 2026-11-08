@@ -1,14 +1,28 @@
+//! Report rendering with embedded templates and fonts.
+/// Bundled font faces for reproducible report rendering.
 pub mod fonts;
 
+/// Display-ready report data, independent of the rendering backend.
 pub mod model;
 
+/// Bundled report translations and their canonical template keys.
 pub mod strings;
 
+/// Swappable report colors, fonts, and branding.
 pub mod theme;
 
+/// Embedded Typst compilation and deterministic PDF export.
 pub mod engine;
 
 /// Render a report using bundled translations, templates, and fonts.
+///
+/// # Errors
+///
+/// Fails if template compilation, generation-time conversion, or PDF export fails.
+///
+/// # Panics
+///
+/// Panics if bundled locale JSON is invalid or the embedded main template is missing.
 pub fn render_pdf(
     report: &crate::model::Report,
     opts: &model::RenderOptions,

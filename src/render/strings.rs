@@ -97,6 +97,10 @@ pub const KEYS: &[&str] = &[
 ];
 
 /// Load the bundled translations for a report language.
+///
+/// # Panics
+///
+/// Panics if a bundled locale is not valid JSON containing string values.
 pub fn load(language: Language) -> BTreeMap<String, String> {
     let source = match language {
         Language::ZhTw => include_str!("../../strings/zh-TW.json"),

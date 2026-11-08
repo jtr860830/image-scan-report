@@ -207,3 +207,22 @@ Harbor reports one row per platform child, so the same registry yields 12 and
 20 images respectively. With `RUST_LOG=trace` neither run printed the Basic
 credentials or the NeuVector token. The sequential Harbor fetch is the slow part of a run;
 concurrent requests are a later optimisation.
+
+## Code style
+
+The project follows [Google's Rust Style Guide](https://google.github.io/styleguide/rustguide.html),
+which defers to the official [Rust Style Guide](https://doc.rust-lang.org/style-guide/)
+and [Rust API Guidelines](https://rust-lang.github.io/api-guidelines/).
+
+- Use stable rustfmt options: edition 2024, width 100, and Unix newlines.
+- Apply the nightly-only options by hand: `imports_granularity = "Module"`,
+  `hex_literal_case = "Lower"`, and `format_macro_matchers = true`.
+- Document public APIs; `missing_docs` is enabled and warnings fail Clippy checks.
+- Name fallible constructors `try_new`; keep infallible constructors named `new`.
+- Import items from one module per `use` statement. Avoid glob imports except inline
+  test `use super::*` and non-leaf module re-exports.
+- Scope traits to the function that needs them when they have only one use site,
+  and qualify free-function calls with their module.
+- Prefer `expect` with context over `unwrap`, use pattern matching for optional
+  values, and document panic cases.
+- Mark error types and pure result-producing helpers `#[must_use]`.

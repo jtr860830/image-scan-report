@@ -1,3 +1,4 @@
+//! Integration checks for fonts behavior.
 #[test]
 fn bundled_fonts_cover_three_families_with_regular_and_bold() {
     let book = image_scan_report::render::fonts::font_book();

@@ -1,3 +1,4 @@
+//! Integration checks for strings behavior.
 use std::collections::BTreeSet;
 
 use image_scan_report::{

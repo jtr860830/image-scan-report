@@ -1,3 +1,4 @@
+//! Integration checks for render model behavior.
 use image_scan_report::{
     config::ReportConfig,
     model::*,

@@ -1,3 +1,4 @@
+//! Integration checks for model snapshot behavior.
 use chrono::{DateTime, Utc};
 use image_scan_report::model::*;
 

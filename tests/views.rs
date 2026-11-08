@@ -1,3 +1,4 @@
+//! Integration checks for views behavior.
 use Severity::*;
 use chrono::{Duration, TimeZone, Utc};
 use image_scan_report::model::{Finding, Image, ScanState, ScanStatus, Severity, SeverityBasis};

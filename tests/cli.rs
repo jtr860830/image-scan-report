@@ -1,3 +1,4 @@
+//! Integration checks for cli behavior.
 #[path = "support/reduced_fixtures.rs"]
 mod reduced_fixtures;
 use assert_cmd::cargo::cargo_bin_cmd;

@@ -1,3 +1,4 @@
+//! Integration checks for golden behavior.
 use image_scan_report::{model::Language, render::engine::Renderer};
 #[allow(dead_code)]
 #[path = "support/data.rs"]

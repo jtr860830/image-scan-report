@@ -1,3 +1,4 @@
+//! Integration checks for perf behavior.
 use image_scan_report::{
     model::Language,
     render::{self, model::RenderOptions, theme},
