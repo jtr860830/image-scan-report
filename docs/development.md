@@ -135,3 +135,26 @@ Mock servers bind loopback sockets. These tests, including the closed-port
 connection test, must run where loopback binding is permitted (some sandboxes deny it).
 Compile them with `cargo test --offline --no-run` and run socket-free tests
 where loopback binding is unavailable.
+
+## Live verification
+
+The API sources were run against a real Harbor and NeuVector before release.
+The lab (two VMs' worth of k3s on one node) is private; the numbers below are
+the record of what the release build did there. Re-run this table whenever a
+source changes or a scanner is upgraded.
+
+| Item | Value |
+|---|---|
+| Date | 2026-11-08 |
+| Build | commit `0efacf4`, `cargo build --release --locked` in `rust:1.99-bookworm` (x86_64) |
+| Harbor | 2.15.4 with Trivy v0.75.0, plain `http://` NodePort, project `demo` |
+| Harbor result | `check` and `run` in both languages: 19 images (11 single-arch, 8 platform children of one multi-arch index), 4 383 findings; PDF 435 pages (zh-TW) / 434 pages (en), 1.8 MB; `run` 94 s wall (≈ 65 s fetching sequentially, ≈ 25 s rendering), peak RSS 860 MB |
+| NeuVector | 5.6.4 controller, self-signed certificate whose only SAN is `neuvector`, registry configuration `harbor-lab` |
+| NeuVector with `insecure_skip_verify: true` | OK by IP; the warning line is printed once; 12 images, 3 560 findings, 348 pages, 18 s, RSS 716 MB |
+| NeuVector with `ca_file` | OK when addressed as `https://neuvector:<port>` (hosts entry); by IP the handshake fails with exit 3 and `certificate not valid for name "…"; certificate is only valid for DnsName("neuvector")` — the expected behaviour, and the message tells the operator what to fix |
+| Schema drift | none; every captured fixture shape matched the live responses |
+
+Notes: NeuVector reports a multi-arch index as a single image (the amd64 child),
+Harbor reports one row per platform child, so the same registry yields 12 and
+19 images respectively. The sequential Harbor fetch is the slow part of a run;
+concurrent requests are a later optimisation.
