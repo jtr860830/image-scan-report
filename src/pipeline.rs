@@ -84,7 +84,7 @@ fn source_client(
         ca_file: ca_file.map(Path::to_owned),
         insecure_skip_verify,
         timeout: std::time::Duration::from_secs(timeout_secs),
-        user_agent: format!("image-scan-report/{}", env!("CARGO_PKG_VERSION")),
+        user_agent: crate::source::http::USER_AGENT.into(),
     })
     .map_err(|e| ConfigError::Invalid(format!("source.ca_file: {e}")))?;
     if insecure_skip_verify {

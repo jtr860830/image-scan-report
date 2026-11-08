@@ -1,7 +1,7 @@
 # judex
 
 judex turns existing container-image vulnerability scans into audit reports.
-It normalises Trivy and NeuVector scanner JSON into a shared model without scanning images itself.
+It normalises Trivy and NeuVector scanner JSON and results from the Harbor and NeuVector APIs into a shared model without scanning images itself.
 
 Sources: Trivy and NeuVector scanner files, the Harbor API and the NeuVector controller API.
 Outputs: PDF and JSON to the filesystem.
@@ -59,8 +59,10 @@ File sources recursively discover JSON files. Invalid reports are skipped with a
 warning; no usable reports is a source failure. For NeuVector standalone scanner
 files, use `neuvector-files` and a directory such as `./fixtures/neuvector-scanner`.
 
-Use the [Harbor example](examples/config.yaml) or [NeuVector example](examples/config-neuvector.yaml)
-with `judex check --config <file>` or `judex run --config <file>`.
+Start from the [Harbor example](examples/config.yaml) or the
+[NeuVector example](examples/config-neuvector.yaml): they are templates, so
+replace the URL, credentials and file paths (CA bundle, logo) with yours, then
+run `judex check --config <file>` followed by `judex run --config <file>`.
 `url` must use HTTP or HTTPS. `password_env` names an environment variable,
 not the password itself; a missing variable fails with exit code 2.
 Use a least-privilege read-only account: a read-only project member in Harbor (Guest is sufficient; Limited Guest should work but was not verified),
@@ -80,6 +82,17 @@ resort for appliances whose CA cannot be exported, remove `ca_file` and set
 `insecure_skip_verify: true`. This disables certificate verification and prints
 `source <authority>: TLS certificate verification is disabled` once per check/run.
 The two settings cannot be combined.
+
+The default trust store is the bundled Mozilla root set. The OS store is not
+consulted (the image ships no system certificates); `ca_file` replaces the bundled
+roots. 3xx redirects are not followed: fix the configured URL to the final endpoint.
+A path prefix in `url`, such as `https://host/harbor`, is supported.
+`timeout_secs` covers the whole response download.
+
+Across API sources, NeuVector rows have no platform. Harbor `os` is the image OS
+from the manifest; NeuVector `os` is the detected distro. Harbor sizes are compressed,
+while NeuVector sizes are uncompressed. NeuVector's scanner version is its CVE
+database version.
 
 Harbor scan states:
 

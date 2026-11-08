@@ -16,6 +16,7 @@ fn scan_states_map() {
         ("Stopped", ScanState::Failed, Some("Stopped")),
         ("Running", ScanState::NotScanned, Some("scan in progress")),
         ("Success", ScanState::Ok, None),
+        ("sUcCeSs", ScanState::Ok, None),
     ] {
         let overview: ScanOverview = serde_json::from_value(
             serde_json::json!({"scan_status":status,"end_time":"2026-11-08T12:00:00Z"}),
@@ -358,4 +359,56 @@ fn missing_child_platform_uses_attrs_or_digest_suffix() {
             "demo/index:v1 (333333333333)"
         ])
     );
+}
+
+#[test]
+fn shared_digest_in_two_repositories_preserves_both_rows() {
+    let server = httpmock::MockServer::start();
+    paged(
+        &server,
+        "/api/v2.0/projects/demo/repositories",
+        vec![
+            serde_json::json!({"name":"demo/busybox"}),
+            serde_json::json!({"name":"demo/nested/busybox"}),
+        ],
+    );
+    for (repo, file) in [
+        ("busybox", "artifacts-busybox.json"),
+        ("nested%252Fbusybox", "artifacts-nested-busybox.json"),
+    ] {
+        let values = fixture(file).as_array().unwrap().clone();
+        artifacts(&server, repo, values.clone());
+        for artifact in values {
+            let digest = artifact["digest"].as_str().unwrap();
+            server.mock(|w, t| {
+                w.path(format!("/api/v2.0/projects/demo/repositories/{repo}/artifacts/{digest}/additions/vulnerabilities"));
+                t.json_body(fixture("vulns/nginx.json"));
+            });
+        }
+    }
+    let result = source(&server).fetch().unwrap();
+    for repo in ["demo/busybox:", "demo/nested/busybox:"] {
+        let image = result
+            .images
+            .iter()
+            .find(|i| i.reference.starts_with(repo))
+            .unwrap();
+        assert!(result.findings.iter().any(|f| f.image == image.reference));
+    }
+    assert_eq!(result.images.len(), 2);
+}
+
+#[test]
+fn missing_project_on_first_repositories_page_is_named() {
+    let server = httpmock::MockServer::start();
+    let request = server.mock(|w, t| {
+        w.path("/api/v2.0/projects/demo/repositories")
+            .query_param("page", "1");
+        t.status(404);
+    });
+    assert_eq!(
+        source(&server).fetch().unwrap_err().to_string(),
+        "project demo not found"
+    );
+    request.assert_calls(1);
 }

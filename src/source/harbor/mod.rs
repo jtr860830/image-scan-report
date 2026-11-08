@@ -3,11 +3,12 @@ pub mod api;
 pub mod map;
 use super::{
     ScanSource, SourceError,
-    files::dedupe_images,
-    http::{Auth, HttpClient, HttpError, encode_segment, url_authority},
+    files::dedupe_images_by_reference,
+    http::{Auth, HttpClient, HttpError, encode_segment, row_failure, url_authority},
 };
 use crate::model::*;
 use api::*;
+use map::digest12;
 use serde::de::DeserializeOwned;
 use std::collections::BTreeMap;
 
@@ -20,7 +21,7 @@ pub struct HarborParams {
 pub struct HarborSource {
     pub base_url: String,
     pub project: Option<String>,
-    pub auth: Auth,
+    auth: Auth,
     pub client: HttpClient,
     host: String,
 }
@@ -53,7 +54,15 @@ impl HarborSource {
     ) -> Result<Vec<T>, SourceError> {
         collect_pages(|page| {
             let url = format!("{}{path}?page_size=100&page={page}{query}", self.base_url);
-            Ok(self.client.get_json::<Vec<T>>(&url, &self.auth, &[])?)
+            match self.client.get_json::<Vec<T>>(&url, &self.auth, &[]) {
+                Err(HttpError::Status(_, 404)) if page == 1 && path.ends_with("/repositories") => {
+                    Err(SourceError::Other(format!(
+                        "project {} not found",
+                        path.split('/').nth(4).unwrap_or_default()
+                    )))
+                }
+                result => Ok(result?),
+            }
         })
     }
     fn artifact_rows(
@@ -95,14 +104,13 @@ impl HarborSource {
                             candidates.push((response.body, RowKind::Child(platform), None));
                         }
                     }
-                    Err(error @ HttpError::Unauthorized(_)) => return Err(error.into()),
                     Err(error) => candidates.push((
                         Artifact {
                             digest: reference.child_digest.clone(),
                             ..Artifact::default()
                         },
                         RowKind::Child(platform),
-                        Some(error),
+                        Some(row_failure(error)?),
                     )),
                 }
             }
@@ -158,12 +166,11 @@ impl HarborSource {
                                 .collect();
                         }
                     }
-                    Err(error @ HttpError::Unauthorized(_)) => return Err(error.into()),
-                    Err(error) => failure = Some(error),
+                    Err(error) => failure = Some(row_failure(error)?),
                 }
             }
             if let Some(error) = failure {
-                tracing::warn!(artifact = artifact.digest, %error, "artifact request failed");
+                tracing::warn!(image = reference, %error, "artifact request failed");
                 scan.state = ScanState::Failed;
                 scan.error = Some(error.to_string());
             }
@@ -218,7 +225,7 @@ impl ScanSource for HarborSource {
                 }
             }
         }
-        let (images, findings) = dedupe_images(rows);
+        let (images, findings) = dedupe_images_by_reference(rows);
         if images.is_empty() {
             return Err(SourceError::NoImages(self.scope()));
         }
@@ -243,15 +250,6 @@ enum RowKind {
     Child(Option<String>),
 }
 const MAX_PAGES: usize = 10_000;
-
-fn digest12(digest: &str) -> String {
-    digest
-        .strip_prefix("sha256:")
-        .unwrap_or(digest)
-        .chars()
-        .take(12)
-        .collect()
-}
 
 trait PageItem {
     fn key(&self) -> &str;
@@ -290,6 +288,9 @@ fn collect_pages<T: PageItem>(
             .and_then(|s| s.parse::<usize>().ok());
         if count == 0 || total.map(|t| result.len() >= t).unwrap_or(count < 100) {
             break;
+        }
+        if page == MAX_PAGES {
+            tracing::warn!(MAX_PAGES, "pagination limit reached; results truncated");
         }
     }
     Ok(result)
@@ -340,6 +341,5 @@ mod tests {
         assert!(!repeated_page(&mut previous, Some("b")));
         assert!(repeated_page(&mut previous, Some("b")));
         assert!(!repeated_page(&mut previous, None));
-        assert_eq!((1..=MAX_PAGES).count(), 10_000);
     }
 }

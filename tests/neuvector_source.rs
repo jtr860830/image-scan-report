@@ -283,3 +283,62 @@ fn status_table_without_sockets() {
         assert_eq!(scan.error.as_deref(), error);
     }
 }
+
+#[test]
+fn shared_digest_under_two_tags_preserves_both_rows() {
+    let server = MockServer::start();
+    login(&server);
+    logout(&server);
+    summary(&server);
+    get(
+        &server,
+        &format!("{ROOT}/images"),
+        json!({"images":[
+            {"repository":"demo/test","tag":"a","image_id":"id","digest":"sha256:same","base_os":"","status":"finished","result":"succeeded"},
+            {"repository":"demo/test","tag":"b","image_id":"id","digest":"sha256:same","status":"finished","result":"succeeded"}
+        ]}),
+        200,
+    );
+    get(
+        &server,
+        &format!("{ROOT}/image/id"),
+        json!({"report":{"vulnerabilities":[{"name":"CVE-test","package_name":"pkg","package_version":"1","severity":"High"}]}}),
+        200,
+    );
+    let result = source(&server).fetch().unwrap();
+    assert_eq!(result.images.len(), 2);
+    for tag in ["a", "b"] {
+        let image = result
+            .images
+            .iter()
+            .find(|i| i.reference.ends_with(&format!(":{tag}")))
+            .unwrap();
+        assert!(image.os.is_none());
+        assert!(result.findings.iter().any(|f| f.image == image.reference));
+    }
+}
+
+#[test]
+fn logout_failure_is_not_retried() {
+    let server = MockServer::start();
+    login(&server);
+    summary(&server);
+    get(
+        &server,
+        &format!("{ROOT}/images"),
+        json!({"images":[
+            {"repository":"demo/test","tag":"a","image_id":"id","digest":"","base_os":"","status":"scanning"}
+        ]}),
+        200,
+    );
+    let out = server.mock(|w, t| {
+        w.method("DELETE")
+            .path("/v1/auth")
+            .header("X-Auth-Token", TOKEN);
+        t.status(503);
+    });
+    let result = source(&server).fetch().unwrap();
+    assert!(result.images[0].digest.is_none());
+    assert!(result.images[0].os.is_none());
+    out.assert_calls(1);
+}

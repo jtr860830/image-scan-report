@@ -23,15 +23,7 @@ pub fn image_reference(
     let mut value = if let Some(tag) = tags.iter().min() {
         format!("{repository}:{tag}")
     } else {
-        format!(
-            "{repository}@{}",
-            digest
-                .strip_prefix("sha256:")
-                .unwrap_or(digest)
-                .chars()
-                .take(12)
-                .collect::<String>()
-        )
+        format!("{repository}@{}", digest12(digest))
     };
     if let Some(p) = platform {
         write!(value, " ({p})").expect("writing to String");
@@ -40,10 +32,10 @@ pub fn image_reference(
 }
 pub fn scan_status(overview: Option<&ScanOverview>) -> ScanStatus {
     let status = overview.map(|o| o.scan_status.as_str()).unwrap_or("");
-    let (state, error) = match status {
-        "Success" => (ScanState::Ok, None),
-        "Error" => (ScanState::Failed, Some(status.into())),
-        "Running" | "Pending" | "Scheduled" => {
+    let (state, error) = match status.to_ascii_lowercase().as_str() {
+        "success" => (ScanState::Ok, None),
+        "error" => (ScanState::Failed, Some(status.into())),
+        "running" | "pending" | "scheduled" => {
             (ScanState::NotScanned, Some("scan in progress".into()))
         }
         "" => (ScanState::NotScanned, None),
@@ -102,4 +94,13 @@ pub fn platform_from_attrs(attrs: &ExtraAttrs) -> Option<String> {
         architecture: architecture.clone(),
         variant: attrs.variant.clone(),
     }))
+}
+
+pub(super) fn digest12(digest: &str) -> String {
+    digest
+        .strip_prefix("sha256:")
+        .unwrap_or(digest)
+        .chars()
+        .take(12)
+        .collect()
 }

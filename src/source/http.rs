@@ -4,6 +4,8 @@ use serde::{Serialize, de::DeserializeOwned};
 use std::{collections::BTreeMap, path::PathBuf, sync::Arc, time::Duration};
 use ureq::tls::{PemItem, RootCerts, TlsConfig, parse_pem};
 
+pub const USER_AGENT: &str = concat!("image-scan-report/", env!("CARGO_PKG_VERSION"));
+
 pub const MAX_RESPONSE_BYTES: u64 = 512 * 1024 * 1024;
 
 #[derive(Debug, Clone)]
@@ -90,6 +92,7 @@ impl HttpClient {
     }
 
     /// Override the delays between the three request attempts.
+    #[doc(hidden)]
     pub fn with_backoff(mut self, delays: [Duration; 2]) -> Self {
         self.retry_delays = delays;
         self
@@ -130,6 +133,16 @@ impl HttpClient {
         Ok(())
     }
 
+    pub fn delete_once(
+        &self,
+        url: &str,
+        auth: &Auth,
+        headers: &[(&str, &str)],
+    ) -> Result<(), HttpError> {
+        self.request("DELETE_ONCE", url, auth, headers, None)?;
+        Ok(())
+    }
+
     fn json_response<T: DeserializeOwned>(
         &self,
         method: &str,
@@ -165,6 +178,8 @@ impl HttpClient {
         headers: &[(&str, &str)],
         body: Option<&[u8]>,
     ) -> Result<Response<Vec<u8>>, HttpError> {
+        let once = method == "DELETE_ONCE";
+        let method = if once { "DELETE" } else { method };
         let uri: ureq::http::Uri = url.parse().map_err(|e: ureq::http::uri::InvalidUri| {
             HttpError::InvalidRequest(format!("{method} {url}"), e.to_string())
         })?;
@@ -250,7 +265,7 @@ impl HttpClient {
                 &result,
                 Err(HttpError::Transport(..) | HttpError::Status(_, 500..=599))
             );
-            if !retry || attempt == 2 {
+            if once || !retry || attempt == 2 {
                 return result;
             }
             std::thread::sleep(self.retry_delays[attempt]);
@@ -285,6 +300,34 @@ fn base64(bytes: &[u8]) -> String {
 impl From<HttpError> for SourceError {
     fn from(error: HttpError) -> Self {
         Self::Other(error.to_string())
+    }
+}
+
+/// Encode one URL path segment.
+pub fn encode_segment(s: &str) -> String {
+    s.bytes()
+        .map(|b| {
+            if b.is_ascii_alphanumeric() || b"-._~".contains(&b) {
+                (b as char).to_string()
+            } else {
+                format!("%{b:02X}")
+            }
+        })
+        .collect()
+}
+
+/// Extract the URL authority, including an explicit port.
+pub fn url_authority(url: &str) -> String {
+    url.parse::<ureq::http::Uri>()
+        .ok()
+        .and_then(|u| u.authority().map(|a| a.as_str().to_owned()))
+        .unwrap_or_default()
+}
+/// Authentication errors abort a source; other errors describe a failed row.
+pub fn row_failure(error: HttpError) -> Result<String, HttpError> {
+    match error {
+        error @ HttpError::Unauthorized(_) => Err(error),
+        error => Ok(error.to_string()),
     }
 }
 
@@ -328,26 +371,6 @@ mod tests {
     }
 }
 
-/// Encode one URL path segment.
-pub fn encode_segment(s: &str) -> String {
-    s.bytes()
-        .map(|b| {
-            if b.is_ascii_alphanumeric() || b"-._~".contains(&b) {
-                (b as char).to_string()
-            } else {
-                format!("%{b:02X}")
-            }
-        })
-        .collect()
-}
-
-/// Extract the URL authority, including an explicit port.
-pub fn url_authority(url: &str) -> String {
-    url.parse::<ureq::http::Uri>()
-        .ok()
-        .and_then(|u| u.authority().map(|a| a.as_str().to_owned()))
-        .unwrap_or_default()
-}
 #[cfg(test)]
 mod url_tests {
     use super::*;

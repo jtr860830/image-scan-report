@@ -205,8 +205,9 @@ fn post_delete_and_decode_status_errors() {
 }
 
 #[test]
-fn untrusted_server_is_source_error() {
-    // HTTPS is unavailable in this httpmock build; cover the CA error conversion.
+fn invalid_ca_converts_to_source_error() {
+    // This checks only From conversion; certificate validation during a TLS handshake
+    // is covered by the live run.
     let mut opts = options();
     opts.ca_file = Some("tests/data/tls/not-a-cert.pem".into());
     let error = HttpClient::new(&opts).err().unwrap();
@@ -253,4 +254,21 @@ fn decode_errors_do_not_expose_response_values() {
         .unwrap();
     assert!(matches!(e, HttpError::Decode(..)));
     assert!(!e.to_string().contains("TOPSECRET"));
+}
+
+#[test]
+fn tls_handshake_failure_is_transport() {
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let addr = listener.local_addr().unwrap();
+    let server = std::thread::spawn(move || {
+        for _ in 0..3 {
+            let (stream, _) = listener.accept().unwrap();
+            drop(stream);
+        }
+    });
+    assert!(matches!(
+        client().get_json::<Value>(&format!("https://{addr}/"), &Auth::None, &[]),
+        Err(HttpError::Transport(..))
+    ));
+    server.join().unwrap();
 }

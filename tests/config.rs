@@ -80,22 +80,15 @@ fn missing_env_names_the_variable() {
 #[test]
 fn example_config_in_repo_loads() {
     let _guard = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-    let previous = std::env::var_os("UPLOAD_TOKEN");
-    unsafe { std::env::set_var("UPLOAD_TOKEN", "example-token") };
     let result = config::load(Path::new("examples/config.yaml"));
     let nv_result = config::load(Path::new("examples/config-neuvector.yaml"));
-    unsafe {
-        match previous {
-            Some(value) => std::env::set_var("UPLOAD_TOKEN", value),
-            None => std::env::remove_var("UPLOAD_TOKEN"),
-        }
-    }
     let config = result.unwrap();
     // Loading does not read source credentials or CA files.
     let neuvector = nv_result.unwrap();
     assert!(matches!(neuvector.source, SourceConfig::Neuvector { .. }));
     assert!(matches!(config.source, SourceConfig::Harbor { .. }));
-    assert_eq!(config.output.len(), 2);
+    assert_eq!(config.output.len(), 1);
+    assert_eq!(neuvector.output.len(), 1);
 }
 
 #[test]

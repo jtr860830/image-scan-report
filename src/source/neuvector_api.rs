@@ -1,8 +1,8 @@
 //! NeuVector controller registry scan source.
 use super::{
     ScanSource, SourceError,
-    files::dedupe_images,
-    http::{Auth, HttpClient, HttpError, encode_segment, url_authority},
+    files::dedupe_images_by_reference,
+    http::{Auth, HttpClient, HttpError, encode_segment, row_failure, url_authority},
     neuvector::{
         api::*,
         report::{compose_reference, finding_from_nv, nv_timestamp},
@@ -20,7 +20,7 @@ pub struct NeuvectorSource {
     pub base_url: String,
     pub registry: String,
     pub username: String,
-    pub password: String,
+    password: String,
     pub client: HttpClient,
     host: String,
 }
@@ -30,7 +30,7 @@ struct Session<'a> {
 }
 impl Drop for Session<'_> {
     fn drop(&mut self) {
-        if let Err(error) = self.source.client.delete(
+        if let Err(error) = self.source.client.delete_once(
             &format!("{}/v1/auth", self.source.base_url),
             &Auth::None,
             &[("X-Auth-Token", &self.token)],
@@ -164,8 +164,8 @@ impl ScanSource for NeuvectorSource {
                             tracing::warn!(image = reference, "NeuVector vulnerabilities missing");
                         }
                     },
-                    Err(e @ HttpError::Unauthorized(_)) => return Err(e.into()),
                     Err(e) => {
+                        let e = row_failure(e)?;
                         tracing::warn!(image=reference,%e,"NeuVector image report failed");
                         scan.state = ScanState::Failed;
                         scan.error = Some(e.to_string());
@@ -180,9 +180,9 @@ impl ScanSource for NeuvectorSource {
                     } else {
                         vec![entry.tag]
                     },
-                    digest: entry.digest,
+                    digest: entry.digest.filter(|s| !s.is_empty()),
                     platform: None,
-                    os: entry.base_os,
+                    os: entry.base_os.filter(|s| !s.is_empty()),
                     size_bytes: entry.size,
                     created_at: timestamp(entry.created_at.as_deref()),
                     scan,
@@ -191,7 +191,7 @@ impl ScanSource for NeuvectorSource {
             ));
         }
         let scope = format!("{}/{}", self.host, self.registry);
-        let (images, findings) = dedupe_images(rows);
+        let (images, findings) = dedupe_images_by_reference(rows);
         if images.is_empty() {
             return Err(SourceError::NoImages(scope));
         }
