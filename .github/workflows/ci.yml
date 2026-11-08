@@ -8,6 +8,31 @@ on:
     - cron: '0 3 * * 1'
 
 jobs:
+  notices:
+    if: github.event_name == 'push' || github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install Rust toolchain
+        run: rustup toolchain install
+      - name: Cache cargo-about
+        id: cargo-about-cache
+        uses: actions/cache@v5
+        with:
+          path: ~/.cargo/bin/cargo-about
+          key: ${{ runner.os }}-${{ runner.arch }}-cargo-about-0.9.3
+      - name: Install cargo-about
+        if: steps.cargo-about-cache.outputs.cache-hit != 'true'
+        run: cargo install cargo-about --version 0.9.3 --locked --features cli
+      - name: Generate third-party notices
+        run: cargo about generate --config about.toml about.hbs -o /tmp/THIRD_PARTY_NOTICES.md
+      - name: Check third-party notices
+        run: |
+          if ! diff -u THIRD_PARTY_NOTICES.md /tmp/THIRD_PARTY_NOTICES.md; then
+            echo '::error::Third-party notices are stale. Run cargo about generate --config about.toml about.hbs -o THIRD_PARTY_NOTICES.md and commit the result.'
+            exit 1
+          fi
+
   check:
     runs-on: ubuntu-latest
     steps:

@@ -3,6 +3,8 @@
 These eight static faces are embedded in the binary; no system fonts or network access are required.
 All three font families are licensed under SIL Open Font License 1.1 (OFL-1.1).
 The corresponding licence texts are included beside the fonts.
+This README records the source versions and SHA-256 checksums; there is no separate font manifest.
+The fonts are embedded as unmodified static instances; no subsetting is applied.
 
 | Family | Version / revision | Source | Licence |
 | --- | --- | --- | --- |

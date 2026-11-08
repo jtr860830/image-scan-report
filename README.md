@@ -251,5 +251,6 @@ the template root with the filename recorded in the data.
 
 See [development notes](docs/development.md) for checks, snapshots and module layout.
 Licensed under [Apache-2.0](LICENSE).
+Regenerate third-party notices with `cargo about generate --config about.toml about.hbs -o THIRD_PARTY_NOTICES.md` using cargo-about 0.9.3; see [development notes](docs/development.md#third-party-notices).
 
 Set `report.logo` to a local PNG or SVG file to place the customer logo on the cover. Theme logos appear beside the product credit in the appendix.

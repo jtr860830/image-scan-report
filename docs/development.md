@@ -17,6 +17,21 @@ capture procedure are documented in [fixtures/README.md](../fixtures/README.md).
 Do not hand-edit captured fixtures; recapture them. Synthetic edge cases live in
 `tests/data/`. No real failed-scan capture exists yet.
 
+## Third-party notices
+
+Install the pinned generator and regenerate notices from the repository root:
+
+```sh
+cargo install cargo-about --version 0.9.3 --locked --features cli
+cargo about generate --config about.toml about.hbs -o THIRD_PARTY_NOTICES.md
+```
+
+Commit the generated `THIRD_PARTY_NOTICES.md` whenever dependencies, `about.toml`,
+or `about.hbs` change. The CI `notices` job regenerates it and fails when the
+committed file is stale. Rust licence notices come from cargo-about; the font
+attributions and typesetting note are static text in `about.hbs`. Update the
+font section there when changing the bundled fonts.
+
 ## Snapshots
 
 The `insta` development dependency checks the normalised report JSON shape in
@@ -116,6 +131,11 @@ compiled, using a single test run:
 |---|---|---|---|
 | 30,576 | 2,227 | 8.4 s | 2.89 GB |
 | 52,416 | 3,728 | 11.8 s | 4.39 GB |
+
+Measured with the default release profile. The release profile shipped since
+plan 4 (`lto = "thin"`, `codegen-units = 1`, `strip = true`) renders the same
+52,416 findings in **10.9 s** with a **4.13 GB** peak — about 7 % faster and 6 %
+smaller; the rule of thumb below keeps the more conservative numbers.
 
 Rule of thumb from the two points: **about 0.8 GB plus 70 MB per 1,000 findings**
 (the earlier "100 MB per 1,000" was an extrapolation from one point). A 20,000-finding
