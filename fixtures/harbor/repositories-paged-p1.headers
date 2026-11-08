@@ -1,0 +1,13 @@
+HTTP/1.1 200 OK
+Server: nginx
+Date: Sun, 08 Nov 2026 11:27:42 GMT
+Content-Type: application/json
+Content-Length: 355
+Connection: keep-alive
+Link: </api/v2.0/projects/demo/repositories?page=2&page_size=2>; rel="next"
+Set-Cookie: sid=2e0a03532e6fae0746774096f225e43d; Path=/; HttpOnly
+X-Request-Id: 0e859894-3b66-4178-8566-6b4830fb29bd
+X-Total-Count: 11
+X-Frame-Options: DENY
+Content-Security-Policy: frame-ancestors 'none'
+
