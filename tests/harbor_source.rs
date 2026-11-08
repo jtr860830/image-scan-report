@@ -5,8 +5,15 @@ use image_scan_report::{
 #[test]
 fn scan_states_map() {
     assert_eq!(scan_status(None).state, ScanState::NotScanned);
+    let artifact: Artifact =
+        serde_json::from_value(serde_json::json!({"scan_overview":{}})).unwrap();
+    assert_eq!(
+        scan_status(artifact.scan_overview.values().next()).state,
+        ScanState::NotScanned
+    );
     for (status, state, error) in [
         ("Error", ScanState::Failed, Some("Error")),
+        ("Stopped", ScanState::Failed, Some("Stopped")),
         ("Running", ScanState::NotScanned, Some("scan in progress")),
         ("Success", ScanState::Ok, None),
     ] {
@@ -61,7 +68,7 @@ fn fetches_project_images_and_findings() {
             > 300
     );
     assert_eq!(result.source.scanner_name.as_deref(), Some("Trivy"));
-    assert!(result.scope.ends_with("/demo"));
+    assert_eq!(result.scope, format!("{}/demo", _s.address()));
 }
 #[test]
 fn index_children_become_platform_rows() {
@@ -80,6 +87,21 @@ fn index_children_become_platform_rows() {
     );
     let digests: std::collections::BTreeSet<_> = children.iter().map(|i| &i.digest).collect();
     assert_eq!(digests.len(), 8);
+    for child in children {
+        let digest = child.digest.as_ref().unwrap();
+        let report = fixture(&format!("multiarch/vulns-{}.json", &digest[7..19]));
+        let expected = report.as_object().unwrap().values().next().unwrap()["vulnerabilities"]
+            .as_array()
+            .map_or(0, Vec::len);
+        assert_eq!(
+            result
+                .findings
+                .iter()
+                .filter(|f| f.image == child.reference)
+                .count(),
+            expected
+        );
+    }
 }
 #[test]
 fn unauthorized_is_reported_without_secrets() {
@@ -95,7 +117,7 @@ fn unauthorized_is_reported_without_secrets() {
 #[test]
 fn paginates_repositories_and_artifacts() {
     let s = httpmock::MockServer::start();
-    paged(
+    let mut mocks = paged(
         &s,
         "/api/v2.0/projects/demo/repositories",
         (0..150)
@@ -103,7 +125,7 @@ fn paginates_repositories_and_artifacts() {
             .collect(),
     );
     for n in 0..150 {
-        artifacts(
+        mocks.extend(artifacts(
             &s,
             &format!("r{n}"),
             (0..if n == 0 { 101 } else { 1 })
@@ -111,9 +133,12 @@ fn paginates_repositories_and_artifacts() {
                     |a| serde_json::json!({"type":"IMAGE","digest":format!("sha256:{n:06}{a:06}")}),
                 )
                 .collect(),
-        );
+        ));
     }
     assert_eq!(source(&s).fetch().unwrap().images.len(), 250);
+    for mock in mocks {
+        mock.assert_calls(1);
+    }
 }
 #[test]
 fn multiple_tags_one_row() {
@@ -191,5 +216,146 @@ fn empty_scope_is_named() {
             .unwrap_err()
             .to_string()
             .ends_with("/demo")
+    );
+}
+
+#[test]
+fn all_projects_scope() {
+    let (server, mut src) = harbor_mock();
+    src.project = None;
+    let result = src.fetch().unwrap();
+    assert_eq!(result.images.len(), 19);
+    assert_eq!(result.scope, format!("{} (all projects)", server.address()));
+}
+
+#[test]
+fn failing_child_becomes_failed_row() {
+    let parent = fixture("multiarch/artifacts-alpine-multi.json");
+    let child = parent[0]["references"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|r| r["platform"]["os"] == "linux")
+        .unwrap();
+    let digest = child["child_digest"].as_str().unwrap();
+    let path = format!("/api/v2.0/projects/demo/repositories/alpine-multi/artifacts/{digest}");
+    let (_server, src) = harbor_mock_with_failure(Some((&path, 500)));
+    let result = src.fetch().unwrap();
+    assert_eq!(result.images.len(), 19);
+    let row = result
+        .images
+        .iter()
+        .find(|i| i.digest.as_deref() == Some(digest))
+        .unwrap();
+    assert_eq!(row.scan.state, ScanState::Failed);
+    assert!(row.scan.error.as_ref().unwrap().contains("500"));
+    assert_eq!(
+        result
+            .images
+            .iter()
+            .filter(|i| i.scan.state == ScanState::Ok)
+            .count(),
+        18
+    );
+    assert!(!result.findings.iter().any(|f| f.image == row.reference));
+}
+
+#[test]
+fn failing_vulnerability_report_becomes_failed_row() {
+    let artifact = fixture("artifacts-nginx.json");
+    let digest = artifact[0]["digest"].as_str().unwrap();
+    let path = format!(
+        "/api/v2.0/projects/demo/repositories/nginx/artifacts/{digest}/additions/vulnerabilities"
+    );
+    let (_server, src) = harbor_mock_with_failure(Some((&path, 404)));
+    let result = src.fetch().unwrap();
+    let row = result
+        .images
+        .iter()
+        .find(|i| i.reference == "demo/nginx:1.21.0")
+        .unwrap();
+    assert_eq!(row.scan.state, ScanState::Failed);
+    assert!(row.scan.error.as_ref().unwrap().contains("404"));
+    assert!(row.scan.scanned_at.is_some());
+    assert!(!result.findings.iter().any(|f| f.image == row.reference));
+}
+
+#[test]
+fn nested_repository_is_double_encoded() {
+    let server = httpmock::MockServer::start();
+    paged(
+        &server,
+        "/api/v2.0/projects/demo/repositories",
+        vec![serde_json::json!({"name":"demo/nested/busybox"})],
+    );
+    let mut values = fixture("artifacts-nested-busybox.json")
+        .as_array()
+        .unwrap()
+        .clone();
+    // This test isolates routing from vulnerability retrieval.
+    values[0]["scan_overview"] = serde_json::json!({});
+    let mocks = artifacts(&server, "nested%252Fbusybox", values);
+    let result = source(&server).fetch().unwrap();
+    assert_eq!(result.images[0].reference, "demo/nested/busybox:1.37");
+    for mock in mocks {
+        mock.assert_calls(1);
+    }
+}
+
+#[test]
+fn platform_attrs_fallback() {
+    let attrs: ExtraAttrs = serde_json::from_value(
+        serde_json::json!({"os":"linux","architecture":"arm","variant":"v7"}),
+    )
+    .unwrap();
+    assert_eq!(platform_from_attrs(&attrs).as_deref(), Some("linux/arm/v7"));
+    assert!(platform_from_attrs(&ExtraAttrs::default()).is_none());
+}
+
+#[test]
+fn missing_child_platform_uses_attrs_or_digest_suffix() {
+    let server = httpmock::MockServer::start();
+    paged(
+        &server,
+        "/api/v2.0/projects/demo/repositories",
+        vec![serde_json::json!({"name":"demo/index"})],
+    );
+    artifacts(
+        &server,
+        "index",
+        vec![
+            serde_json::json!({"type":"IMAGE","digest":"sha256:parent","tags":[{"name":"v1"}],"references":[
+                {"child_digest":"sha256:111111111111aaaa"}, {"child_digest":"sha256:222222222222bbbb"}, {"child_digest":"sha256:333333333333cccc"}
+            ]}),
+        ],
+    );
+    for (digest, attrs) in [
+        (
+            "sha256:111111111111aaaa",
+            serde_json::json!({"os":"linux","architecture":"arm","variant":"v7"}),
+        ),
+        ("sha256:222222222222bbbb", serde_json::json!({})),
+        ("sha256:333333333333cccc", serde_json::json!({})),
+    ] {
+        server.mock(|w, t| {
+            w.path(format!(
+                "/api/v2.0/projects/demo/repositories/index/artifacts/{digest}"
+            ))
+            .query_param("with_tag", "true")
+            .query_param("with_scan_overview", "true");
+            t.status(200)
+                .json_body(serde_json::json!({"type":"IMAGE","digest":digest,"extra_attrs":attrs}));
+        });
+    }
+    let result = source(&server).fetch().unwrap();
+    let references: std::collections::BTreeSet<_> =
+        result.images.iter().map(|i| i.reference.as_str()).collect();
+    assert_eq!(
+        references,
+        std::collections::BTreeSet::from([
+            "demo/index:v1 (linux/arm/v7)",
+            "demo/index:v1 (222222222222)",
+            "demo/index:v1 (333333333333)"
+        ])
     );
 }

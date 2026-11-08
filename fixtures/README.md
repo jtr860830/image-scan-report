@@ -84,6 +84,7 @@ versions listed above. Lab addresses were sanitised as described above.
 | `harbor/repositories-paged-p2.json` | Second repository page with `page_size=2` |
 | `harbor/repositories-after.json` | Full repository list after the pushes |
 | `harbor/artifacts-junk-artifact.json` | Deliberately non-image OCI artifact with Harbor type `JUNK` |
+| `harbor/artifacts-nested-busybox.json` | Artifact list of the nested repository `demo/nested/busybox` (a copy of `demo/busybox:1.37`). Harbor only answers when the repository segment is double-encoded: `.../repositories/nested%252Fbusybox/artifacts` returns 200, `nested%2Fbusybox` returns 404 (measured on Harbor 2.15.4) |
 | `neuvector-api/rescan/registry.json` | Registry summary after the rescan |
 | `neuvector-api/rescan/registry-images.json` | Registry image list after the rescan, containing 12 images |
 

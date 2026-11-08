@@ -1,4 +1,4 @@
-use httpmock::MockServer;
+use httpmock::{Mock, MockServer};
 use image_scan_report::source::{
     harbor::{HarborParams, HarborSource},
     http::{HttpClient, HttpOptions},
@@ -35,35 +35,57 @@ pub fn fixture(name: &str) -> Value {
     )
     .unwrap()
 }
-pub fn paged(server: &MockServer, path: &str, values: Vec<Value>) {
+pub fn paged<'a>(server: &'a MockServer, path: &str, values: Vec<Value>) -> Vec<Mock<'a>> {
+    let mut mocks = Vec::new();
     let total = values.len();
     for (i, chunk) in values.chunks(100).enumerate() {
-        server.mock(|w, t| {
-            w.method("GET")
+        mocks.push(server.mock(|w, t| {
+            let w = w
+                .method("GET")
                 .path(path)
                 .query_param("page", (i + 1).to_string())
                 .query_param("page_size", "100");
+            if path.ends_with("/artifacts") {
+                w.query_param("with_scan_overview", "true")
+                    .query_param("with_tag", "true");
+            }
             t.status(200)
                 .header("X-Total-Count", total.to_string())
                 .json_body(chunk);
-        });
+        }));
     }
     if values.is_empty() {
-        server.mock(|w, t| {
-            w.method("GET").path(path);
+        mocks.push(server.mock(|w, t| {
+            let w = w.method("GET").path(path);
+            if path.ends_with("/artifacts") {
+                w.query_param("with_scan_overview", "true")
+                    .query_param("with_tag", "true");
+            }
             t.status(200).json_body(Vec::<Value>::new());
-        });
+        }));
     }
+    mocks
 }
-pub fn artifacts(server: &MockServer, repo: &str, values: Vec<Value>) {
+pub fn artifacts<'a>(server: &'a MockServer, repo: &str, values: Vec<Value>) -> Vec<Mock<'a>> {
     paged(
         server,
         &format!("/api/v2.0/projects/demo/repositories/{repo}/artifacts"),
         values,
-    );
+    )
 }
 pub fn harbor_mock() -> (MockServer, HarborSource) {
+    harbor_mock_with_failure(None)
+}
+pub fn harbor_mock_with_failure(failure: Option<(&str, u16)>) -> (MockServer, HarborSource) {
     let server = MockServer::start();
+    if let Some((path, status)) = failure {
+        server.mock(|w, t| {
+            w.path(path);
+            t.status(status);
+        });
+    }
+    paged(&server, "/api/v2.0/projects/library/repositories", vec![]);
+
     server.mock(|w, t| {
         w.path("/api/v2.0/projects");
         t.status(200).json_body(fixture("projects.json"));
@@ -98,7 +120,9 @@ pub fn harbor_mock() -> (MockServer, HarborSource) {
                     server.mock(|w, t| {
                         w.path(format!(
                             "/api/v2.0/projects/demo/repositories/{name}/artifacts/{digest}"
-                        ));
+                        ))
+                        .query_param("with_scan_overview", "true")
+                        .query_param("with_tag", "true");
                         t.status(200)
                             .json_body(fixture(&format!("multiarch/child-{short}.json")));
                     });

@@ -4,6 +4,7 @@ use crate::{
     model::*,
     severity::{ScoreInput, classify, cvss_from_map},
 };
+use std::fmt::Write;
 
 pub fn platform_string(p: &Platform) -> String {
     let mut value = format!("{}/{}", p.os, p.architecture);
@@ -33,7 +34,7 @@ pub fn image_reference(
         )
     };
     if let Some(p) = platform {
-        value.push_str(&format!(" ({p})"));
+        write!(value, " ({p})").expect("writing to String");
     }
     value
 }
@@ -58,12 +59,11 @@ pub fn scan_status(overview: Option<&ScanOverview>) -> ScanStatus {
     }
 }
 pub fn finding(v: &Vuln, image_reference: &str) -> Finding {
-    let cvss = cvss_from_map(
-        v.vendor_attributes
-            .as_ref()
-            .map(|a| a.cvss.clone())
-            .unwrap_or_default(),
-    );
+    let cvss = v
+        .vendor_attributes
+        .as_ref()
+        .map(|a| cvss_from_map(&a.cvss))
+        .unwrap_or_default();
     let c = classify(&ScoreInput {
         cvss: &cvss,
         scanner_label: Some(&v.severity),
@@ -85,4 +85,21 @@ pub fn finding(v: &Vuln, image_reference: &str) -> Finding {
         links: v.links.clone(),
         published_at: None,
     }
+}
+
+/// Infer a usable platform from child or single-manifest metadata.
+pub fn platform_from_attrs(attrs: &ExtraAttrs) -> Option<String> {
+    let os = attrs
+        .os
+        .as_ref()
+        .filter(|s| !s.is_empty() && *s != "unknown")?;
+    let architecture = attrs
+        .architecture
+        .as_ref()
+        .filter(|s| !s.is_empty() && *s != "unknown")?;
+    Some(platform_string(&Platform {
+        os: os.clone(),
+        architecture: architecture.clone(),
+        variant: attrs.variant.clone(),
+    }))
 }

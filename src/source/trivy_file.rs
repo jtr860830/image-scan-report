@@ -162,7 +162,7 @@ pub fn parse_trivy_report(
             continue;
         }
         for v in result.vulnerabilities.unwrap_or_default() {
-            let cvss = cvss_from_map(v.cvss);
+            let cvss = cvss_from_map(&v.cvss);
             let c = classify(&ScoreInput {
                 cvss: &cvss,
                 scanner_label: v.severity.as_deref(),

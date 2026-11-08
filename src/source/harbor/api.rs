@@ -9,15 +9,18 @@ fn null_default<'de, D: Deserializer<'de>, T: Deserialize<'de> + Default>(
 ) -> Result<T, D::Error> {
     Ok(Option::<T>::deserialize(d)?.unwrap_or_default())
 }
-#[derive(Deserialize)]
+
+#[derive(Clone, Deserialize)]
 pub struct Project {
     pub name: String,
 }
-#[derive(Deserialize)]
+
+#[derive(Clone, Deserialize)]
 pub struct Repository {
     pub name: String,
 }
-#[derive(Default, Deserialize)]
+
+#[derive(Clone, Default, Deserialize)]
 #[serde(default)]
 pub struct Artifact {
     pub digest: String,
@@ -33,23 +36,27 @@ pub struct Artifact {
     pub size: Option<u64>,
     pub push_time: Option<DateTime<Utc>>,
 }
-#[derive(Deserialize)]
+
+#[derive(Clone, Deserialize)]
 pub struct Tag {
     pub name: String,
 }
-#[derive(Deserialize)]
+
+#[derive(Clone, Deserialize)]
 pub struct Reference {
     pub child_digest: String,
     pub platform: Option<Platform>,
 }
-#[derive(Default, Deserialize)]
+
+#[derive(Clone, Default, Deserialize)]
 #[serde(default)]
 pub struct Platform {
     pub os: String,
     pub architecture: String,
     pub variant: Option<String>,
 }
-#[derive(Default, Deserialize)]
+
+#[derive(Clone, Default, Deserialize)]
 #[serde(default)]
 pub struct ExtraAttrs {
     pub os: Option<String>,
@@ -57,7 +64,8 @@ pub struct ExtraAttrs {
     pub variant: Option<String>,
     pub created: Option<DateTime<Utc>>,
 }
-#[derive(Default, Deserialize)]
+
+#[derive(Clone, Default, Deserialize)]
 #[serde(default)]
 pub struct ScanOverview {
     pub scan_status: String,
@@ -66,17 +74,20 @@ pub struct ScanOverview {
     pub scanner: Option<Scanner>,
     pub report_id: Option<String>,
 }
+
 #[derive(Clone, Deserialize)]
 pub struct Scanner {
     pub name: String,
     pub version: Option<String>,
 }
-#[derive(Deserialize)]
+
+#[derive(Clone, Deserialize)]
 pub struct VulnReport {
     pub scanner: Option<Scanner>,
     pub vulnerabilities: Option<Vec<Vuln>>,
 }
-#[derive(Default, Deserialize)]
+
+#[derive(Clone, Default, Deserialize)]
 #[serde(default)]
 pub struct Vuln {
     pub id: String,
@@ -90,7 +101,8 @@ pub struct Vuln {
     pub links: Vec<String>,
     pub vendor_attributes: Option<VendorAttributes>,
 }
-#[derive(Default, Deserialize)]
+
+#[derive(Clone, Default, Deserialize)]
 pub struct VendorAttributes {
     #[serde(default, rename = "CVSS")]
     pub cvss: BTreeMap<String, CvssSourceScores>,

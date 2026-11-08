@@ -119,12 +119,12 @@ pub struct CvssSourceScores {
 }
 
 pub fn cvss_from_map(
-    map: std::collections::BTreeMap<String, CvssSourceScores>,
+    map: &std::collections::BTreeMap<String, CvssSourceScores>,
 ) -> Vec<(String, CvssScores)> {
-    map.into_iter()
+    map.iter()
         .map(|(name, scores)| {
             (
-                name,
+                name.clone(),
                 CvssScores {
                     v3: clean_score(scores.v3_score),
                     v2: clean_score(scores.v2_score),

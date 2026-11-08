@@ -4,7 +4,7 @@ pub mod map;
 use super::{
     ScanSource, SourceError,
     files::dedupe_images,
-    http::{Auth, HttpClient},
+    http::{Auth, HttpClient, HttpError},
 };
 use crate::model::*;
 use api::*;
@@ -22,6 +22,7 @@ pub struct HarborSource {
     pub project: Option<String>,
     pub auth: Auth,
     pub client: HttpClient,
+    host: String,
 }
 fn encode(s: &str) -> String {
     s.bytes()
@@ -37,6 +38,12 @@ fn encode(s: &str) -> String {
 impl HarborSource {
     pub fn from_config(cfg: &HarborParams, client: HttpClient, password: String) -> Self {
         Self {
+            host: cfg
+                .url
+                .parse::<ureq::http::Uri>()
+                .ok()
+                .and_then(|u| u.authority().map(|a| a.as_str().to_owned()))
+                .unwrap_or_default(),
             base_url: cfg.url.trim_end_matches('/').into(),
             project: cfg.project.clone(),
             auth: Auth::Basic {
@@ -46,63 +53,106 @@ impl HarborSource {
             client,
         }
     }
-    fn host(&self) -> String {
-        self.base_url
-            .parse::<ureq::http::Uri>()
-            .ok()
-            .and_then(|u| u.authority().map(|a| a.as_str().to_owned()))
-            .unwrap_or_default()
+    fn host(&self) -> &str {
+        &self.host
     }
     fn scope(&self) -> String {
-        format!(
-            "{}/{}",
-            self.host(),
-            self.project.as_deref().unwrap_or("all projects")
-        )
-    }
-    fn pages<T: DeserializeOwned>(&self, path: &str, query: &str) -> Result<Vec<T>, SourceError> {
-        let mut result = Vec::new();
-        for page in 1.. {
-            let url = format!("{}{path}?page_size=100&page={page}{query}", self.base_url);
-            let response = self.client.get_json::<Vec<T>>(&url, &self.auth, &[])?;
-            let count = response.body.len();
-            result.extend(response.body);
-            let total = response
-                .headers
-                .get("x-total-count")
-                .and_then(|s| s.parse::<usize>().ok());
-            if count == 0 || total.map(|t| result.len() >= t).unwrap_or(count < 100) {
-                break;
-            }
+        match &self.project {
+            Some(project) => format!("{}/{project}", self.host),
+            None => format!("{} (all projects)", self.host),
         }
-        Ok(result)
     }
-    fn row(
+    fn pages<T: DeserializeOwned + PageItem>(
         &self,
-        repository: &str,
         path: &str,
-        artifact: Artifact,
-        mut tags: Vec<String>,
-        platform: (Option<String>, bool),
+        query: &str,
+    ) -> Result<Vec<T>, SourceError> {
+        collect_pages(|page| {
+            let url = format!("{}{path}?page_size=100&page={page}{query}", self.base_url);
+            Ok(self.client.get_json::<Vec<T>>(&url, &self.auth, &[])?)
+        })
+    }
+    fn artifact_rows(
+        &self,
+        repo_path: &str,
+        repository: &str,
+        artifact: &Artifact,
         scanner: &mut Option<Scanner>,
-    ) -> Result<(Image, Vec<Finding>), SourceError> {
-        let (platform, child) = platform;
+    ) -> Result<Vec<(Image, Vec<Finding>)>, SourceError> {
+        if artifact.r#type != "IMAGE" {
+            return Ok(Vec::new());
+        }
+        let mut tags: Vec<_> = artifact.tags.iter().map(|t| t.name.clone()).collect();
         tags.sort();
         tags.dedup();
-        let reference = map::image_reference(
-            repository,
-            &tags,
-            &artifact.digest,
-            if child { platform.as_deref() } else { None },
-        );
-        let scan = map::scan_status(artifact.scan_overview.values().next());
-        let mut findings = Vec::new();
-        if scan.state == ScanState::Ok {
-            let reports = self
-                .client
-                .get_json::<BTreeMap<String, VulnReport>>(
+        let mut candidates = Vec::new();
+        if artifact.references.is_empty() {
+            candidates.push((artifact.clone(), RowKind::Single, None));
+        } else {
+            for reference in &artifact.references {
+                if reference
+                    .platform
+                    .as_ref()
+                    .is_some_and(|p| p.os == "unknown" && p.architecture == "unknown")
+                {
+                    continue;
+                }
+                let platform = reference.platform.as_ref().map(map::platform_string);
+                match self.client.get_json::<Artifact>(
                     &format!(
-                        "{}{path}/{}/additions/vulnerabilities",
+                        "{}{repo_path}/{}?with_scan_overview=true&with_tag=true",
+                        self.base_url, reference.child_digest
+                    ),
+                    &self.auth,
+                    &[],
+                ) {
+                    Ok(response) => {
+                        if response.body.r#type == "IMAGE" {
+                            candidates.push((response.body, RowKind::Child(platform), None));
+                        }
+                    }
+                    Err(error @ HttpError::Unauthorized(_)) => return Err(error.into()),
+                    Err(error) => candidates.push((
+                        Artifact {
+                            digest: reference.child_digest.clone(),
+                            ..Artifact::default()
+                        },
+                        RowKind::Child(platform),
+                        Some(error),
+                    )),
+                }
+            }
+        }
+        let mut rows = Vec::new();
+        for (artifact, kind, mut failure) in candidates {
+            let platform = match &kind {
+                RowKind::Single => artifact
+                    .extra_attrs
+                    .as_ref()
+                    .and_then(map::platform_from_attrs),
+                RowKind::Child(platform) => platform.clone().or_else(|| {
+                    artifact
+                        .extra_attrs
+                        .as_ref()
+                        .and_then(map::platform_from_attrs)
+                }),
+            };
+            let suffix = match &kind {
+                RowKind::Single => None,
+                RowKind::Child(_) => Some(
+                    platform
+                        .clone()
+                        .unwrap_or_else(|| digest12(&artifact.digest)),
+                ),
+            };
+            let reference =
+                map::image_reference(repository, &tags, &artifact.digest, suffix.as_deref());
+            let mut scan = map::scan_status(artifact.scan_overview.values().next());
+            let mut findings = Vec::new();
+            if failure.is_none() && scan.state == ScanState::Ok {
+                match self.client.get_json::<BTreeMap<String, VulnReport>>(
+                    &format!(
+                        "{}{repo_path}/{}/additions/vulnerabilities",
                         self.base_url, artifact.digest
                     ),
                     &self.auth,
@@ -110,34 +160,44 @@ impl HarborSource {
                         "X-Accept-Vulnerabilities",
                         "application/vnd.security.vulnerability.report; version=1.1",
                     )],
-                )?
-                .body;
-            if let Some(report) = reports.into_values().next() {
-                if scanner.is_none() {
-                    *scanner = report.scanner;
+                ) {
+                    Ok(response) => {
+                        if let Some(report) = response.body.into_values().next() {
+                            if scanner.is_none() {
+                                *scanner = report.scanner;
+                            }
+                            findings = report
+                                .vulnerabilities
+                                .unwrap_or_default()
+                                .iter()
+                                .map(|v| map::finding(v, &reference))
+                                .collect();
+                        }
+                    }
+                    Err(error @ HttpError::Unauthorized(_)) => return Err(error.into()),
+                    Err(error) => failure = Some(error),
                 }
-                findings = report
-                    .vulnerabilities
-                    .unwrap_or_default()
-                    .iter()
-                    .map(|v| map::finding(v, &reference))
-                    .collect();
             }
+            if let Some(error) = failure {
+                tracing::warn!(artifact = artifact.digest, %error, "artifact request failed");
+                scan.state = ScanState::Failed;
+                scan.error = Some(error.to_string());
+            }
+            rows.push((
+                Image {
+                    reference,
+                    tags: tags.clone(),
+                    digest: Some(artifact.digest),
+                    platform,
+                    os: artifact.extra_attrs.as_ref().and_then(|a| a.os.clone()),
+                    created_at: artifact.extra_attrs.and_then(|a| a.created),
+                    size_bytes: artifact.size,
+                    scan,
+                },
+                findings,
+            ));
         }
-        let attrs = artifact.extra_attrs;
-        Ok((
-            Image {
-                reference,
-                tags,
-                digest: Some(artifact.digest),
-                platform,
-                os: attrs.as_ref().and_then(|a| a.os.clone()),
-                created_at: attrs.and_then(|a| a.created),
-                size_bytes: artifact.size,
-                scan,
-            },
-            findings,
-        ))
+        Ok(rows)
     }
 }
 impl ScanSource for HarborSource {
@@ -162,64 +222,12 @@ impl ScanSource for HarborSource {
                     .name
                     .strip_prefix(&format!("{}/", project.name))
                     .unwrap_or(&repo.name);
-                let path = format!("{path}/{}/artifacts", encode(name));
+                let path = format!("{path}/{}/artifacts", encode(&encode(name)));
                 let artifacts =
                     self.pages::<Artifact>(&path, "&with_tag=true&with_scan_overview=true")?;
                 tracing::info!("repository {}: {} artifacts", repo.name, artifacts.len());
                 for artifact in artifacts {
-                    if artifact.r#type != "IMAGE" {
-                        continue;
-                    }
-                    let tags: Vec<_> = artifact.tags.iter().map(|t| t.name.clone()).collect();
-                    if artifact.references.is_empty() {
-                        let platform = artifact.extra_attrs.as_ref().and_then(|a| {
-                            Some(map::platform_string(&Platform {
-                                os: a.os.clone()?,
-                                architecture: a.architecture.clone()?,
-                                variant: a.variant.clone(),
-                            }))
-                        });
-                        rows.push(self.row(
-                            &repo.name,
-                            &path,
-                            artifact,
-                            tags,
-                            (platform, false),
-                            &mut scanner,
-                        )?);
-                    } else {
-                        for reference in artifact.references {
-                            if reference
-                                .platform
-                                .as_ref()
-                                .is_some_and(|p| p.os == "unknown" && p.architecture == "unknown")
-                            {
-                                continue;
-                            }
-                            let child = self
-                                .client
-                                .get_json::<Artifact>(
-                                    &format!(
-                                        "{}{path}/{}?with_scan_overview=true&with_tag=true",
-                                        self.base_url, reference.child_digest
-                                    ),
-                                    &self.auth,
-                                    &[],
-                                )?
-                                .body;
-                            if child.r#type != "IMAGE" {
-                                continue;
-                            }
-                            rows.push(self.row(
-                                &repo.name,
-                                &path,
-                                child,
-                                tags.clone(),
-                                (reference.platform.as_ref().map(map::platform_string), true),
-                                &mut scanner,
-                            )?);
-                        }
-                    }
+                    rows.extend(self.artifact_rows(&path, &repo.name, &artifact, &mut scanner)?);
                 }
             }
         }
@@ -240,5 +248,111 @@ impl ScanSource for HarborSource {
             images,
             findings,
         })
+    }
+}
+
+enum RowKind {
+    Single,
+    Child(Option<String>),
+}
+const MAX_PAGES: usize = 10_000;
+
+fn digest12(digest: &str) -> String {
+    digest
+        .strip_prefix("sha256:")
+        .unwrap_or(digest)
+        .chars()
+        .take(12)
+        .collect()
+}
+
+trait PageItem {
+    fn key(&self) -> &str;
+}
+impl PageItem for Artifact {
+    fn key(&self) -> &str {
+        &self.digest
+    }
+}
+impl PageItem for Repository {
+    fn key(&self) -> &str {
+        &self.name
+    }
+}
+impl PageItem for Project {
+    fn key(&self) -> &str {
+        &self.name
+    }
+}
+
+fn collect_pages<T: PageItem>(
+    mut request: impl FnMut(usize) -> Result<super::http::Response<Vec<T>>, SourceError>,
+) -> Result<Vec<T>, SourceError> {
+    let mut result = Vec::new();
+    let mut previous = None;
+    for page in 1..=MAX_PAGES {
+        let response = request(page)?;
+        let count = response.body.len();
+        if repeated_page(&mut previous, response.body.first().map(PageItem::key)) {
+            break;
+        }
+        result.extend(response.body);
+        let total = response
+            .headers
+            .get("x-total-count")
+            .and_then(|s| s.parse::<usize>().ok());
+        if count == 0 || total.map(|t| result.len() >= t).unwrap_or(count < 100) {
+            break;
+        }
+    }
+    Ok(result)
+}
+
+fn repeated_page(previous: &mut Option<String>, first: Option<&str>) -> bool {
+    let repeated = first.is_some() && previous.as_deref() == first;
+    *previous = first.map(str::to_owned);
+    repeated
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn pagination_stops_repeated_page_and_caps_requests() {
+        let mut calls = 0;
+        let rows = collect_pages(|_| {
+            calls += 1;
+            Ok(super::super::http::Response {
+                body: vec![Repository {
+                    name: "same".into(),
+                }],
+                headers: BTreeMap::from([("x-total-count".into(), "20000".into())]),
+            })
+        })
+        .unwrap();
+        assert_eq!(calls, 2);
+        assert_eq!(rows.len(), 1);
+        calls = 0;
+        let rows = collect_pages(|page| {
+            calls += 1;
+            Ok(super::super::http::Response {
+                body: vec![Repository {
+                    name: page.to_string(),
+                }],
+                headers: BTreeMap::from([("x-total-count".into(), "20000".into())]),
+            })
+        })
+        .unwrap();
+        assert_eq!(calls, MAX_PAGES);
+        assert_eq!(rows.len(), MAX_PAGES);
+    }
+    #[test]
+    fn pagination_guard() {
+        let mut previous = None;
+        assert!(!repeated_page(&mut previous, Some("a")));
+        assert!(!repeated_page(&mut previous, Some("b")));
+        assert!(repeated_page(&mut previous, Some("b")));
+        assert!(!repeated_page(&mut previous, None));
+        assert_eq!((1..=MAX_PAGES).count(), 10_000);
     }
 }
