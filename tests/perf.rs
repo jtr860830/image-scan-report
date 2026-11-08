@@ -9,6 +9,43 @@ mod data;
 #[path = "support/pdf.rs"]
 mod pdf;
 
+// Linux reports the process high-water mark. macOS ps reports current RSS,
+// sampled after rendering, rather than a lifetime high-water mark.
+fn peak_rss_mb() -> Option<u64> {
+    #[cfg(target_os = "linux")]
+    {
+        let status = std::fs::read_to_string("/proc/self/status").ok()?;
+        let kb = status.lines().find_map(|line| {
+            line.strip_prefix("VmHWM:")?
+                .split_whitespace()
+                .next()?
+                .parse::<u64>()
+                .ok()
+        })?;
+        Some(kb / 1024)
+    }
+    #[cfg(target_os = "macos")]
+    {
+        let output = std::process::Command::new("ps")
+            .args(["-o", "rss=", "-p", &std::process::id().to_string()])
+            .output()
+            .ok()?;
+        if !output.status.success() {
+            return None;
+        }
+        let kb = std::str::from_utf8(&output.stdout)
+            .ok()?
+            .trim()
+            .parse::<u64>()
+            .ok()?;
+        Some(kb / 1024)
+    }
+    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
+    {
+        None
+    }
+}
+
 fn budget(minimum: usize, seconds: f64) {
     let base = data::fixture_report(11);
     let mut report = base.clone();
@@ -49,6 +86,10 @@ fn budget(minimum: usize, seconds: f64) {
         "{} findings: {elapsed:.3} seconds, {pages} pages",
         report.findings.len()
     );
+    match peak_rss_mb() {
+        Some(mb) => println!("peak_rss_mb={mb}"),
+        None => println!("peak_rss_mb=unknown"),
+    }
     assert!(elapsed < seconds, "{elapsed:.3}s exceeds {seconds}s budget");
     assert!(pages > 400, "{pages} pages");
 }
