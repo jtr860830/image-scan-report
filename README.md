@@ -226,8 +226,8 @@ The default displays `judex <ver>`; an edition named `Arishem` displays
 `Arishem <ver> (judex)`. `--version` and `version` use the environment theme or
 embedded default, without reading configuration. An invalid `JUDEX_THEME_DIR`
 then prints the upstream identity, warns once on stderr, and exits 0.
-HTTP `User-Agent` is `judex/<ver>` or `Arishem/<ver> judex/<ver>`;
-whitespace in the product name becomes `-`.
+HTTP `User-Agent` is `judex/<ver>` or `Arishem/<ver> judex/<ver>`; every
+character of the product name outside the RFC 9110 token set becomes `-`.
 
 ### Output
 
