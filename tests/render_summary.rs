@@ -65,10 +65,36 @@ fn summary_page_has_counts_and_tables() {
             .contains(&data.summary.top_images[0].reference),
         "{text}"
     );
-    assert!(text.contains(&data.summary.top_findings[0].id), "{text}");
+    assert!(
+        text.replace('\u{200b}', "")
+            .contains(&data.summary.top_findings[0].id),
+        "{text}"
+    );
     for count in [data.summary.counts.critical, data.summary.counts.high] {
         assert!(text.replace(',', "").contains(&count.to_string()), "{text}");
     }
+}
+
+#[test]
+fn summary_long_identifiers_get_break_opportunities() {
+    // Issue #15: a seven-digit CVE sequence number and a Debian version string ran into the
+    // neighbouring columns because the summary table lacked the identifier treatment.
+    let (report, _, mut data) = fixture(Language::En);
+    let row = &mut data.summary.top_findings[0];
+    row.id = "CVE-2019-1010022".into();
+    row.fixed_versions = "2.9.14+dfsg-1.3~deb12u3".into();
+    let bytes = Renderer::new()
+        .render_pdf(&data, None, None, report.generated_at)
+        .unwrap();
+    let doc = lopdf::Document::load_mem(&bytes).unwrap();
+    let text: String = doc
+        .extract_text(&[3])
+        .unwrap()
+        .chars()
+        .filter(|c| !c.is_whitespace())
+        .collect();
+    assert!(text.contains("CVE-\u{200b}2019-\u{200b}1010022"), "{text}");
+    assert!(text.contains("dfsg-\u{200b}1.\u{200b}3~deb12u3"), "{text}");
 }
 
 #[test]
