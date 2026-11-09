@@ -177,3 +177,41 @@ fn edition_metadata_and_appendix_credit_agree() {
         "{text}"
     );
 }
+
+#[test]
+fn summary_explains_hidden_findings_in_both_languages() {
+    for lang in [Language::En, Language::ZhTw] {
+        let (report, mut opts, _) = fixture(lang.clone());
+        opts.min_severity = Some(image_scan_report::model::Severity::High);
+        let data = model::build(
+            &report,
+            &opts,
+            strings::load(lang.clone()),
+            theme::default_theme().to_render_value(),
+        );
+        assert!(data.filters.hidden_findings > 0);
+        let expected = if lang == Language::En {
+            format!(
+                "Inventory, remediation and image tables show High and above; {} lower findings are counted above but not listed.",
+                data.filters.hidden_findings
+            )
+        } else {
+            format!(
+                "清單、修補建議及映像檔表格僅列出 High 及以上等級；{} 個較低等級弱點僅計入上方統計，未列於表格中。",
+                data.filters.hidden_findings
+            )
+        };
+        let bytes = Renderer::new()
+            .render_pdf(&data, None, None, report.generated_at)
+            .unwrap();
+        let compact = |s: &str| {
+            s.chars()
+                .filter(|c| !c.is_whitespace() && *c != '\u{200b}')
+                .collect::<String>()
+        };
+        assert!(
+            compact(&pdf::text(&bytes)).contains(&compact(&expected)),
+            "{expected}"
+        );
+    }
+}

@@ -86,5 +86,13 @@
   "scan_state_ok": "掃描成功",
   "scan_state_failed": "掃描失敗",
   "scan_state_not_scanned": "尚未掃描",
-  "col_source": "來源"
+  "col_source": "來源",
+  "filters_summary_note": "清單、修補建議及映像檔表格僅列出 {band} 及以上等級；{count} 個較低等級弱點僅計入上方統計，未列於表格中。",
+  "filters_rows_omitted": "… 另有 {count} 列未顯示",
+  "filters_rows_omitted_json": "… 另有 {count} 列未顯示；完整清單請見 JSON 成品",
+  "filters_image_counts_only": "弱點依識別碼列於清單中；本報告於映像檔章節僅顯示各映像檔的統計數量。",
+  "filters_method_note": "已套用篩選條件：{details}。",
+  "filters_min_severity": "最低嚴重程度為 {band}",
+  "filters_image_counts": "映像檔章節僅顯示統計數量",
+  "filters_max_rows": "每個表格最多 {n} 列"
 }

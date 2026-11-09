@@ -105,3 +105,19 @@ fn stale_and_failed_tables_render() {
         }
     }
 }
+
+#[test]
+fn method_explains_active_filters() {
+    let report = data::fixture_report(3);
+    let mut opts = data::default_options(Language::En);
+    opts.min_severity = Some(image_scan_report::model::Severity::High);
+    opts.image_detail = image_scan_report::model::ImageDetail::Counts;
+    opts.max_table_rows = Some(1);
+    let data = image_scan_report::render::model::build(
+        &report,
+        &opts,
+        image_scan_report::render::strings::load(Language::En),
+        image_scan_report::render::theme::default_theme().to_render_value(),
+    );
+    assert!(compact(&pdf::text(&render(&data))).contains(&compact("Filters applied: minimum severity High; image chapter counts only; at most 1 rows per table.")));
+}

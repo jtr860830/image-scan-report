@@ -126,3 +126,38 @@ fn inventory_caps_images_and_handles_empty_inventory() {
     assert!(text.contains(&data.strings["no_findings"]));
     assert!(text.contains(&data.strings["inventory_lede"].replace("{count}", "0")));
 }
+
+#[test]
+fn inventory_explains_capped_rows_with_optional_json() {
+    for json in [false, true] {
+        let (report, mut opts, _) = fixture(Language::En);
+        opts.max_table_rows = Some(1);
+        opts.json_artifact = json;
+        let data = image_scan_report::render::model::build(
+            &report,
+            &opts,
+            image_scan_report::render::strings::load(Language::En),
+            image_scan_report::render::theme::default_theme().to_render_value(),
+        );
+        assert!(data.inventory_omitted > 0);
+        let bytes = Renderer::new()
+            .render_pdf(&data, None, None, report.generated_at)
+            .unwrap();
+        let (_, text) = chapter(&bytes, &data.strings["ch_inventory"]);
+        let text = text.split(&data.strings["ch_images"]).next().unwrap();
+        let expected = format!(
+            "… and {} more rows{}",
+            data.inventory_omitted,
+            if json {
+                "; the complete list is in the JSON artifact"
+            } else {
+                ""
+            }
+        );
+        assert!(
+            compact_inventory(text).contains(&compact_inventory(&expected)),
+            "{expected}"
+        );
+        assert_eq!(text.contains("JSON artifact"), json);
+    }
+}

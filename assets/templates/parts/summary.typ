@@ -10,6 +10,10 @@
   set text(number-width: "tabular")
   heading(level: 1, tr("ch_summary"))
   secondary(theme, tr("summary_lede", images: num(s.images_total), unique: num(s.unique_total)))
+  if data.filters.active and data.filters.hidden_findings > 0 {
+    parbreak()
+    secondary(theme, tr("filters_summary_note", band: data.filters.min_severity_label, count: num(data.filters.hidden_findings)))
+  }
   v(10pt)
   if s.findings_total == 0 {
     secondary(theme, tr("no_findings"))

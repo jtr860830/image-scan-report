@@ -36,6 +36,8 @@
       block(fill: rgb(theme.colors.tint_high), radius: 6pt)[
         #card(theme)[#text(fill: rgb(theme.colors.high), if image.scan_state == "not_scanned" { tr("scan_state_not_scanned") } else { tr("image_scan_failed", error: image.scan_error) })]
       ]
+    } else if not image.show_findings {
+      secondary(theme, tr("filters_image_counts_only"))
     } else {
       section-title(theme, tr("image_findings_title"))
       if image.findings.len() == 0 {
@@ -62,6 +64,9 @@
               }
             ]),)
           }).flatten())
+      }
+      if image.findings_omitted > 0 {
+        secondary(theme, tr(if data.filters.json_artifact { "filters_rows_omitted_json" } else { "filters_rows_omitted" }, count: num(image.findings_omitted)))
       }
     }
   }

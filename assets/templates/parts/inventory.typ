@@ -28,4 +28,7 @@
         ],
       )).flatten())
   }
+  if data.inventory_omitted > 0 {
+    secondary(theme, tr(if data.filters.json_artifact { "filters_rows_omitted_json" } else { "filters_rows_omitted" }, count: num(data.inventory_omitted)))
+  }
 }

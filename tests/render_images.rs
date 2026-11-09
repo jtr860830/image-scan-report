@@ -231,3 +231,49 @@ fn image_detail_lists_every_tag() {
         }
     }
 }
+
+#[test]
+fn images_explain_caps_and_counts_only() {
+    for json in [false, true] {
+        for counts in [false, true] {
+            let mut report = data::fixture_report(3);
+            // The reduced fixture has one finding per image; repeat one to exercise the cap.
+            report.findings.push(report.findings[0].clone());
+            let mut opts = data::default_options(Language::En);
+            opts.max_table_rows = Some(1);
+            opts.json_artifact = json;
+            if counts {
+                opts.image_detail = image_scan_report::model::ImageDetail::Counts;
+            }
+            let data = model::build(
+                &report,
+                &opts,
+                strings::load(Language::En),
+                theme::default_theme().to_render_value(),
+            );
+            let (_, text) = chapter(&render(&data), &data.strings["ch_images"]);
+            let text = text.split(&data.strings["ch_appendix"]).next().unwrap();
+            if counts {
+                assert!(compact(text).contains(&compact("Findings are listed per vulnerability in the inventory; this report shows counts per image.")));
+                assert!(!text.contains("more rows"));
+                assert!(!text.contains(&data.strings["image_findings_title"]));
+            } else {
+                let omitted = data
+                    .images
+                    .iter()
+                    .find(|i| i.findings_omitted > 0)
+                    .unwrap()
+                    .findings_omitted;
+                let expected = format!(
+                    "… and {omitted} more rows{}",
+                    if json {
+                        "; the complete list is in the JSON artifact"
+                    } else {
+                        ""
+                    }
+                );
+                assert!(compact(text).contains(&compact(&expected)), "{expected}");
+            }
+        }
+    }
+}
