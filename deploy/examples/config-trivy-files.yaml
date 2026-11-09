@@ -1,3 +1,5 @@
+# For container use, set source.path to /var/lib/judex/scans/trivy and
+# output.path to /var/lib/judex/reports.
 source:
   type: trivy-files
   path: ./tests/fixtures/trivy

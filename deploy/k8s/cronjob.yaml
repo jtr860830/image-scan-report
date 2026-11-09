@@ -1,10 +1,10 @@
 apiVersion: batch/v1
 kind: CronJob
 metadata:
-  name: image-scan-report
-  namespace: image-scan-report
+  name: judex
+  namespace: judex
   labels:
-    app.kubernetes.io/name: image-scan-report
+    app.kubernetes.io/name: judex
 spec:
   schedule: "0 2 * * 1"
   concurrencyPolicy: Forbid
@@ -17,7 +17,7 @@ spec:
       template:
         metadata:
           labels:
-            app.kubernetes.io/name: image-scan-report
+            app.kubernetes.io/name: judex
         spec:
           restartPolicy: Never
           securityContext:
@@ -47,15 +47,15 @@ spec:
                     name: report-secrets
               volumeMounts:
                 - name: config
-                  mountPath: /etc/report/config.yaml
+                  mountPath: /etc/judex/config.yaml
                   subPath: config.yaml
                   readOnly: true
                 - name: ca
-                  mountPath: /etc/report/ca.pem
+                  mountPath: /etc/judex/ca.pem
                   subPath: ca.pem
                   readOnly: true
                 - name: output
-                  mountPath: /output
+                  mountPath: /var/lib/judex/reports
           volumes:
             - name: config
               configMap:

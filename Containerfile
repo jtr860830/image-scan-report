@@ -24,7 +24,7 @@ COPY --from=build /src/target/release/judex /usr/local/bin/judex
 COPY LICENSE THIRD_PARTY_NOTICES.md /usr/share/doc/judex/
 COPY assets/fonts/LICENSE-*.txt /usr/share/doc/judex/fonts/
 USER 65532:65532
-WORKDIR /output
-VOLUME ["/output"]
+WORKDIR /var/lib/judex/reports
+VOLUME ["/var/lib/judex/reports"]
 ENTRYPOINT ["/usr/local/bin/judex"]
-CMD ["run", "--config", "/etc/report/config.yaml"]
+CMD ["run"]

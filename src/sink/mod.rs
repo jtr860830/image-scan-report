@@ -50,7 +50,10 @@ pub trait ReportSink {
 /// # Errors
 ///
 /// Fails if an HTTP destination has conflicting TLS options or an unreadable or invalid CA bundle.
-pub fn build_sinks(cfg: &[OutputConfig]) -> Result<Vec<Box<dyn ReportSink>>, ConfigError> {
+pub fn build_sinks(
+    cfg: &[OutputConfig],
+    user_agent: &str,
+) -> Result<Vec<Box<dyn ReportSink>>, ConfigError> {
     cfg.iter()
         .map(|output| match output {
             OutputConfig::Filesystem { path } => {
@@ -72,6 +75,7 @@ pub fn build_sinks(cfg: &[OutputConfig]) -> Result<Vec<Box<dyn ReportSink>>, Con
                     ca_file.as_deref(),
                     *timeout_secs,
                     *insecure_skip_verify,
+                    user_agent,
                 )?;
                 Ok(Box::new(http::HttpSink::new(
                     url.clone(),

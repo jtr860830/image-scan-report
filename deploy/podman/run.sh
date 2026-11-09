@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # IMAGE=ghcr.io/jtr860830/judex:0.1.0 CONFIG=./config.yaml OUT=./out deploy/podman/run.sh
-# Optional CA=/path/to/ca.pem; configure source.ca_file as /etc/report/ca.pem.
+# Optional CA=/path/to/ca.pem; configure source.ca_file as /etc/judex/ca.pem.
 set -euo pipefail
 IMAGE=${IMAGE:-ghcr.io/jtr860830/judex:0.1.0}
 CONFIG=${CONFIG:-./config.yaml}
@@ -20,8 +20,8 @@ for name in HARBOR_PASSWORD NEUVECTOR_PASSWORD UPLOAD_TOKEN; do
     fi
 done
 if [[ -n ${CA:-} ]]; then
-    args+=(-v "$CA":/etc/report/ca.pem:ro,Z)
+    args+=(-v "$CA":/etc/judex/ca.pem:ro,Z)
 fi
 exec podman "${args[@]}" \
-    -v "$CONFIG":/etc/report/config.yaml:ro,Z \
-    -v "$OUT":/output:Z "$IMAGE" "$@"
+    -v "$CONFIG":/etc/judex/config.yaml:ro,Z \
+    -v "$OUT":/var/lib/judex/reports:Z "$IMAGE" "$@"

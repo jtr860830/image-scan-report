@@ -84,8 +84,8 @@ jobs:
           cache-to: type=gha,mode=max
       - name: Prepare smoke inputs
         run: |
-          sed -e 's|path: ./tests/fixtures/trivy|path: /fixtures/trivy|' \
-              -e 's|path: ./out|path: /output|' \
+          sed -e 's|path: ./tests/fixtures/trivy|path: /var/lib/judex/scans/trivy|' \
+              -e 's|path: ./out|path: /var/lib/judex/reports|' \
               deploy/examples/config-trivy-files.yaml > smoke-config.yaml
           mkdir -p smoke-out
           chmod 777 smoke-out
@@ -93,18 +93,25 @@ jobs:
         run: |
           docker image inspect -f '{{.Config.User}}' judex:ci | grep -qx '65532:65532'
           docker run --rm --read-only \
-            -v "$PWD/tests/fixtures:/fixtures:ro" \
-            -v "$PWD/smoke-config.yaml:/etc/report/config.yaml:ro" \
-            -v "$PWD/smoke-out:/output" \
+            -v "$PWD/tests/fixtures:/var/lib/judex/scans:ro" \
+            -v "$PWD/smoke-config.yaml:/etc/judex/config.yaml:ro" \
+            -v "$PWD/smoke-out:/var/lib/judex/reports" \
             judex:ci
           test -n "$(find smoke-out -type f -name '*.pdf' -print -quit)"
           rm -f smoke-out/*.pdf
           for command in check run; do
             docker run --rm --read-only --user 65532:65532 \
-              -v "$PWD/tests/fixtures:/fixtures:ro" \
-              -v "$PWD/smoke-config.yaml:/etc/report/config.yaml:ro" \
-              -v "$PWD/smoke-out:/output" \
-              judex:ci "$command" --config /etc/report/config.yaml
+              -v "$PWD/tests/fixtures:/var/lib/judex/scans:ro" \
+              -v "$PWD/smoke-config.yaml:/etc/judex/config.yaml:ro" \
+              -v "$PWD/smoke-out:/var/lib/judex/reports" \
+              judex:ci "$command"
           done
           test -n "$(find smoke-out -type f -name '*.pdf' -print -quit)"
+          docker run --rm --read-only --user 65532:65532 \
+            -v "$PWD/tests/fixtures:/var/lib/judex/scans:ro" \
+            -v "$PWD/smoke-config.yaml:/etc/judex/config.yaml:ro" \
+            -v "$PWD/smoke-out:/var/lib/judex/reports" \
+            judex:ci check --config /etc/judex/config.yaml
+          docker run --rm -e JUDEX_THEME_DIR=/nonexistent judex:ci --version 2> theme-warning.log
+          grep -q 'JUDEX_THEME_DIR' theme-warning.log
           docker run --rm judex:ci --version | grep '^judex '

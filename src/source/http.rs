@@ -8,9 +8,6 @@ use std::sync::Arc;
 use std::time::Duration;
 use ureq::tls::{PemItem, RootCerts, TlsConfig};
 
-/// `User-Agent` sent by default: `image-scan-report/<crate version>`.
-pub const USER_AGENT: &str = concat!("image-scan-report/", env!("CARGO_PKG_VERSION"));
-
 /// Maximum accepted response body size in bytes (512 MiB).
 pub const MAX_RESPONSE_BYTES: u64 = 512 * 1024 * 1024;
 
@@ -33,7 +30,7 @@ impl Default for HttpOptions {
             ca_file: None,
             insecure_skip_verify: false,
             timeout: Duration::from_secs(30),
-            user_agent: USER_AGENT.into(),
+            user_agent: String::new(),
         }
     }
 }
@@ -97,21 +94,23 @@ pub struct HttpClient {
     retry_delays: [Duration; 2],
 }
 
-/// Build an HTTP transport with the default `User-Agent` and the given TLS settings.
+/// Build an HTTP transport with the supplied `User-Agent` and the given TLS settings.
 ///
 /// # Errors
 ///
-/// Fails if TLS options conflict or a custom certificate file cannot be read or parsed.
+/// Fails if the User-Agent is empty, TLS options conflict, or a custom certificate file
+/// cannot be read or parsed.
 pub fn client_from_tls(
     ca_file: Option<&Path>,
     insecure_skip_verify: bool,
     timeout: Duration,
+    user_agent: &str,
 ) -> Result<HttpClient, HttpError> {
     HttpClient::try_new(&HttpOptions {
         ca_file: ca_file.map(Path::to_owned),
         insecure_skip_verify,
         timeout,
-        user_agent: USER_AGENT.into(),
+        user_agent: user_agent.into(),
     })
 }
 
@@ -120,8 +119,15 @@ impl HttpClient {
     ///
     /// # Errors
     ///
-    /// Fails if TLS options conflict or a custom certificate file cannot be read or parsed.
+    /// Fails if the User-Agent is empty, TLS options conflict, or a custom certificate file
+    /// cannot be read or parsed.
     pub fn try_new(opts: &HttpOptions) -> Result<Self, HttpError> {
+        if opts.user_agent.is_empty() {
+            return Err(HttpError::InvalidRequest(
+                "options".into(),
+                "user_agent must not be empty".into(),
+            ));
+        }
         if opts.ca_file.is_some() && opts.insecure_skip_verify {
             return Err(HttpError::ConflictingTls);
         }
@@ -500,7 +506,7 @@ mod tests {
                 ca_file: None,
                 insecure_skip_verify,
                 timeout: Duration::from_secs(1),
-                user_agent: format!("image-scan-report/{}", env!("CARGO_PKG_VERSION")),
+                user_agent: format!("upstream/{}", env!("CARGO_PKG_VERSION")),
             })
             .expect("valid test TLS options");
             assert_eq!(
@@ -544,11 +550,13 @@ pub fn tls_client(
     ca_file: Option<&Path>,
     timeout_secs: u64,
     insecure_skip_verify: bool,
+    user_agent: &str,
 ) -> Result<crate::source::http::HttpClient, crate::config::ConfigError> {
     let client = crate::source::http::client_from_tls(
         ca_file,
         insecure_skip_verify,
         std::time::Duration::from_secs(timeout_secs),
+        user_agent,
     )
     .map_err(|e| crate::config::ConfigError::Invalid(format!("{role}.ca_file: {e}")))?;
     if insecure_skip_verify {

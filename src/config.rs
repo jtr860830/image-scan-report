@@ -1,6 +1,7 @@
 //! YAML configuration and explicit environment-variable resolution.
 
 use std::collections::BTreeMap;
+use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
@@ -161,6 +162,14 @@ pub enum HttpMode {
 #[derive(thiserror::Error, Debug)]
 #[must_use]
 pub enum ConfigError {
+    /// No candidate configuration file exists.
+    #[error("{}", lookup_error_message(.candidates, .moved_from))]
+    NotFound {
+        /// Configuration paths searched in lookup order.
+        candidates: Vec<PathBuf>,
+        /// Historical configuration path, when it still exists.
+        moved_from: Option<PathBuf>,
+    },
     /// The configuration file could not be read.
     #[error("cannot read {0}: {1}")]
     Read(PathBuf, std::io::Error),
@@ -173,6 +182,73 @@ pub enum ConfigError {
     /// A value failed validation, or the theme, logo or TLS setup it names is unusable.
     #[error("{0}")]
     Invalid(String),
+}
+
+/// Candidate configuration files in lookup order for a product called `name`:
+/// `$<NAME>_CONFIG`, `$XDG_CONFIG_HOME/<name>/config.yaml` (or `$HOME/.config/<name>/config.yaml`), `/etc/<name>/config.yaml`.
+/// `env` returns the value of a variable; it is a parameter so tests need not touch the process environment.
+pub fn candidate_paths(name: &str, env: &dyn Fn(&str) -> Option<OsString>) -> Vec<PathBuf> {
+    let mut candidates = Vec::new();
+    if let Some(path) =
+        env(&format!("{}_CONFIG", name.to_uppercase())).filter(|value| !value.is_empty())
+    {
+        candidates.push(PathBuf::from(path));
+    }
+    let xdg = env("XDG_CONFIG_HOME")
+        .filter(|value| !value.is_empty())
+        .map(PathBuf::from)
+        .filter(|path| path.is_absolute())
+        .or_else(|| {
+            env("HOME")
+                .filter(|value| !value.is_empty())
+                .map(|home| PathBuf::from(home).join(".config"))
+        });
+    if let Some(base) = xdg {
+        candidates.push(base.join(name).join("config.yaml"));
+    }
+    candidates.push(Path::new("/etc").join(name).join("config.yaml"));
+    candidates
+}
+
+/// Non-empty explicit environment path, otherwise the first existing candidate, or `ConfigError::NotFound { candidates, moved_from: Option<PathBuf> }`.
+///
+/// # Errors
+///
+/// Returns [`ConfigError::NotFound`] if no candidate is a file.
+pub fn default_path(
+    name: &str,
+    env: &dyn Fn(&str) -> Option<OsString>,
+) -> Result<PathBuf, ConfigError> {
+    if let Some(path) =
+        env(&format!("{}_CONFIG", name.to_uppercase())).filter(|value| !value.is_empty())
+    {
+        return Ok(PathBuf::from(path));
+    }
+    let candidates = candidate_paths(name, env);
+    if let Some(path) = candidates.iter().find(|path| path.is_file()) {
+        return Ok(path.clone());
+    }
+    let old = Path::new("/etc/report/config.yaml");
+    Err(ConfigError::NotFound {
+        candidates,
+        moved_from: old.is_file().then(|| old.to_owned()),
+    })
+}
+
+fn lookup_error_message(candidates: &[PathBuf], moved_from: &Option<PathBuf>) -> String {
+    let mut message = String::from("configuration not found; searched:");
+    for path in candidates {
+        message.push_str(&format!("\n{}", path.display()));
+    }
+    if moved_from.is_some()
+        && let Some(destination) = candidates.last()
+    {
+        message.push_str(&format!(
+            "\nconfiguration moved to {} in 0.2.0",
+            destination.display()
+        ));
+    }
+    message
 }
 
 fn default_describe_severities() -> Vec<Severity> {
@@ -397,4 +473,124 @@ pub struct ThemeConfig {
     /// Directory holding `theme.toml` and an optional `logo.png` or `logo.svg`; `None` uses the
     /// embedded default theme.
     pub path: Option<PathBuf>,
+}
+
+#[cfg(test)]
+mod lookup_tests {
+    use super::*;
+
+    #[test]
+    fn candidates_follow_xdg_then_etc() {
+        let env = |k: &str| match k {
+            "XDG_CONFIG_HOME" => Some("/xdg".into()),
+            "HOME" => Some("/home/u".into()),
+            _ => None,
+        };
+        assert_eq!(
+            candidate_paths("prod", &env),
+            [
+                PathBuf::from("/xdg/prod/config.yaml"),
+                "/etc/prod/config.yaml".into()
+            ]
+        );
+    }
+
+    #[test]
+    fn explicit_env_variable_comes_first() {
+        let env = |k: &str| (k == "PROD_CONFIG").then(|| "/x/c.yaml".into());
+        assert_eq!(candidate_paths("prod", &env)[0], Path::new("/x/c.yaml"));
+        assert_eq!(default_path("prod", &env).unwrap(), Path::new("/x/c.yaml"));
+    }
+
+    #[test]
+    fn relative_or_empty_xdg_config_home_is_ignored() {
+        for value in ["rel", ""] {
+            let env = |k: &str| match k {
+                "XDG_CONFIG_HOME" => Some(value.into()),
+                "HOME" => Some("/home/u".into()),
+                _ => None,
+            };
+            assert_eq!(
+                candidate_paths("prod", &env)[0],
+                Path::new("/home/u/.config/prod/config.yaml")
+            );
+        }
+    }
+
+    #[test]
+    fn missing_home_skips_the_xdg_candidate() {
+        for home in [None, Some("")] {
+            let env = |k: &str| {
+                if k == "HOME" {
+                    home.map(Into::into)
+                } else {
+                    None
+                }
+            };
+            assert_eq!(
+                candidate_paths("prod", &env),
+                [PathBuf::from("/etc/prod/config.yaml")]
+            );
+        }
+    }
+
+    #[test]
+    fn default_path_returns_first_existing() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("prod/config.yaml");
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(&path, "").unwrap();
+        let explicit = dir.path().join("explicit.yaml");
+        let env = |k: &str| match k {
+            "XDG_CONFIG_HOME" => Some(dir.path().as_os_str().to_owned()),
+            "PROD_CONFIG" => Some(explicit.as_os_str().to_owned()),
+            _ => None,
+        };
+        assert_eq!(
+            default_path("prod", &|k| if k == "PROD_CONFIG" {
+                Some("".into())
+            } else {
+                env(k)
+            })
+            .unwrap(),
+            path
+        );
+        assert_eq!(default_path("prod", &env).unwrap(), explicit);
+        std::fs::write(&explicit, "").unwrap();
+        assert_eq!(default_path("prod", &env).unwrap(), explicit);
+    }
+
+    #[test]
+    fn lookup_error_includes_exact_migration_hint() {
+        let error = ConfigError::NotFound {
+            candidates: vec!["/etc/prod/config.yaml".into()],
+            moved_from: Some("/etc/report/config.yaml".into()),
+        };
+        assert_eq!(
+            error.to_string(),
+            "configuration not found; searched:\n/etc/prod/config.yaml\nconfiguration moved to /etc/prod/config.yaml in 0.2.0"
+        );
+        assert!(
+            !candidate_paths("prod", &|k| (k == "PROD_CONFIG").then(|| "".into()))
+                .contains(&PathBuf::new())
+        );
+    }
+
+    #[test]
+    fn default_path_error_lists_candidates() {
+        let dir = tempfile::tempdir().unwrap();
+        let env = |k: &str| (k == "XDG_CONFIG_HOME").then(|| dir.path().as_os_str().to_owned());
+        let error = default_path("prod", &env).unwrap_err();
+        let ConfigError::NotFound { candidates, .. } = &error else {
+            panic!("unexpected error")
+        };
+        for candidate in candidates {
+            assert!(
+                error
+                    .to_string()
+                    .lines()
+                    .any(|line| line == candidate.display().to_string())
+            );
+        }
+    }
 }
