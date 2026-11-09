@@ -80,7 +80,7 @@ status:
 | End of Life | The scanner reports end-of-life status. |
 | Under Investigation | The scanner reports an unresolved investigation. |
 | Other | No status was supplied, or the status was `unknown`. |
-| Other (&lt;raw value&gt;) | An unrecognised status was supplied; its raw value is shown. |
+| `Other (<raw value>)` | An unrecognised status was supplied; its raw value is shown. |
 
 These statuses do not establish exploitability or approve accepting the risk.
 Assess mitigation, replacement or a supported base image with the image owner.
@@ -179,9 +179,9 @@ Consult [report settings](../../README.md#report) for the controls. Look for:
 | Summary note about a minimum band | `min_severity` hid lower-band findings from detail, while retaining Unrated. |
 | **Rows not shown: N** | `max_table_rows` capped the inventory or an individual image table. |
 | **Groups not shown: N (below …)** | Remediation groups fell below the severity floor. |
-| **Tables list findings at or above {band} (Unrated is always listed); counts include every finding.** | Image Details has a severity floor in full mode. |
-| **… unique vulnerabilities at or above {band} (Unrated included).** | The inventory opening count covers the retained severity bands. |
-| **No findings at or above {band}.** | No retained findings are available for that detail table or remediation groups. |
+| **Tables list findings at or above High (Unrated is always listed); counts include every finding.** | Image Details has a severity floor in full mode (High stands for whichever band was configured). |
+| **… unique vulnerabilities at or above High (Unrated included).** | The inventory opening count covers the retained severity bands. |
+| **No findings at or above High.** | No retained findings are available for that detail table or remediation groups. |
 | Image Details chapter note about counts | `image_detail: counts` omitted per-image finding tables. |
 | **Filters applied: …** in Methodology | The configured floor, counts-only mode and/or row cap is active. |
 

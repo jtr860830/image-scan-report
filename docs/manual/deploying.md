@@ -18,8 +18,9 @@ the image `ghcr.io/jtr860830/judex:<ver>`. Replace `<ver>` with a release tag.
 
 ## Local check
 
-Check sample file inputs before configuring scanner credentials. From a repository
-checkout, with the binary on PATH, run:
+Check sample file inputs before configuring scanner credentials. From the root of a
+repository checkout (the example configuration uses paths relative to it), with the
+binary on PATH, run:
 
 ```sh
 judex check --config deploy/examples/config-trivy-files.yaml
@@ -197,7 +198,8 @@ Failed rows. Use `RUST_LOG=debug` for diagnostics.
 Follow [Kubernetes deployment](../../deploy/k8s/README.md) for the ConfigMap,
 Secret, CA, PVC, CronJob and one-off Job. Schedule judex after the scanner's
 refresh window: for example, Harbor scan-all daily at 02:00 UTC using a custom
-cron schedule, then judex Monday at 06:00 UTC. Harbor's Daily preset runs at
+cron schedule, then judex Monday at 06:00 UTC (the supplied CronJob runs
+`0 2 * * 1`, Monday at 02:00 — change its `schedule`). Harbor's Daily preset runs at
 midnight UTC, so it does not express that example. Set the CronJob's
 `spec.timeZone` explicitly to align with Harbor's UTC; without it, the supplied
 CronJob uses the controller's timezone. Leave enough time for scans to finish
