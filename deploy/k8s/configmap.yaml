@@ -2,9 +2,9 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: report-config
-  namespace: image-scan-report
+  namespace: judex
   labels:
-    app.kubernetes.io/name: image-scan-report
+    app.kubernetes.io/name: judex
 data:
   config.yaml: |
     source:
@@ -13,7 +13,7 @@ data:
       project: my-project
       username: report-reader
       password_env: HARBOR_PASSWORD
-      ca_file: /etc/report/ca.pem
+      ca_file: /etc/judex/ca.pem
     report:
       language: zh-TW
       organization: Example Organization
@@ -21,4 +21,4 @@ data:
       json: true
     output:
       - type: filesystem
-        path: /output
+        path: /var/lib/judex/reports

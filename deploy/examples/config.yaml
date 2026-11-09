@@ -9,12 +9,12 @@ source:
   # Last resort when the CA cannot be exported; prints a TLS verification warning.
   # insecure_skip_verify: true
   # Mount your private certificate authority bundle at this path.
-  ca_file: /etc/report/harbor-ca.pem
+  ca_file: /etc/judex/ca.pem
 
 report:
   language: zh-TW
   organization: Example Organization
-  logo: /etc/report/logo.png
+  logo: /etc/judex/logo.png
   # Scans older than this threshold are marked stale.
   stale_after_days: 30
   pdf: true
@@ -23,7 +23,7 @@ report:
 output:
   # Persist reports to a mounted output directory.
   - type: filesystem
-    path: /output
+    path: /var/lib/judex/reports
   - type: http
     url: https://reports.example.com/upload/{filename}
     method: PUT

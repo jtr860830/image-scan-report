@@ -1,3 +1,5 @@
+# For containers, mount scans at /var/lib/judex/scans and reports at
+# /var/lib/judex/reports; use /var/lib/judex/scans/trivy as the source path.
 source:
   type: trivy-files
   path: ./tests/fixtures/trivy

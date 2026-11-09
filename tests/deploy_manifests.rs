@@ -22,6 +22,27 @@ fn manifests_parse_and_pin_the_contract() {
             }
         }
     }
+    for document in &documents {
+        assert_eq!(
+            document["metadata"]["labels"]["app.kubernetes.io/name"],
+            "judex"
+        );
+        if document["kind"] == "Namespace" {
+            assert_eq!(document["metadata"]["name"], "judex");
+        } else {
+            assert_eq!(document["metadata"]["namespace"], "judex");
+        }
+        let name = match document["kind"].as_str().unwrap() {
+            "Namespace" | "CronJob" => "judex",
+            "Job" => "judex-once",
+            "Secret" => "report-secrets",
+            "PersistentVolumeClaim" => "report-output",
+            "ConfigMap" if document["data"]["config.yaml"].is_string() => "report-config",
+            "ConfigMap" => "harbor-ca",
+            kind => panic!("unexpected resource kind: {kind}"),
+        };
+        assert_eq!(document["metadata"]["name"], name);
+    }
     let secret = documents
         .iter()
         .find(|d| d["kind"] == "Secret")
@@ -53,6 +74,10 @@ fn manifests_parse_and_pin_the_contract() {
             &job["spec"]
         };
         assert_eq!(spec["backoffLimit"], 1);
+        assert_eq!(
+            spec["template"]["metadata"]["labels"]["app.kubernetes.io/name"],
+            "judex"
+        );
         let pod = &spec["template"]["spec"];
         assert_eq!(pod["restartPolicy"], "Never");
         let volumes = pod["volumes"].as_sequence().unwrap();
@@ -91,7 +116,11 @@ fn manifests_parse_and_pin_the_contract() {
                 assert_eq!(container["resources"][section]["cpu"], cpu);
                 assert_eq!(container["resources"][section]["memory"], memory);
             }
-            for path in ["/etc/report/config.yaml", "/output"] {
+            for path in [
+                "/etc/judex/config.yaml",
+                "/etc/judex/ca.pem",
+                "/var/lib/judex/reports",
+            ] {
                 assert!(
                     container["volumeMounts"]
                         .as_sequence()
