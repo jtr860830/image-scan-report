@@ -455,6 +455,7 @@ fn one_failed_sink_keeps_exit_zero_and_hides_headers() {
             None,
             false,
             std::time::Duration::from_secs(1),
+            "upstream/test",
         )
         .unwrap(),
     );
@@ -541,7 +542,7 @@ fn check_reports_env_theme_and_config_precedence() {
     let output = tempfile::tempdir().unwrap();
     let env_dir = tempfile::tempdir().unwrap();
     let cfg_dir = tempfile::tempdir().unwrap();
-    for (dir, name) in [(&env_dir, "Env Edition"), (&cfg_dir, "Config Edition")] {
+    for (dir, name) in [(&env_dir, "Env Edition"), (&cfg_dir, "Edition")] {
         let mut theme = image_scan_report::render::theme::default_theme();
         theme.product.name = name.into();
         std::fs::write(
@@ -565,5 +566,8 @@ fn check_reports_env_theme_and_config_precedence() {
         .path();
     assert!(pdf::text(&std::fs::read(path).unwrap()).contains("Env Edition"));
     cfg.theme.path = Some(cfg_dir.path().into());
-    assert!(check(&cfg, &runtime).unwrap().ends_with("; theme: config"));
+    assert!(check(&cfg, &runtime).unwrap().ends_with(&format!(
+        "; product: Edition {} (judex); theme: config",
+        env!("CARGO_PKG_VERSION")
+    )));
 }

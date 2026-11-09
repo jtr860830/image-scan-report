@@ -5,7 +5,11 @@ use assert_cmd::cargo::cargo_bin_cmd;
 
 #[test]
 fn version_prints_product_name_and_semver() {
-    let out = cargo_bin_cmd!("judex").arg("version").output().unwrap();
+    let out = cargo_bin_cmd!("judex")
+        .env_remove("JUDEX_THEME_DIR")
+        .arg("version")
+        .output()
+        .unwrap();
     assert!(out.status.success());
     let s = String::from_utf8(out.stdout).unwrap();
     assert!(s.starts_with("judex "));
@@ -28,6 +32,7 @@ fn run_subcommand_end_to_end() {
     let dir = tempfile::tempdir().unwrap();
     let config = write_config(dir.path());
     let out = cargo_bin_cmd!("judex")
+        .env_remove("JUDEX_THEME_DIR")
         .args(["run", "--config"])
         .arg(config)
         .output()
@@ -58,6 +63,7 @@ fn bad_config_exits_2() {
     let path = dir.path().join("bad.yaml");
     std::fs::write(&path, "source:\n  type: foo\n").unwrap();
     let out = cargo_bin_cmd!("judex")
+        .env_remove("JUDEX_THEME_DIR")
         .args(["run", "--config"])
         .arg(path)
         .output()
@@ -79,6 +85,7 @@ fn partial_failure_is_reported_on_stderr() {
     ));
     std::fs::write(&config, yaml).unwrap();
     let out = cargo_bin_cmd!("judex")
+        .env_remove("JUDEX_THEME_DIR")
         .args(["run", "--config"])
         .arg(config)
         .output()
@@ -99,6 +106,7 @@ fn scope_for_dot_is_directory_name() {
     std::fs::write(dir.path().join("config.yaml"),
         "source:\n  type: trivy-files\n  path: .\nreport:\n  language: en\n  organization: Test\n  json: true\n  pdf: false\noutput:\n  - type: filesystem\n    path: out\n").unwrap();
     let out = cargo_bin_cmd!("judex")
+        .env_remove("JUDEX_THEME_DIR")
         .current_dir(dir.path())
         .args(["run", "--config", "config.yaml"])
         .output()
@@ -132,7 +140,10 @@ fn render_data_subcommand_writes_json() {
     let dir = tempfile::tempdir().unwrap();
     let config = write_config(dir.path());
     let path = dir.path().join("data.json");
+    edition_theme(dir.path());
     let out = cargo_bin_cmd!("judex")
+        .env_remove("JUDEX_THEME_DIR")
+        .env("JUDEX_THEME_DIR", dir.path())
         .args(["render-data", "--config"])
         .arg(config)
         .arg("--out")
@@ -147,7 +158,7 @@ fn render_data_subcommand_writes_json() {
     let data: serde_json::Value = serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
     assert!(data.get("strings").is_some());
     assert!(data.get("theme").is_some());
-    assert_eq!(data["meta"]["product_name"], "judex");
+    assert_eq!(data["meta"]["product_name"], "Edition");
 }
 
 #[test]
@@ -166,6 +177,7 @@ fn run_default_config_produces_pdf() {
         );
     std::fs::write(&config, yaml).unwrap();
     let out = cargo_bin_cmd!("judex")
+        .env_remove("JUDEX_THEME_DIR")
         .args(["run", "--config"])
         .arg(config)
         .output()
@@ -200,6 +212,7 @@ fn check_prints_scan_state_counts() {
     cfg["source"] = serde_yaml_ng::from_str(&format!("type: harbor\nurl: {}\nproject: demo\nusername: robot\npassword_env: JUDEX_CLI_HARBOR_PASSWORD", server.base_url())).unwrap();
     std::fs::write(&path, serde_yaml_ng::to_string(&cfg).unwrap()).unwrap();
     let out = cargo_bin_cmd!("judex")
+        .env_remove("JUDEX_THEME_DIR")
         .args(["check", "--config"])
         .arg(path)
         .env("JUDEX_CLI_HARBOR_PASSWORD", "secret-password")
@@ -221,7 +234,11 @@ fn check_prints_scan_state_counts() {
 #[test]
 fn version_flag_prints_product_and_version() {
     for flag in ["--version", "-V", "version"] {
-        let out = cargo_bin_cmd!("judex").arg(flag).output().unwrap();
+        let out = cargo_bin_cmd!("judex")
+            .env_remove("JUDEX_THEME_DIR")
+            .arg(flag)
+            .output()
+            .unwrap();
         assert!(out.status.success());
         assert_eq!(
             String::from_utf8(out.stdout).unwrap(),
@@ -237,6 +254,7 @@ fn default_config_path_is_etc_report() {
     assert!(!std::path::Path::new("/etc/report/config.yaml").exists());
     for command in ["run", "check", "render-data"] {
         let mut cmd = cargo_bin_cmd!("judex");
+        cmd.env_remove("JUDEX_THEME_DIR");
         cmd.env_remove("HOME").arg(command);
         if command == "render-data" {
             cmd.arg("--out").arg(&output);
@@ -253,6 +271,7 @@ fn check_fails_with_exit_2_when_theme_dir_env_is_invalid() {
     let empty = tempfile::tempdir().unwrap();
     let config = write_config(dir.path());
     let out = cargo_bin_cmd!("judex")
+        .env_remove("JUDEX_THEME_DIR")
         .args(["check", "--config"])
         .arg(config)
         .env("JUDEX_THEME_DIR", empty.path())
@@ -262,4 +281,48 @@ fn check_fails_with_exit_2_when_theme_dir_env_is_invalid() {
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert!(stderr.contains(empty.path().to_str().unwrap()));
     assert!(stderr.contains("theme.toml"));
+}
+
+fn edition_theme(dir: &std::path::Path) {
+    let mut theme = image_scan_report::render::theme::default_theme();
+    theme.product.name = "Edition".into();
+    std::fs::write(dir.join("theme.toml"), toml::to_string(&theme).unwrap()).unwrap();
+}
+
+#[test]
+fn version_uses_edition_name_from_theme_dir_env() {
+    let dir = tempfile::tempdir().unwrap();
+    edition_theme(dir.path());
+    for command in ["version", "--version"] {
+        let out = cargo_bin_cmd!("judex")
+            .env("JUDEX_THEME_DIR", dir.path())
+            .arg(command)
+            .output()
+            .unwrap();
+        assert!(out.status.success());
+        assert_eq!(
+            String::from_utf8_lossy(&out.stdout),
+            format!("Edition {} (judex)\n", env!("CARGO_PKG_VERSION"))
+        );
+    }
+}
+
+#[test]
+fn version_warns_but_prints_when_theme_dir_env_is_invalid() {
+    let dir = tempfile::tempdir().unwrap();
+    for value in [dir.path().as_os_str(), std::ffi::OsStr::new("")] {
+        for command in ["version", "--version"] {
+            let out = cargo_bin_cmd!("judex")
+                .env("JUDEX_THEME_DIR", value)
+                .arg(command)
+                .output()
+                .unwrap();
+            assert!(out.status.success());
+            assert_eq!(
+                String::from_utf8_lossy(&out.stdout),
+                format!("judex {}\n", env!("CARGO_PKG_VERSION"))
+            );
+            assert!(String::from_utf8_lossy(&out.stderr).contains("JUDEX_THEME_DIR:"));
+        }
+    }
 }

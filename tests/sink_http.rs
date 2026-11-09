@@ -21,7 +21,7 @@ fn sink(url: String, mode: HttpMode, method: &str) -> HttpSink {
         method.into(),
         vec![("Authorization".into(), "Bearer t".into())],
         mode,
-        client_from_tls(None, false, Duration::from_secs(5))
+        client_from_tls(None, false, Duration::from_secs(5), "upstream/test")
             .unwrap()
             .with_backoff([Duration::ZERO; 2]),
     )
@@ -58,7 +58,7 @@ fn raw_put_sends_bytes_with_content_headers() {
             ("cOnTeNt-Disposition".into(), "caller-value".into()),
         ],
         HttpMode::Raw,
-        client_from_tls(None, false, Duration::from_secs(5)).unwrap(),
+        client_from_tls(None, false, Duration::from_secs(5), "upstream/test").unwrap(),
     )
     .store(&artifact())
     .unwrap();

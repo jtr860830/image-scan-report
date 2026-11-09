@@ -9,7 +9,7 @@ fn options() -> HttpOptions {
         ca_file: None,
         insecure_skip_verify: false,
         timeout: Duration::from_secs(1),
-        user_agent: format!("image-scan-report/{}", env!("CARGO_PKG_VERSION")),
+        user_agent: format!("upstream/{}", env!("CARGO_PKG_VERSION")),
     }
 }
 fn client() -> HttpClient {
@@ -23,7 +23,7 @@ fn get_json_decodes_and_returns_headers() {
     let m = s.mock(|w, t| {
         w.method("GET").header("X-Auth-Token", "token").header(
             "User-Agent",
-            format!("image-scan-report/{}", env!("CARGO_PKG_VERSION")),
+            format!("upstream/{}", env!("CARGO_PKG_VERSION")),
         );
         t.status(200)
             .header("X-Total-Count", "7")
@@ -278,4 +278,13 @@ fn tls_handshake_failure_is_transport() {
         Err(HttpError::Transport(..))
     ));
     server.join().unwrap();
+}
+
+#[test]
+fn default_user_agent_is_empty_and_rejected() {
+    assert!(HttpOptions::default().user_agent.is_empty());
+    assert!(matches!(
+        HttpClient::try_new(&HttpOptions::default()),
+        Err(HttpError::InvalidRequest(..))
+    ));
 }

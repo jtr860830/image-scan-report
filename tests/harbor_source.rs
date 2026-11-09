@@ -635,3 +635,45 @@ fn sibling_children_with_same_platform_get_distinct_references() {
     }
     assert_ne!(result.images[0].reference, result.images[1].reference);
 }
+
+#[test]
+fn pipeline_sends_edition_user_agent() {
+    let server = httpmock::MockServer::start();
+    let request = server.mock(|when, then| {
+        when.method("GET")
+            .path("/api/v2.0/projects/demo/repositories")
+            .header(
+                "User-Agent",
+                format!(
+                    "Edition/{} judex/{}",
+                    env!("CARGO_PKG_VERSION"),
+                    env!("CARGO_PKG_VERSION")
+                ),
+            );
+        // An empty list isolates the edition header check and intentionally yields no images.
+        then.status(200).json_body(serde_json::json!([]));
+    });
+    let dir = tempfile::tempdir().unwrap();
+    let mut theme = image_scan_report::render::theme::default_theme();
+    theme.product.name = "Edition".into();
+    std::fs::write(
+        dir.path().join("theme.toml"),
+        toml::to_string(&theme).unwrap(),
+    )
+    .unwrap();
+    let config = dir.path().join("config.yaml");
+    std::fs::write(&config, format!("source:\n  type: harbor\n  url: {}\n  project: demo\n  username: robot\n  password_env: TASK2_HARBOR_PASSWORD\nreport:\n  language: en\n  organization: Test\n  pdf: false\n  json: true\noutput:\n  - type: filesystem\n    path: {}\n", server.base_url(), dir.path().display())).unwrap();
+    let out = assert_cmd::cargo::cargo_bin_cmd!("judex")
+        .env("JUDEX_THEME_DIR", dir.path())
+        .env("TASK2_HARBOR_PASSWORD", "secret")
+        .args(["check", "--config"])
+        .arg(config)
+        .output()
+        .unwrap();
+    assert!(
+        String::from_utf8_lossy(&out.stderr).contains("no images found"),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    request.assert_calls(1);
+}

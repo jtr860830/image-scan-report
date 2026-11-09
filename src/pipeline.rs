@@ -14,7 +14,10 @@ use std::path::{Path, PathBuf};
 ///
 /// Fails if a Harbor or NeuVector password variable is unset, or the TLS options conflict or
 /// name an unusable CA file.
-pub fn build_source(cfg: &SourceConfig) -> Result<Box<dyn ScanSource>, ConfigError> {
+pub fn build_source(
+    cfg: &SourceConfig,
+    user_agent: &str,
+) -> Result<Box<dyn ScanSource>, ConfigError> {
     match cfg {
         SourceConfig::TrivyFiles { path } => Ok(Box::new(TrivyFileSource { dir: path.clone() })),
         SourceConfig::NeuvectorFiles { path } => {
@@ -36,6 +39,7 @@ pub fn build_source(cfg: &SourceConfig) -> Result<Box<dyn ScanSource>, ConfigErr
                 ca_file.as_deref(),
                 *timeout_secs,
                 *insecure_skip_verify,
+                user_agent,
             )?;
             Ok(Box::new(crate::source::harbor::HarborSource::from_config(
                 &crate::source::harbor::HarborParams {
@@ -63,6 +67,7 @@ pub fn build_source(cfg: &SourceConfig) -> Result<Box<dyn ScanSource>, ConfigErr
                 ca_file.as_deref(),
                 *timeout_secs,
                 *insecure_skip_verify,
+                user_agent,
             )?;
             Ok(Box::new(
                 crate::source::neuvector_api::NeuvectorSource::from_config(
@@ -151,12 +156,44 @@ pub struct Runtime {
 /// Name and version of the application producing the report.
 #[derive(Clone, Debug)]
 pub struct ProductInfo {
-    /// Application name as the binary reports it (`PRODUCT_NAME` in `main.rs`); shown in
-    /// `check` output and carried in the render data, while the PDF credit uses the theme's
-    /// product name.
+    /// Name presented by the resolved theme.
     pub name: String,
-    /// Application version, the crate version for the binary.
+    /// Upstream application name.
+    pub upstream: String,
+    /// Crate version.
     pub version: String,
+}
+
+impl ProductInfo {
+    /// Derive the edition identity from the resolved theme.
+    pub fn new(runtime: &Runtime, theme: &crate::render::theme::Theme) -> Self {
+        Self {
+            name: theme.product.name.clone(),
+            upstream: runtime.upstream.clone(),
+            version: runtime.version.clone(),
+        }
+    }
+    /// Format the edition and version, including upstream when different.
+    pub fn display(&self) -> String {
+        let mut value = format!("{} {}", self.name, self.version);
+        if self.name != self.upstream {
+            value.push_str(&format!(" ({})", self.upstream));
+        }
+        value
+    }
+    /// Format HTTP identification, replacing whitespace in product names.
+    pub fn user_agent(&self) -> String {
+        let token = |s: &str| {
+            s.chars()
+                .map(|c| if c.is_whitespace() { '-' } else { c })
+                .collect::<String>()
+        };
+        let mut value = format!("{}/{}", token(&self.name), self.version);
+        if self.name != self.upstream {
+            value.push_str(&format!(" {}/{}", token(&self.upstream), self.version));
+        }
+        value
+    }
 }
 
 fn render_options(
@@ -178,6 +215,7 @@ fn render_options(
 }
 
 struct Inputs {
+    product: ProductInfo,
     theme: crate::render::theme::Theme,
     theme_source: crate::render::theme::ThemeSource,
     customer_logo: Option<crate::render::theme::Logo>,
@@ -191,7 +229,14 @@ struct Inputs {
 fn load_inputs(cfg: &Config, runtime: &Runtime, now: DateTime<Utc>) -> Result<Inputs, RunError> {
     let (theme, theme_source) =
         crate::render::theme::resolve(cfg.theme.path.as_deref(), runtime.theme_dir.as_deref())
-            .map_err(ConfigError::from)?;
+            .map_err(|err| {
+                if cfg.theme.path.is_none() && runtime.theme_dir.is_some() {
+                    ConfigError::Invalid(format!("{}: {err}", runtime.theme_dir_env))
+                } else {
+                    ConfigError::from(err)
+                }
+            })?;
+    let product = ProductInfo::new(runtime, &theme);
     let customer_logo = cfg
         .report
         .logo
@@ -199,11 +244,12 @@ fn load_inputs(cfg: &Config, runtime: &Runtime, now: DateTime<Utc>) -> Result<In
         .map(crate::render::theme::Logo::load)
         .transpose()
         .map_err(|err| ConfigError::Invalid(format!("report.logo: {err}")))?;
-    let sinks = crate::sink::build_sinks(&cfg.output)?;
-    let source = build_source(&cfg.source)?;
+    let sinks = crate::sink::build_sinks(&cfg.output, &product.user_agent())?;
+    let source = build_source(&cfg.source, &product.user_agent())?;
     let source_description = source.describe();
     let report = assemble_report(source.fetch()?, &cfg.report, now);
     Ok(Inputs {
+        product,
         customer_logo,
         theme,
         theme_source,
@@ -257,18 +303,13 @@ pub fn render_data(
     runtime: &Runtime,
 ) -> Result<crate::render::model::RenderData, RunError> {
     let Inputs {
+        product,
         theme,
         report,
         customer_logo,
         ..
     } = load_inputs(cfg, runtime, now)?;
-    let mut opts = render_options(
-        &cfg.report,
-        &ProductInfo {
-            name: runtime.upstream.clone(),
-            version: runtime.version.clone(),
-        },
-    );
+    let mut opts = render_options(&cfg.report, &product);
     opts.customer_logo = customer_logo;
     Ok(crate::render::model::build(
         &report,
@@ -286,6 +327,7 @@ pub fn render_data(
 /// JSON serialisation or PDF rendering fails, or no artifact could be stored anywhere.
 pub fn run(cfg: &Config, now: DateTime<Utc>, runtime: &Runtime) -> Result<RunSummary, RunError> {
     let Inputs {
+        product,
         customer_logo,
         theme,
         report,
@@ -309,13 +351,7 @@ pub fn run(cfg: &Config, now: DateTime<Utc>, runtime: &Runtime) -> Result<RunSum
         });
     }
     if cfg.report.pdf {
-        let mut opts = render_options(
-            &cfg.report,
-            &ProductInfo {
-                name: runtime.upstream.clone(),
-                version: runtime.version.clone(),
-            },
-        );
+        let mut opts = render_options(&cfg.report, &product);
         opts.customer_logo = customer_logo;
         let bytes = crate::render::render_pdf(&report, &opts, &theme)
             .map_err(|err| RunError::Render(err.to_string()))?;
@@ -378,15 +414,54 @@ pub fn check(cfg: &Config, runtime: &Runtime) -> Result<String, RunError> {
         }
     }
     Ok(format!(
-        "{}: {} images ({} scanned, {} failed, {} not scanned), {} findings; product: {} {}; theme: {}",
+        "{}: {} images ({} scanned, {} failed, {} not scanned), {} findings; product: {}; theme: {}",
         inputs.source_description,
         inputs.report.images.len(),
         scanned,
         failed,
         not_scanned,
         inputs.report.findings.len(),
-        runtime.upstream,
-        runtime.version,
+        inputs.product.display(),
         inputs.theme_source
     ))
+}
+
+#[cfg(test)]
+mod product_tests {
+    use super::ProductInfo;
+    #[test]
+    fn edition_user_agent_replaces_whitespace() {
+        let runtime = super::Runtime {
+            upstream: "upstream".into(),
+            version: "0.2.0".into(),
+            theme_dir: None,
+            theme_dir_env: "UPSTREAM_THEME_DIR".into(),
+        };
+        let mut theme = crate::render::theme::default_theme();
+        theme.product.name = "Arishem Edition".into();
+        let product = ProductInfo::new(&runtime, &theme);
+        assert_eq!(product.display(), "Arishem Edition 0.2.0 (upstream)");
+        assert_eq!(product.user_agent(), "Arishem-Edition/0.2.0 upstream/0.2.0");
+    }
+
+    #[test]
+    fn product_display_and_user_agent_for_default_theme() {
+        let p = ProductInfo {
+            name: "upstream".into(),
+            upstream: "upstream".into(),
+            version: "0.2.0".into(),
+        };
+        assert_eq!(p.display(), "upstream 0.2.0");
+        assert_eq!(p.user_agent(), "upstream/0.2.0");
+    }
+    #[test]
+    fn product_display_and_user_agent_for_edition_theme() {
+        let p = ProductInfo {
+            name: "Arishem".into(),
+            upstream: "upstream".into(),
+            version: "0.2.0".into(),
+        };
+        assert_eq!(p.display(), "Arishem 0.2.0 (upstream)");
+        assert_eq!(p.user_agent(), "Arishem/0.2.0 upstream/0.2.0");
+    }
 }

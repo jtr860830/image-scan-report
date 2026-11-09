@@ -16,12 +16,33 @@ fn main() -> ExitCode {
     // Not `fn main() -> Result<..>`: that form always exits with status 1 and
     // prints the error with `Debug`, while this program promises distinct exit
     // codes (2 config, 3 source, 4 render, 5 sinks) and a `Display` message.
-    let matches = Cli::command()
+    let theme_dir_env = format!("{}_THEME_DIR", PRODUCT_NAME.to_uppercase());
+    let runtime = image_scan_report::pipeline::Runtime {
+        // An empty value is set-and-invalid, rather than unset.
+        theme_dir: std::env::var_os(&theme_dir_env).map(std::path::PathBuf::from),
+        theme_dir_env,
+        upstream: PRODUCT_NAME.into(),
+        version: PRODUCT_VERSION.into(),
+    };
+    let (version, version_warning) = version_identity(&runtime);
+    let matches = match Cli::command()
         .name(PRODUCT_NAME)
-        .version(PRODUCT_VERSION)
-        .get_matches();
+        .version(version.display())
+        .try_get_matches()
+    {
+        Ok(matches) => matches,
+        Err(err) if err.kind() == clap::error::ErrorKind::DisplayVersion => {
+            if let Some(warning) = &version_warning {
+                eprintln!("warning: {warning}");
+            }
+            // clap prefixes its version string with the command name.
+            println!("{}", version.display());
+            return ExitCode::SUCCESS;
+        }
+        Err(err) => err.exit(),
+    };
     let cli = Cli::from_arg_matches(&matches).unwrap_or_else(|e| e.exit());
-    match dispatch(cli.command) {
+    match dispatch(cli.command, &runtime, &version, version_warning.as_deref()) {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {
             eprintln!("error: {e}");
@@ -30,24 +51,41 @@ fn main() -> ExitCode {
     }
 }
 
-fn dispatch(command: cli::Command) -> Result<(), image_scan_report::pipeline::RunError> {
-    use image_scan_report::{config, pipeline};
-    let theme_dir_env = format!("{}_THEME_DIR", PRODUCT_NAME.to_uppercase());
-    let product = pipeline::Runtime {
-        theme_dir: std::env::var_os(&theme_dir_env).map(std::path::PathBuf::from),
-        theme_dir_env,
-        upstream: PRODUCT_NAME.into(),
-        version: PRODUCT_VERSION.into(),
+fn version_identity(
+    runtime: &image_scan_report::pipeline::Runtime,
+) -> (image_scan_report::pipeline::ProductInfo, Option<String>) {
+    use image_scan_report::{pipeline::ProductInfo, render::theme};
+    let (theme, warning) = match theme::resolve(None, runtime.theme_dir.as_deref()) {
+        Ok((theme, _)) => (theme, None),
+        Err(err) => (
+            theme::default_theme(),
+            Some(format!("{}: {err}", runtime.theme_dir_env)),
+        ),
     };
+    (ProductInfo::new(runtime, &theme), warning)
+}
+
+fn dispatch(
+    command: cli::Command,
+    product: &image_scan_report::pipeline::Runtime,
+    version: &image_scan_report::pipeline::ProductInfo,
+    version_warning: Option<&str>,
+) -> Result<(), image_scan_report::pipeline::RunError> {
+    use image_scan_report::{config, pipeline};
     match command {
         cli::Command::RenderData { config, out } => {
             let cfg = config::load(&config)?;
-            pipeline::write_render_data(&cfg, chrono::Utc::now(), &product, &out)?;
+            pipeline::write_render_data(&cfg, chrono::Utc::now(), product, &out)?;
         }
-        cli::Command::Version => println!("{PRODUCT_NAME} {PRODUCT_VERSION}"),
+        cli::Command::Version => {
+            if let Some(warning) = version_warning {
+                eprintln!("warning: {warning}");
+            }
+            println!("{}", version.display());
+        }
         cli::Command::Run { config } => {
             let cfg = config::load(&config)?;
-            let summary = pipeline::run(&cfg, chrono::Utc::now(), &product)?;
+            let summary = pipeline::run(&cfg, chrono::Utc::now(), product)?;
             println!(
                 "Report: {} images, {} findings",
                 summary.images, summary.findings
@@ -61,7 +99,7 @@ fn dispatch(command: cli::Command) -> Result<(), image_scan_report::pipeline::Ru
         }
         cli::Command::Check { config } => {
             let cfg = config::load(&config)?;
-            println!("{}", pipeline::check(&cfg, &product)?);
+            println!("{}", pipeline::check(&cfg, product)?);
         }
     }
     Ok(())
