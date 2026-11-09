@@ -36,4 +36,4 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Scope is "images stored in the registry", not workloads running in a cluster.
 - No history: comparisons between runs are out of scope.
 
-[0.1.0]: https://github.com/jtr860830/image-scan-report/releases/tag/v0.1.0
+[0.1.0]: https://github.com/jtr860830/judex/releases/tag/v0.1.0

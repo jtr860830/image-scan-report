@@ -1,7 +1,7 @@
-# judex
+# Judex
 
-[![CI](https://github.com/jtr860830/image-scan-report/actions/workflows/ci.yml/badge.svg)](https://github.com/jtr860830/image-scan-report/actions/workflows/ci.yml)
-[![Latest release](https://img.shields.io/github/v/release/jtr860830/image-scan-report?include_prereleases)](https://github.com/jtr860830/image-scan-report/releases)
+[![CI](https://github.com/jtr860830/judex/actions/workflows/ci.yml/badge.svg)](https://github.com/jtr860830/judex/actions/workflows/ci.yml)
+[![Latest release](https://img.shields.io/github/v/release/jtr860830/image-scan-report?include_prereleases)](https://github.com/jtr860830/judex/releases)
 
 judex turns existing container-image vulnerability scans into audit reports.
 It normalises Trivy and NeuVector scanner JSON and results from the Harbor and NeuVector APIs into a shared model without scanning images itself.
@@ -12,7 +12,7 @@ Outputs: PDF and JSON to filesystem directories and HTTP endpoints.
 ## Install
 
 Download the native Linux tarball for x86_64 or aarch64 and `SHA256SUMS` from
-[releases](https://github.com/jtr860830/image-scan-report/releases). Verify it with
+[releases](https://github.com/jtr860830/judex/releases). Verify it with
 `sha256sum -c SHA256SUMS --ignore-missing`, extract it, and put `judex` on your PATH.
 The container image is `ghcr.io/jtr860830/judex:<ver>`. See the
 [release guide](docs/release.md) for assets and air-gap bundles.

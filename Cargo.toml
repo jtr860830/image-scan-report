@@ -1,7 +1,7 @@
 [package]
 name = "judex"
 description = "Turns container image vulnerability scans into audit reports"
-repository = "https://github.com/jtr860830/image-scan-report"
+repository = "https://github.com/jtr860830/judex"
 publish = false
 version = "0.1.0"
 edition = "2024"
