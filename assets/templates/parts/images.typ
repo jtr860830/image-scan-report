@@ -7,11 +7,11 @@
   let tr(key, ..args) = t(data.strings, key, ..args)
   set text(number-width: "tabular")
   heading(level: 1, tr("ch_images"))
-  if data.filters.min_severity_key != "" {
-    secondary(theme, tr("filters_image_floor", band: tr("tile_" + data.filters.min_severity_key)))
-  }
+  // In counts mode there are no tables, so the counts-only note alone applies.
   if data.filters.image_detail == "counts" {
     secondary(theme, tr("filters_image_counts_only"))
+  } else if data.filters.min_severity_key != "" {
+    secondary(theme, tr("filters_image_floor", band: tr("tile_" + data.filters.min_severity_key)))
   }
   for (i, image) in data.images.enumerate() {
     if i > 0 { v(12pt) }
