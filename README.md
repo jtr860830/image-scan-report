@@ -1,13 +1,26 @@
 # Judex
 
 [![CI](https://github.com/jtr860830/judex/actions/workflows/ci.yml/badge.svg)](https://github.com/jtr860830/judex/actions/workflows/ci.yml)
-[![Latest release](https://img.shields.io/github/v/release/jtr860830/image-scan-report?include_prereleases)](https://github.com/jtr860830/judex/releases)
+[![Latest release](https://img.shields.io/github/v/release/jtr860830/judex?include_prereleases)](https://github.com/jtr860830/judex/releases)
 
 judex turns existing container-image vulnerability scans into audit reports.
 It normalises Trivy and NeuVector scanner JSON and results from the Harbor and NeuVector APIs into a shared model without scanning images itself.
 
 Sources: Trivy and NeuVector scanner files, the Harbor API and the NeuVector controller API.
 Outputs: PDF and JSON to filesystem directories and HTTP endpoints.
+
+## Sample reports
+
+Two reports rendered by judex 0.1.0 with the default theme from four of the Trivy
+fixtures in `tests/fixtures/trivy/` (alpine 3.22, busybox 1.37, nginx 1.21.0 and the
+log4shell demo application; 4 images, 828 findings):
+
+- [English](docs/samples/sample-report-en.pdf)
+- [繁體中文](docs/samples/sample-report-zh-TW.pdf)
+
+To regenerate them, copy those four JSON files into a directory named `demo`, point a
+`trivy-files` source at it, set `report.language` to `en` or `zh-TW`, and run
+`judex run --config <that config>`.
 
 ## Install
 
