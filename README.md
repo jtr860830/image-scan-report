@@ -312,6 +312,11 @@ These codes indicate pipeline outcomes, not vulnerability severity thresholds.
 
 See the [design iteration guide](docs/design/README.md) for Typst previews.
 
+## Manual
+
+- [Deploying judex](docs/manual/deploying.md) — for operators.
+- [Reading the report](docs/manual/reading-the-report.md) — for auditors and managers.
+
 ## Development and licence
 
 See [development notes](docs/development.md) for checks, snapshots and module layout.
