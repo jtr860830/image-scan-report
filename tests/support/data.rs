@@ -12,7 +12,7 @@ use image_scan_report::{
 pub fn fixture_report(max_images: usize) -> Report {
     let mut report = assemble_report(
         TrivyFileSource {
-            dir: "fixtures/trivy".into(),
+            dir: "tests/fixtures/trivy".into(),
         }
         .fetch()
         .unwrap(),

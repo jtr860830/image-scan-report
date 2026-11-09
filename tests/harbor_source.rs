@@ -223,7 +223,11 @@ fn non_image_artifacts_are_skipped() {
 
 #[test]
 fn fixture_responses_deserialize_without_sockets() {
-    for entry in std::fs::read_dir(concat!(env!("CARGO_MANIFEST_DIR"), "/fixtures/harbor")).unwrap()
+    for entry in std::fs::read_dir(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/fixtures/harbor"
+    ))
+    .unwrap()
     {
         let path = entry.unwrap().path();
         if path
@@ -237,7 +241,7 @@ fn fixture_responses_deserialize_without_sockets() {
     }
     for entry in std::fs::read_dir(concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/fixtures/harbor/multiarch"
+        "/tests/fixtures/harbor/multiarch"
     ))
     .unwrap()
     {

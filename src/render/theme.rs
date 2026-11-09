@@ -214,7 +214,7 @@ fn parse(text: &str, path: &Path) -> Result<Theme, ThemeError> {
     theme.validate(path)?;
     Ok(theme)
 }
-/// Parse the default theme embedded from `themes/default/theme.toml`, which has no logo.
+/// Parse the default theme embedded from `assets/themes/default/theme.toml`, which has no logo.
 ///
 /// # Panics
 ///
@@ -222,8 +222,8 @@ fn parse(text: &str, path: &Path) -> Result<Theme, ThemeError> {
 /// than a caller error.
 pub fn default_theme() -> Theme {
     parse(
-        include_str!("../../themes/default/theme.toml"),
-        Path::new("themes/default/theme.toml"),
+        include_str!("../../assets/themes/default/theme.toml"),
+        Path::new("assets/themes/default/theme.toml"),
     )
     .expect("embedded default theme must be valid")
 }

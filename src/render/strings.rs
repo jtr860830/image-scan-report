@@ -104,8 +104,8 @@ pub const KEYS: &[&str] = &[
 /// build defect rather than a caller error.
 pub fn load(language: Language) -> BTreeMap<String, String> {
     let source = match language {
-        Language::ZhTw => include_str!("../../strings/zh-TW.json"),
-        Language::En => include_str!("../../strings/en.json"),
+        Language::ZhTw => include_str!("../../assets/strings/zh-TW.json"),
+        Language::En => include_str!("../../assets/strings/en.json"),
     };
     serde_json::from_str(source)
         .expect("bundled report locale must be valid JSON with string values")

@@ -9,7 +9,7 @@ use image_scan_report::source::{
 #[test]
 fn parses_scanner_fixture() {
     let (image, findings) = parse_neuvector_result(
-        &std::fs::read("fixtures/neuvector-scanner/nginx-1.21.0/scan_result.json").unwrap(),
+        &std::fs::read("tests/fixtures/neuvector-scanner/nginx-1.21.0/scan_result.json").unwrap(),
         None,
     )
     .unwrap()
@@ -106,7 +106,7 @@ fn not_neuvector_returns_none() {
 #[test]
 fn fetch_fixture_directory() {
     let s = NeuvectorFileSource {
-        dir: "fixtures/neuvector-scanner".into(),
+        dir: "tests/fixtures/neuvector-scanner".into(),
     }
     .fetch()
     .unwrap();

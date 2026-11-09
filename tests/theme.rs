@@ -75,7 +75,7 @@ fn custom_theme_overrides_and_loads_png_logo() {
 }
 #[test]
 fn config_accepts_theme_path() {
-    let yaml = include_str!("../examples/config-trivy-files.yaml");
+    let yaml = include_str!("../deploy/examples/config-trivy-files.yaml");
     let c: Config = serde_yaml_ng::from_str(yaml).unwrap();
     assert_eq!(c.theme.path, None);
     let c: Config = serde_yaml_ng::from_str(&format!("{yaml}\ntheme: {{ path: /x }}\n")).unwrap();
@@ -84,7 +84,7 @@ fn config_accepts_theme_path() {
 
 #[test]
 fn validation_and_strict_keys() {
-    let original = include_str!("../themes/default/theme.toml");
+    let original = include_str!("../assets/themes/default/theme.toml");
     for (text, key) in [
         (original.replace("version = 1", "version = 2"), "version"),
         (
@@ -125,7 +125,7 @@ fn svg_and_png_validation_and_precedence() {
     let dir = tempfile::tempdir().unwrap();
     std::fs::write(
         dir.path().join("theme.toml"),
-        include_str!("../themes/default/theme.toml"),
+        include_str!("../assets/themes/default/theme.toml"),
     )
     .unwrap();
     for svg in ["<svg/>", "\u{feff} \n<?xml version=\"1.0\"?><svg/>"] {
@@ -169,7 +169,7 @@ fn render_value_and_config_errors() {
     );
     let yaml = format!(
         "{}\ntheme: {{ unknown: true }}",
-        include_str!("../examples/config-trivy-files.yaml")
+        include_str!("../deploy/examples/config-trivy-files.yaml")
     );
     assert!(serde_yaml_ng::from_str::<Config>(&yaml).is_err());
 }
@@ -179,7 +179,7 @@ fn unbundled_font_is_invalid() {
     let dir = tempfile::tempdir().unwrap();
     std::fs::write(
         dir.path().join("theme.toml"),
-        include_str!("../themes/default/theme.toml").replace("Inter", "Helvetica"),
+        include_str!("../assets/themes/default/theme.toml").replace("Inter", "Helvetica"),
     )
     .unwrap();
     assert!(

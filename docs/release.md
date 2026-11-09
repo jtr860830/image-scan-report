@@ -97,16 +97,16 @@ Keep the library crate name `image_scan_report`. Update these product surfaces:
    ENTRYPOINT paths in Containerfile.
 5. `judex:ci` and its version-output assertion in .github/workflows/ci.yml.
 6. Image references in deploy/k8s/*.yaml and deploy/podman/run.sh.
-7. `[product].name` in themes/default/theme.toml: this intentional branding
+7. `[product].name` in assets/themes/default/theme.toml: this intentional branding
    literal is checked separately by the naming guard.
 8. All of tests/: `cargo_bin_cmd!("judex")` calls, the image constant in
    tests/deploy_manifests.rs, and tests/snapshots/*.snap.
-9. Product references in examples/ and user-facing README/docs examples.
+9. Product references in deploy/examples/ and user-facing README/docs examples.
 
 From the repository root, this exact grep lists the naming surfaces:
 
 ```sh
-grep -rn -i 'judex' Cargo.toml Cargo.lock src/ templates/ strings/ themes/default/theme.toml Containerfile .github/workflows/release.yml .github/workflows/ci.yml deploy/k8s/ deploy/podman/run.sh tests/ examples/ README.md docs/
+grep -rn -i 'judex' Cargo.toml Cargo.lock src/ assets/templates/ assets/strings/ assets/themes/default/theme.toml Containerfile .github/workflows/release.yml .github/workflows/ci.yml deploy/k8s/ deploy/podman/run.sh tests/ deploy/examples/ README.md docs/
 ```
 
 For example, update the image repository without introducing kustomization:
@@ -123,6 +123,6 @@ cargo test
 ```
 
 `tests/naming_single_source.rs::product_name_appears_only_in_known_places`
-reads the package name dynamically, rejects new literals in src/, templates/ and
-strings/, and checks the default theme branding. The theme is an intentional
+reads the package name dynamically, rejects new literals in src/, assets/templates/ and
+assets/strings/, and checks the default theme branding. The theme is an intentional
 additional name surface; release/deployment configuration is reviewed separately.

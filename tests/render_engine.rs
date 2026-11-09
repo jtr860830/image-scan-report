@@ -104,7 +104,7 @@ fn body_frame_and_template_helpers_work() {
     let (report, _, data) = fixture(Language::En);
     let source = format!(
         "{}\n#import \"lib/theme.typ\": chip, mono\n#text(\"Body marker\")\n#chip(data.theme, \"High\", \"high\")\n#mono(data.theme, \"literal #text[test]\")\n#num(1234567)\n#pagebreak()\nSecond body page",
-        include_str!("../templates/report.typ")
+        include_str!("../assets/templates/report.typ")
             .replace("\"lib/fmt.typ\": t", "\"lib/fmt.typ\": t, num")
             .replace("#summary(data)", "")
             .replace("#remediation(data)", "")

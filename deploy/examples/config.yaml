@@ -1,15 +1,15 @@
-# Connect to NeuVector using a password supplied through the environment.
+# Connect to Harbor using a password supplied through the environment.
 source:
-  type: neuvector
-  url: https://neuvector.example.com:10443
-  registry: harbor-prod
+  type: harbor
+  url: https://harbor.example.com
+  project: my-project
   username: report-reader
-  password_env: NEUVECTOR_PASSWORD
+  password_env: HARBOR_PASSWORD
   timeout_secs: 30
   # Last resort when the CA cannot be exported; prints a TLS verification warning.
   # insecure_skip_verify: true
   # Mount your private certificate authority bundle at this path.
-  ca_file: /etc/report/neuvector-ca.pem
+  ca_file: /etc/report/harbor-ca.pem
 
 report:
   language: zh-TW
@@ -33,4 +33,4 @@ output:
 
 # Optional directory containing theme.toml and a logo.
 # theme:
-#   path: ./themes/default
+#   path: ./assets/themes/default

@@ -54,7 +54,7 @@ Avoid putting secrets into the image or command arguments.
 
 Set `CA=./ca.pem` for the wrapper to mount the CA at `/etc/report/ca.pem`.
 For a logo, add `-v ./logo.png:/etc/report/logo.png:ro,Z` to the raw command.
-For file sources, add `-v ./fixtures:/fixtures:ro,Z` and configure
+For file sources, add `-v ./tests/fixtures:/fixtures:ro,Z` and configure
 `source.path: /fixtures/trivy`. Custom themes also require a read-only mount
 and a corresponding `theme.path` in the configuration.
 The `:Z` suffix sets a private SELinux label for Podman bind mounts.

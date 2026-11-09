@@ -93,7 +93,7 @@ jobs:
           mkdir -p "dist/$bundle/docs" "dist/$bundle/licenses/fonts" "dist/$bundle/examples"
           cp "target/release/$BIN" LICENSE THIRD_PARTY_NOTICES.md README.md "dist/$bundle/"
           cp assets/fonts/LICENSE-*.txt "dist/$bundle/licenses/fonts/"
-          cp examples/*.yaml "dist/$bundle/examples/"
+          cp deploy/examples/*.yaml "dist/$bundle/examples/"
           cp deploy/podman/run.sh "dist/$bundle/run.sh"
           cp docs/container.md "dist/$bundle/docs/"
           tar -czf "dist/$bundle.tar.gz" -C dist "$bundle"

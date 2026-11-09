@@ -26,7 +26,7 @@ fn opts() -> RenderOptions {
 }
 fn report() -> Report {
     let set = TrivyFileSource {
-        dir: "fixtures/trivy".into(),
+        dir: "tests/fixtures/trivy".into(),
     }
     .fetch()
     .unwrap();

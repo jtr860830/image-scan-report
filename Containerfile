@@ -8,9 +8,6 @@ RUN mkdir src && printf 'fn main(){}\n' > src/main.rs && touch src/lib.rs \
     && cargo build --release --locked --bin judex && rm -rf src
 COPY src/ src/
 COPY assets/ assets/
-COPY templates/ templates/
-COPY strings/ strings/
-COPY themes/ themes/
 # Invalidate the stub fingerprints even when COPY preserves older timestamps.
 RUN find src -type f -exec touch {} + \
     && cargo build --release --locked --bin judex

@@ -82,8 +82,8 @@ fn missing_env_names_the_variable() {
 fn example_config_in_repo_loads() {
     let _guard = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     unsafe { std::env::set_var("UPLOAD_TOKEN", "example-token") };
-    let result = config::load(Path::new("examples/config.yaml"));
-    let nv_result = config::load(Path::new("examples/config-neuvector.yaml"));
+    let result = config::load(Path::new("deploy/examples/config.yaml"));
+    let nv_result = config::load(Path::new("deploy/examples/config-neuvector.yaml"));
     unsafe { std::env::remove_var("UPLOAD_TOKEN") };
     let config = result.unwrap();
     // Loading does not read source credentials or CA files.
@@ -253,7 +253,7 @@ fn unknown_output_key_is_parse_error() {
 
 #[test]
 fn unknown_harbor_source_key_is_parse_error() {
-    let yaml = include_str!("../examples/config.yaml");
+    let yaml = include_str!("../deploy/examples/config.yaml");
     assert_unknown_key_is_parse_error(&yaml.replace("type: harbor", "type: harbor\n  typo: true"));
 }
 
