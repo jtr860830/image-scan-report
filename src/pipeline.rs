@@ -210,6 +210,7 @@ fn render_options(
         min_severity: cfg.min_severity,
         image_detail: cfg.image_detail,
         max_table_rows: cfg.max_table_rows,
+        json_artifact: cfg.json,
         describe_severities: cfg.describe_severities.clone(),
         description_chars: cfg.description_chars,
         remediation_cards: cfg.remediation_cards,

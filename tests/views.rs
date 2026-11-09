@@ -234,6 +234,7 @@ fn v2_only_scores_rank_and_display() {
         min_severity: None,
         image_detail: image_scan_report::model::ImageDetail::Full,
         max_table_rows: None,
+        json_artifact: false,
         describe_severities: vec![
             image_scan_report::model::Severity::Critical,
             image_scan_report::model::Severity::High,
