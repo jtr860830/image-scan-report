@@ -7,6 +7,9 @@
   let tr(key, ..args) = t(data.strings, key, ..args)
   set text(number-width: "tabular")
   heading(level: 1, tr("ch_images"))
+  if data.filters.image_detail == "counts" {
+    secondary(theme, tr("filters_image_counts_only"))
+  }
   for (i, image) in data.images.enumerate() {
     if i > 0 { v(12pt) }
     block(breakable: false)[
@@ -36,9 +39,7 @@
       block(fill: rgb(theme.colors.tint_high), radius: 6pt)[
         #card(theme)[#text(fill: rgb(theme.colors.high), if image.scan_state == "not_scanned" { tr("scan_state_not_scanned") } else { tr("image_scan_failed", error: image.scan_error) })]
       ]
-    } else if not image.show_findings {
-      secondary(theme, tr("filters_image_counts_only"))
-    } else {
+    } else if image.show_findings {
       section-title(theme, tr("image_findings_title"))
       if image.findings.len() == 0 {
         secondary(theme, tr("no_findings"))

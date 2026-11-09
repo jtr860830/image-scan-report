@@ -74,7 +74,7 @@ fn inventory_lists_every_unique_vulnerability() {
         .unwrap();
     let (_, text) = chapter(&small, &data.strings["ch_inventory"]);
     let inventory_text = text.split(&data.strings["ch_images"]).next().unwrap();
-    assert!(!compact_inventory(inventory_text).contains(&removed_id));
+    assert!(!compact_inventory(inventory_text).contains(&compact_inventory(&removed_id)));
 }
 
 #[test]
@@ -116,7 +116,7 @@ fn inventory_caps_images_and_handles_empty_inventory() {
         .unwrap();
     let (_, text) = chapter(&bytes, &data.strings["ch_inventory"]);
     assert!(text.contains("affected19"));
-    assert!(!text.contains("affected20"));
+    assert!(!compact_inventory(&text).contains(&compact_inventory("affected20")));
     assert!(text.contains("+5"));
     data.inventory.clear();
     let bytes = renderer
@@ -146,10 +146,10 @@ fn inventory_explains_capped_rows_with_optional_json() {
         let (_, text) = chapter(&bytes, &data.strings["ch_inventory"]);
         let text = text.split(&data.strings["ch_images"]).next().unwrap();
         let expected = format!(
-            "… and {} more rows{}",
+            "Rows not shown: {}{}",
             data.inventory_omitted,
             if json {
-                "; the complete list is in the JSON artifact"
+                " (complete list in the JSON artifact)"
             } else {
                 ""
             }
@@ -158,6 +158,12 @@ fn inventory_explains_capped_rows_with_optional_json() {
             compact_inventory(text).contains(&compact_inventory(&expected)),
             "{expected}"
         );
-        assert_eq!(text.contains("JSON artifact"), json);
+        let text = compact_inventory(text);
+        assert_eq!(text.contains(&compact_inventory("JSON artifact")), json);
+        let lede = data.strings["inventory_lede"].replace(
+            "{count}",
+            &(data.inventory.len() + data.inventory_omitted).to_string(),
+        );
+        assert!(text.contains(&compact_inventory(&lede)), "{lede}");
     }
 }

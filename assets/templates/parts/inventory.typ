@@ -7,7 +7,7 @@
   let tr(key, ..args) = t(data.strings, key, ..args)
   set text(number-width: "tabular")
   heading(level: 1, tr("ch_inventory"))
-  secondary(theme, tr("inventory_lede", count: num(data.inventory.len())))
+  secondary(theme, tr("inventory_lede", count: num(data.inventory.len() + data.inventory_omitted)))
   v(10pt)
   if data.inventory.len() == 0 {
     secondary(theme, tr("no_findings"))

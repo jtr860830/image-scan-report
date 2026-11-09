@@ -87,12 +87,13 @@
   "scan_state_failed": "Scan Failed",
   "scan_state_not_scanned": "Not Scanned",
   "col_source": "Source",
-  "filters_summary_note": "Inventory, remediation and image tables show {band} and above; {count} lower findings are counted above but not listed.",
-  "filters_rows_omitted": "… and {count} more rows",
-  "filters_rows_omitted_json": "… and {count} more rows; the complete list is in the JSON artifact",
+  "filters_summary_note": "Inventory, remediation and image tables show {band} and above; {count} findings below that level are counted above but not listed.",
+  "filters_rows_omitted": "Rows not shown: {count}",
+  "filters_rows_omitted_json": "Rows not shown: {count} (complete list in the JSON artifact)",
   "filters_image_counts_only": "Findings are listed per vulnerability in the inventory; this report shows counts per image.",
   "filters_method_note": "Filters applied: {details}.",
   "filters_min_severity": "minimum severity {band}",
   "filters_image_counts": "image chapter counts only",
-  "filters_max_rows": "at most {n} rows per table"
+  "filters_max_rows": "table rows capped at {n}",
+  "filters_detail_sep": "; "
 }

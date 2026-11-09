@@ -27,6 +27,7 @@ pub const KEYS: &[&str] = &[
     "filters_min_severity",
     "filters_image_counts",
     "filters_max_rows",
+    "filters_detail_sep",
     "tile_critical",
     "tile_high",
     "tile_medium",

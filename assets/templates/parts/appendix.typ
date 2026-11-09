@@ -20,6 +20,7 @@
     muted(theme, tr("appendix_tool")), data.theme.product.name + " " + data.meta.product_version,
   )
   if data.filters.active {
+    v(8pt)
     let details = ()
     if data.filters.min_severity_key != "" {
       details.push(tr("filters_min_severity", band: data.filters.min_severity_label))
@@ -30,7 +31,7 @@
     if data.filters.max_table_rows > 0 {
       details.push(tr("filters_max_rows", n: num(data.filters.max_table_rows)))
     }
-    muted(theme, tr("filters_method_note", details: details.join("; ")))
+    muted(theme, tr("filters_method_note", details: details.join(tr("filters_detail_sep"))))
   }
   section-title(theme, tr("appendix_rule_title"))
   tr("appendix_rule_text")

@@ -119,5 +119,46 @@ fn method_explains_active_filters() {
         image_scan_report::render::strings::load(Language::En),
         image_scan_report::render::theme::default_theme().to_render_value(),
     );
-    assert!(compact(&pdf::text(&render(&data))).contains(&compact("Filters applied: minimum severity High; image chapter counts only; at most 1 rows per table.")));
+    assert!(compact(&pdf::text(&render(&data))).contains(&compact(
+        "Filters applied: minimum severity High; image chapter counts only; table rows capped at 1."
+    )));
+}
+
+#[test]
+fn traditional_chinese_explains_floor_cap_and_counts() {
+    let report = data::fixture_report(3);
+    let mut opts = data::default_options(Language::ZhTw);
+    opts.min_severity = Some(image_scan_report::model::Severity::Medium);
+    opts.image_detail = image_scan_report::model::ImageDetail::Counts;
+    opts.max_table_rows = Some(1);
+    for json in [false, true] {
+        opts.json_artifact = json;
+        let data = image_scan_report::render::model::build(
+            &report,
+            &opts,
+            image_scan_report::render::strings::load(Language::ZhTw),
+            image_scan_report::render::theme::default_theme().to_render_value(),
+        );
+        assert!(data.inventory_omitted > 0);
+        let text = compact(&pdf::text(&render(&data)));
+        let omitted = if json {
+            format!(
+                "未顯示 {} 筆（完整清單見 JSON 檔案）",
+                data.inventory_omitted
+            )
+        } else {
+            format!("未顯示 {} 筆", data.inventory_omitted)
+        };
+        assert!(text.contains(&compact(&omitted)), "{omitted}");
+        assert_eq!(
+            text.matches(&compact(
+                "弱點依識別碼列於清單中；本報告於映像檔章節僅顯示各映像檔的統計數量。"
+            ))
+            .count(),
+            1
+        );
+        assert!(text.contains(&compact(
+            "已套用篩選條件：最低嚴重程度為 Medium；映像檔章節僅顯示統計數量；每個表格最多 1 列。"
+        )));
+    }
 }

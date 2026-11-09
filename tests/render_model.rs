@@ -421,13 +421,22 @@ fn min_severity_hides_lower_bands_but_keeps_unrated_and_summary_counts() {
     );
     assert_eq!(d.summary, baseline.summary);
     assert_eq!((d.summary.counts.medium, d.summary.counts.low), (4, 5));
+    for image in &d.images {
+        let summary = d
+            .summary
+            .top_images
+            .iter()
+            .find(|row| row.reference == image.reference)
+            .unwrap();
+        assert_eq!(image.counts, summary.counts);
+    }
     assert_eq!(d.filters.hidden_findings, 9);
     assert!(d.filters.active && d.filters.json_artifact);
     assert_eq!(d.filters.min_severity_key, "high");
     assert_eq!(d.filters.min_severity_label, "High");
     assert_eq!(d.remediation.unfixable_total, 6);
     assert_eq!(d.appendix, baseline.appendix);
-    assert_eq!(d.images.iter().map(|i| i.counts.total()).sum::<usize>(), 6);
+    assert_eq!(d.images.iter().map(|i| i.counts.total()).sum::<usize>(), 15);
 }
 
 #[test]

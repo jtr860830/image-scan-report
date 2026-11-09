@@ -458,7 +458,6 @@ pub fn build(
     if let Some(cap) = opts.max_table_rows {
         inventory.truncate(cap);
     }
-    let detail_summaries = views::image_summaries(&report.images, &kept);
     let mut grouped: HashMap<&str, Vec<&Finding>> = HashMap::new();
     for finding in kept.iter() {
         grouped
@@ -472,7 +471,7 @@ pub fn build(
             .entry(image.reference.as_str())
             .or_insert(image);
     }
-    let images = image_details(&detail_summaries, &images_by_reference, &grouped, opts);
+    let images = image_details(&summaries, &images_by_reference, &grouped, opts);
     RenderData {
         filters: Filters {
             min_severity_key: opts

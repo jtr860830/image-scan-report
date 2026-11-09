@@ -192,7 +192,7 @@ fn summary_explains_hidden_findings_in_both_languages() {
         assert!(data.filters.hidden_findings > 0);
         let expected = if lang == Language::En {
             format!(
-                "Inventory, remediation and image tables show High and above; {} lower findings are counted above but not listed.",
+                "Inventory, remediation and image tables show High and above; {} findings below that level are counted above but not listed.",
                 data.filters.hidden_findings
             )
         } else {

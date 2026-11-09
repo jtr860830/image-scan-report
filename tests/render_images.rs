@@ -60,7 +60,7 @@ fn failed_image_shows_error_callout() {
     data.images[0].findings[0].id = "MUST-NOT-RENDER".into();
     let (_, text) = chapter(&render(&data), &data.strings["ch_images"]);
     assert!(text.contains("manifest unknown"));
-    assert!(!text.contains("MUST-NOT-RENDER"));
+    assert!(!compact(&text).contains(&compact("MUST-NOT-RENDER")));
 }
 #[test]
 fn oversized_description_is_contained() {
@@ -147,7 +147,10 @@ fn optional_facts_show_placeholder() {
     );
     let (_, text) = chapter(&render(&data), &data.strings["ch_images"]);
     assert!(text.matches('—').count() >= 4, "{text}");
-    assert!(!text.to_lowercase().contains("none") && !text.to_lowercase().contains("null"));
+    assert!(
+        !compact(&text).to_lowercase().contains(&compact("none"))
+            && !compact(&text).to_lowercase().contains(&compact("null"))
+    );
     assert!(text.contains(&data.strings["no_findings"]));
 }
 #[test]
@@ -158,7 +161,7 @@ fn medium_description_is_not_rendered() {
     row.severity_label = "Medium".into();
     row.show_description = false;
     row.description = "MEDIUM-DESCRIPTION-SENTINEL".into();
-    assert!(!pdf::text(&render(&data)).contains("MEDIUM-DESCRIPTION-SENTINEL"));
+    assert!(!compact(&pdf::text(&render(&data))).contains(&compact("MEDIUM-DESCRIPTION-SENTINEL")));
 }
 
 #[test]
@@ -192,7 +195,9 @@ fn not_scanned_has_its_own_callout() {
     let image_text = text.split(&data.strings["ch_appendix"]).next().unwrap();
     assert!(compact(image_text).contains(&compact(&data.strings["scan_state_not_scanned"])));
     assert!(
-        !image_text.to_lowercase().contains("failed"),
+        !compact(image_text)
+            .to_lowercase()
+            .contains(&compact("failed")),
         "{image_text}"
     );
 }
@@ -225,7 +230,10 @@ fn image_detail_lists_every_tag() {
         let (_, text) = chapter(&render(&opts), &opts.strings["ch_images"]);
         let detail = text.split(&opts.strings["ch_appendix"]).next().unwrap();
         assert_eq!(opts.images[0].show_tags, show);
-        assert_eq!(detail.contains(&opts.strings["image_meta_tags"]), show);
+        assert_eq!(
+            compact(detail).contains(&compact(&opts.strings["image_meta_tags"])),
+            show
+        );
         if show {
             assert!(compact(detail).contains(&compact(&tags.join(", "))));
         }
@@ -254,9 +262,9 @@ fn images_explain_caps_and_counts_only() {
             let (_, text) = chapter(&render(&data), &data.strings["ch_images"]);
             let text = text.split(&data.strings["ch_appendix"]).next().unwrap();
             if counts {
-                assert!(compact(text).contains(&compact("Findings are listed per vulnerability in the inventory; this report shows counts per image.")));
-                assert!(!text.contains("more rows"));
-                assert!(!text.contains(&data.strings["image_findings_title"]));
+                assert_eq!(compact(text).matches(&compact("Findings are listed per vulnerability in the inventory; this report shows counts per image.")).count(), 1);
+                assert!(!compact(text).contains(&compact("Rows not shown:")));
+                assert!(!compact(text).contains(&compact(&data.strings["image_findings_title"])));
             } else {
                 let omitted = data
                     .images
@@ -265,9 +273,9 @@ fn images_explain_caps_and_counts_only() {
                     .unwrap()
                     .findings_omitted;
                 let expected = format!(
-                    "… and {omitted} more rows{}",
+                    "Rows not shown: {omitted}{}",
                     if json {
-                        "; the complete list is in the JSON artifact"
+                        " (complete list in the JSON artifact)"
                     } else {
                         ""
                     }
