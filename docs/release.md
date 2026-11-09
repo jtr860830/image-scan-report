@@ -4,8 +4,7 @@
 
 1. Bump `[package].version` in Cargo.toml and the judex package version in
    Cargo.lock together. Keep the Kubernetes image tags in deploy/k8s/*.yaml and
-   deploy/podman/run.sh (including its default image tag) and version examples in README/docs aligned. The current candidate is 0.1.0;
-   bump to 1.0.0 for the stable release.
+   deploy/podman/run.sh (including its default image tag) and version examples in README/docs aligned.
 2. Review CHANGELOG.md and replace `unreleased` in the version heading with the
    release date (YYYY-MM-DD). Run the checks in [development.md](development.md).
 3. Commit the reviewed files, then sign and push the tag:
@@ -28,8 +27,8 @@ section. Delete a stale draft before re-running the release job. Review the asse
 Native image builds export digests; a manifest job combines both architectures
 at `ghcr.io/jtr860830/judex:X.Y.Z`, then verifies both architectures. Only stable
 versions (without a `-`) update `:latest`; release candidates never move it.
-Images publish before the draft is reviewed. After the first GHCR push, make the
-package public and link it to the repository in the package settings.
+Images publish before the draft is reviewed. After the first GHCR push, check in the
+package settings that the package is public and linked to the repository.
 
 Native binaries require glibc >= 2.39 (built on ubuntu-24.04). Use the container
 image on hosts with older glibc. SHA256SUMS is checkable with `sha256sum -c

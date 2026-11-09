@@ -18,7 +18,7 @@ RUN find src -type f -exec touch {} + \
 FROM gcr.io/distroless/cc-debian13:nonroot AS runtime
 ARG VERSION=dev
 ARG REVISION=unknown
-LABEL org.opencontainers.image.source="https://github.com/jtr860830/image-scan-report" \
+LABEL org.opencontainers.image.source="https://github.com/jtr860830/judex" \
       org.opencontainers.image.version="$VERSION" \
       org.opencontainers.image.revision="$REVISION" \
       org.opencontainers.image.licenses="Apache-2.0" \
