@@ -198,12 +198,30 @@ NeuVector scan states (case insensitive):
 | `report.describe_severities` | List of lowercase severities: `critical`, `high`, `medium`, `low`, `unrated`; `[]` disables descriptions | `[critical, high]` |
 | `report.description_chars` | Description character limit (at least 50), followed by an ellipsis when truncated | `600` |
 | `report.remediation_cards` | Number of remediation groups shown as cards; remaining groups use a table; `0` means table only | `30` |
+| `report.min_severity` | `critical`, `high`, `medium` or `low`; omit lower bands from inventory, remediation and per-image tables; always keep Unrated | `null` (no floor) |
+| `report.image_detail` | `full` or `counts`; counts shows only each image’s metadata card and severity counts | `full` |
+| `report.max_table_rows` | Positive integer; first N rows of the inventory and each image table after sorting, most severe first | `null` (no cap) |
 | `report.json` | Boolean | `false` |
 | `report.pdf` | Boolean | `true` |
 
 PDF is enabled by default; enable `json: true` to also write the normalised report.
 The configuration's `organization` is serialised as `organisation` in JSON.
 `stale_after_days` controls the appendix's stale-scan threshold.
+
+**Large reports.** Prefer per-scope reports first, then use the content settings
+above to reduce detail. See [container resources](docs/container.md#resources)
+for sizing. The summary’s tiles, bar, facts and rankings, per-image severity
+counts and appendix always cover the full report. `unrated` as a floor and a
+zero row cap are configuration errors (exit 2).
+
+The PDF states omissions: a line under the summary lede when the floor hides
+findings; “Rows not shown: N” under capped tables, with “(complete list in the
+JSON artifact)” when JSON output is enabled; and “Filters applied: ...” in the
+appendix Method section. Counts-only detail adds one note under the chapter
+heading directing readers to the inventory’s per-vulnerability findings.
+The JSON artifact is always the complete normalised report; `render-data` JSON
+includes a `filters` block. No CSV output is provided. Chunked/batch rendering
+remains out of scope ([#11](https://github.com/jtr860830/judex/issues/11)).
 
 ### Theme
 
