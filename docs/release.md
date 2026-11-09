@@ -103,6 +103,12 @@ Keep the library crate name `image_scan_report`. Update these product surfaces:
    tests/deploy_manifests.rs, and tests/snapshots/*.snap.
 9. Product references in deploy/examples/ and user-facing README/docs examples.
 
+Environment variable names (`<NAME>_CONFIG`, `<NAME>_THEME_DIR`) and default
+configuration directories (`/etc/<name>` and the XDG `<name>` subdirectory) are
+derived from `PRODUCT_NAME` in src/main.rs. Re-check these names and the
+`/var/lib/<name>` report directory in Containerfile, deploy files and docs
+after a rename.
+
 From the repository root, this exact grep lists the naming surfaces:
 
 ```sh

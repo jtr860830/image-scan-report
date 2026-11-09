@@ -5,6 +5,40 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- Move container paths and Kubernetes namespace/labels:
+
+  | Old | New |
+  | --- | --- |
+  | `/etc/report/config.yaml` | `/etc/judex/config.yaml` |
+  | `/etc/report/ca.pem` | `/etc/judex/ca.pem` |
+  | `/etc/report/logo.png` | `/etc/judex/logo.png` |
+  | `/output` | `/var/lib/judex/reports` |
+  | Kubernetes namespace/labels `image-scan-report` | `judex` |
+
+- Display `judex <ver>` or `<edition> <ver> (judex)` for `--version` and
+  `version`. End `check` output with `; product: <display>; theme: <source>`.
+- Send `judex/<ver>` or `<edition>/<ver> judex/<ver>` as the HTTP User-Agent;
+  replace whitespace in the edition name with `-`.
+
+### Added
+
+- Look up configuration for `run`, `check`, and `render-data` when `--config`
+  is omitted: `$JUDEX_CONFIG`, `$XDG_CONFIG_HOME/judex/config.yaml`, then
+  `/etc/judex/config.yaml`. Use `$HOME/.config/judex/config.yaml` when XDG is
+  unset, empty or relative; skip that fallback when HOME is unset or empty.
+  Select the first existing file; otherwise exit 2 and list candidates, with a
+  migration hint when the pre-0.2.0 configuration still exists.
+- Select themes through `JUDEX_THEME_DIR`, after `theme.path` and before the
+  embedded default. Report the theme source (`config`, `env`, or `default`)
+  in `check` output.
+
+### Removed
+
+- The `image-scan-report/<ver>` HTTP User-Agent.
+- The hard default `--config /etc/report/config.yaml`.
+
 ### Fixed
 
 - Summary table: vulnerability ids with seven-digit sequence numbers and long

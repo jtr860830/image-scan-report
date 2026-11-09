@@ -1,5 +1,5 @@
-# For containers, mount scans at /var/lib/judex/scans and reports at
-# /var/lib/judex/reports; use /var/lib/judex/scans/trivy as the source path.
+# For container use, set source.path to /var/lib/judex/scans/trivy and
+# output.path to /var/lib/judex/reports.
 source:
   type: trivy-files
   path: ./tests/fixtures/trivy

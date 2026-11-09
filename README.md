@@ -46,10 +46,10 @@ Use `RUST_LOG=debug` for diagnostics; even `trace` never prints credentials.
 ### Container installation
 
 Use `ghcr.io/jtr860830/judex:<ver>` with a release tag, a config whose filesystem
-output points to `/output`, and a writable `./out` directory:
+output points to `/var/lib/judex/reports`, and a writable `./out` directory:
 
 ```sh
-podman run --rm --read-only --security-opt no-new-privileges -v ./config.yaml:/etc/report/config.yaml:ro,Z -v ./out:/output:Z -e HARBOR_PASSWORD ghcr.io/jtr860830/judex:<ver>
+podman run --rm --read-only --security-opt no-new-privileges -v ./config.yaml:/etc/judex/config.yaml:ro,Z -v ./out:/var/lib/judex/reports:Z -e HARBOR_PASSWORD ghcr.io/jtr860830/judex:<ver>
 ```
 
 For air-gapped hosts, transfer the image with `podman save` and `podman load`.
@@ -82,7 +82,7 @@ resolve from the working directory, not the configuration file's directory.
 See [fixture provenance](tests/fixtures/README.md) for how the scanner inputs were captured.
 
 `--version` (or `-V`) and `version` print `judex 0.1.0`. `check` fetches and parses the source and prints
-`Trivy (files): ./tests/fixtures/trivy: 11 images (11 scanned, 0 failed, 0 not scanned), 4368 findings; theme: judex; product: judex 0.1.0`; it validates output configuration and the theme without
+`Trivy (files): ./tests/fixtures/trivy: 11 images (11 scanned, 0 failed, 0 not scanned), 4368 findings; product: judex 0.1.0; theme: default`; it validates output configuration and the theme without
 writing artifacts. `run` prints `Report: 11 images, 4368 findings`, followed by
 one destination and filename per stored artifact. Counts depend on the inputs.
 The example produces `out/trivy-trivy-files-YYYY-MM-DD.pdf` and a matching JSON file, using the UTC run
@@ -92,9 +92,16 @@ the same date atomically overwrites the same filename.
 
 ## Configuration reference
 
-The default `--config` path for `run`, `check`, and `render-data` is
-`/etc/report/config.yaml`. The `check` counts show scanned, failed, and not scanned
-images before the findings count.
+When `--config` is omitted for `run`, `check`, or `render-data`, use the first
+existing file in this order: `$JUDEX_CONFIG`,
+`$XDG_CONFIG_HOME/judex/config.yaml`, `/etc/judex/config.yaml`.
+Use XDG only when `XDG_CONFIG_HOME` is a non-empty absolute path; otherwise use
+`$HOME/.config/judex/config.yaml`. Skip that fallback when `HOME` is unset or
+empty (as in the container). If no file exists, exit 2 and list every candidate;
+if the pre-0.2.0 configuration still exists, include a migration hint.
+The `check` counts show scanned, failed, and not scanned images before the
+findings count, followed by the product display and theme source
+(`config`, `env`, or `default`).
 
 Configuration is YAML with required `source`, `report`, and `output` sections.
 Unknown keys are rejected. “Required” below means there is no default;
@@ -198,15 +205,26 @@ The configuration's `organization` is serialised as `organisation` in JSON.
 ### Theme
 
 The optional top-level `theme.path` points to a directory containing `theme.toml`
-and an optional `logo.png` or `logo.svg`. Omit it to use the bundled default.
+and an optional `logo.png` or `logo.svg`. Select the theme in this order:
+`theme.path`, `$JUDEX_THEME_DIR`, embedded default. A set `JUDEX_THEME_DIR` must
+be non-empty and contain a valid `theme.toml`; an invalid selected directory
+exits 2 for `run`, `check`, and `render-data`.
 Copy [assets/themes/default/theme.toml](assets/themes/default/theme.toml) to customise product
-branding, colors and font families. Unknown keys and invalid values fail with
+branding, colours and font families. Unknown keys and invalid values fail with
 exit code 2 before fetching scans. Paths resolve from the working directory.
 
 ```yaml
 theme:
   path: ./assets/themes/default
 ```
+
+The theme's `[product] name` supplies `meta.product_name` in `render-data` JSON.
+The default displays `judex <ver>`; an edition named `Arishem` displays
+`Arishem <ver> (judex)`. `--version` and `version` use the environment theme or
+embedded default, without reading configuration. An invalid `JUDEX_THEME_DIR`
+then prints the upstream identity, warns once on stderr, and exits 0.
+HTTP `User-Agent` is `judex/<ver>` or `Arishem/<ver> judex/<ver>`;
+whitespace in the product name becomes `-`.
 
 ### Output
 
