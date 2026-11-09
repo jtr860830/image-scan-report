@@ -5,6 +5,8 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-09
+
 ### Changed
 
 - Move container paths and Kubernetes namespace/labels:
@@ -85,5 +87,6 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Scope is "images stored in the registry", not workloads running in a cluster.
 - No history: comparisons between runs are out of scope.
 
-[Unreleased]: https://github.com/jtr860830/judex/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/jtr860830/judex/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/jtr860830/judex/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/jtr860830/judex/releases/tag/v0.1.0
