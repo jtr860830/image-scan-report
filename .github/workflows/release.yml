@@ -95,7 +95,7 @@ jobs:
           cp assets/fonts/LICENSE-*.txt "dist/$bundle/licenses/fonts/"
           cp deploy/examples/*.yaml "dist/$bundle/examples/"
           cp deploy/podman/run.sh "dist/$bundle/run.sh"
-          cp docs/container.md "dist/$bundle/docs/"
+          cp docs/container.md docs/manual/*.md "dist/$bundle/docs/"
           tar -czf "dist/$bundle.tar.gz" -C dist "$bundle"
           rm -r "dist/$bundle"
           cd dist

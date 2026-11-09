@@ -34,6 +34,8 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Add operator and report-reading manuals, included in native release archives.
+
 - Add optional report settings `min_severity`, `image_detail` and `max_table_rows`
   for large reports, with omission statements below the summary lede and capped
   tables and in the appendix Method section.
