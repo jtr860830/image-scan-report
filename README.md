@@ -92,13 +92,16 @@ the same date atomically overwrites the same filename.
 
 ## Configuration reference
 
-When `--config` is omitted for `run`, `check`, or `render-data`, use the first
-existing file in this order: `$JUDEX_CONFIG`,
+When `--config` is omitted for `run`, `check`, or `render-data`, a non-empty
+`JUDEX_CONFIG` is authoritative and used as-is; a missing file is an error.
+An empty value is ignored. Otherwise, use the first existing file in this order:
 `$XDG_CONFIG_HOME/judex/config.yaml`, `/etc/judex/config.yaml`.
 Use XDG only when `XDG_CONFIG_HOME` is a non-empty absolute path; otherwise use
 `$HOME/.config/judex/config.yaml`. Skip that fallback when `HOME` is unset or
-empty (as in the container). If no file exists, exit 2 and list every candidate;
-if the pre-0.2.0 configuration still exists, include a migration hint.
+empty. The distroless container sets `HOME=/home/nonroot`, so it searches
+`/home/nonroot/.config/judex/config.yaml`, which is normally absent.
+If no file exists, exit 2 and list every candidate; if the pre-0.2.0
+configuration still exists, include a migration hint.
 The `check` counts show scanned, failed, and not scanned images before the
 findings count, followed by the product display and theme source
 (`config`, `env`, or `default`).

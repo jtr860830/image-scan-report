@@ -59,7 +59,11 @@ fn version_identity(
         Ok((theme, _)) => (theme, None),
         Err(err) => (
             theme::default_theme(),
-            Some(format!("{}: {err}", runtime.theme_dir_env)),
+            Some(format!(
+                "{}: {}",
+                runtime.theme_dir_env,
+                err.to_string().lines().next().unwrap_or_default()
+            )),
         ),
     };
     (ProductInfo::new(runtime, &theme), warning)
@@ -67,7 +71,7 @@ fn version_identity(
 
 fn dispatch(
     command: cli::Command,
-    product: &image_scan_report::pipeline::Runtime,
+    runtime: &image_scan_report::pipeline::Runtime,
     version: &image_scan_report::pipeline::ProductInfo,
     version_warning: Option<&str>,
 ) -> Result<(), image_scan_report::pipeline::RunError> {
@@ -91,11 +95,11 @@ fn dispatch(
     let cfg = config::load(&config)?;
     match command {
         cli::Command::RenderData { out, .. } => {
-            pipeline::write_render_data(&cfg, chrono::Utc::now(), product, &out)?;
+            pipeline::write_render_data(&cfg, chrono::Utc::now(), runtime, &out)?;
         }
         cli::Command::Version => unreachable!("version handled above"),
         cli::Command::Run { .. } => {
-            let summary = pipeline::run(&cfg, chrono::Utc::now(), product)?;
+            let summary = pipeline::run(&cfg, chrono::Utc::now(), runtime)?;
             println!(
                 "Report: {} images, {} findings",
                 summary.images, summary.findings
@@ -108,7 +112,7 @@ fn dispatch(
             }
         }
         cli::Command::Check { .. } => {
-            println!("{}", pipeline::check(&cfg, product)?);
+            println!("{}", pipeline::check(&cfg, runtime)?);
         }
     }
     Ok(())

@@ -371,10 +371,13 @@ fn config_found_under_xdg_config_home() {
 fn judex_config_env_overrides_lookup() {
     let temp = tempfile::tempdir().unwrap();
     let config = write_config(temp.path());
+    let xdg = temp.path().join("judex");
+    std::fs::create_dir(&xdg).unwrap();
+    std::fs::write(xdg.join("config.yaml"), "invalid: competing-config").unwrap();
     let out = cargo_bin_cmd!("judex")
         .env_remove("JUDEX_THEME_DIR")
         .env("HOME", temp.path())
-        .env_remove("XDG_CONFIG_HOME")
+        .env("XDG_CONFIG_HOME", temp.path())
         .env_remove("JUDEX_CONFIG")
         .env("JUDEX_CONFIG", config)
         .arg("check")
@@ -385,4 +388,78 @@ fn judex_config_env_overrides_lookup() {
         "{}",
         String::from_utf8_lossy(&out.stderr)
     );
+}
+
+#[test]
+fn missing_explicit_env_config_is_authoritative() {
+    let temp = tempfile::tempdir().unwrap();
+    let config = write_config(temp.path());
+    let xdg = temp.path().join("judex");
+    std::fs::create_dir(&xdg).unwrap();
+    std::fs::copy(config, xdg.join("config.yaml")).unwrap();
+    let out = cargo_bin_cmd!("judex")
+        .env_remove("JUDEX_THEME_DIR")
+        .env("XDG_CONFIG_HOME", temp.path())
+        .env("JUDEX_CONFIG", "/nonexistent.yaml")
+        .arg("check")
+        .output()
+        .unwrap();
+    assert_eq!(out.status.code(), Some(2));
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains("cannot read"));
+    assert!(stderr.contains("/nonexistent.yaml"));
+}
+
+#[test]
+fn empty_theme_env_never_selects_current_directory() {
+    let temp = tempfile::tempdir().unwrap();
+    edition_theme(temp.path());
+    // A valid 1x1 PNG makes the current directory a complete theme.
+    std::fs::write(
+        temp.path().join("logo.png"),
+        [
+            137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 1, 0, 0, 0, 1,
+            8, 6, 0, 0, 0, 31, 21, 196, 137, 0, 0, 0, 11, 73, 68, 65, 84, 120, 156, 99, 96, 0, 2,
+            0, 0, 5, 0, 1, 169, 245, 214, 200, 0, 0, 0, 0, 73, 69, 78, 68, 174, 66, 96, 130,
+        ],
+    )
+    .unwrap();
+    image_scan_report::render::theme::load(Some(temp.path())).unwrap();
+    let config = write_config(temp.path());
+    let out = cargo_bin_cmd!("judex")
+        .current_dir(temp.path())
+        .env("JUDEX_THEME_DIR", "")
+        .arg("--version")
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    assert_eq!(
+        String::from_utf8_lossy(&out.stdout),
+        format!("judex {}\n", env!("CARGO_PKG_VERSION"))
+    );
+    assert!(String::from_utf8_lossy(&out.stderr).contains("theme directory must not be empty"));
+    let out = cargo_bin_cmd!("judex")
+        .current_dir(temp.path())
+        .env("JUDEX_THEME_DIR", "")
+        .arg("check")
+        .arg("--config")
+        .arg(config)
+        .output()
+        .unwrap();
+    assert_eq!(out.status.code(), Some(2));
+}
+
+#[test]
+fn version_parse_warning_is_one_line() {
+    let temp = tempfile::tempdir().unwrap();
+    std::fs::write(temp.path().join("theme.toml"), "[broken").unwrap();
+    let out = cargo_bin_cmd!("judex")
+        .env("JUDEX_THEME_DIR", temp.path())
+        .arg("--version")
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains("JUDEX_THEME_DIR:"));
+    assert_eq!(stderr.lines().count(), 1);
 }

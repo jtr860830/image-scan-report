@@ -189,7 +189,9 @@ pub enum ConfigError {
 /// `env` returns the value of a variable; it is a parameter so tests need not touch the process environment.
 pub fn candidate_paths(name: &str, env: &dyn Fn(&str) -> Option<OsString>) -> Vec<PathBuf> {
     let mut candidates = Vec::new();
-    if let Some(path) = env(&format!("{}_CONFIG", name.to_uppercase())) {
+    if let Some(path) =
+        env(&format!("{}_CONFIG", name.to_uppercase())).filter(|value| !value.is_empty())
+    {
         candidates.push(PathBuf::from(path));
     }
     let xdg = env("XDG_CONFIG_HOME")
@@ -208,7 +210,7 @@ pub fn candidate_paths(name: &str, env: &dyn Fn(&str) -> Option<OsString>) -> Ve
     candidates
 }
 
-/// First existing candidate, or `ConfigError::NotFound { candidates, moved_from: Option<PathBuf> }`.
+/// Non-empty explicit environment path, otherwise the first existing candidate, or `ConfigError::NotFound { candidates, moved_from: Option<PathBuf> }`.
 ///
 /// # Errors
 ///
@@ -217,6 +219,11 @@ pub fn default_path(
     name: &str,
     env: &dyn Fn(&str) -> Option<OsString>,
 ) -> Result<PathBuf, ConfigError> {
+    if let Some(path) =
+        env(&format!("{}_CONFIG", name.to_uppercase())).filter(|value| !value.is_empty())
+    {
+        return Ok(PathBuf::from(path));
+    }
     let candidates = candidate_paths(name, env);
     if let Some(path) = candidates.iter().find(|path| path.is_file()) {
         return Ok(path.clone());
@@ -492,6 +499,7 @@ mod lookup_tests {
     fn explicit_env_variable_comes_first() {
         let env = |k: &str| (k == "PROD_CONFIG").then(|| "/x/c.yaml".into());
         assert_eq!(candidate_paths("prod", &env)[0], Path::new("/x/c.yaml"));
+        assert_eq!(default_path("prod", &env).unwrap(), Path::new("/x/c.yaml"));
     }
 
     #[test]
@@ -538,9 +546,34 @@ mod lookup_tests {
             "PROD_CONFIG" => Some(explicit.as_os_str().to_owned()),
             _ => None,
         };
-        assert_eq!(default_path("prod", &env).unwrap(), path);
+        assert_eq!(
+            default_path("prod", &|k| if k == "PROD_CONFIG" {
+                Some("".into())
+            } else {
+                env(k)
+            })
+            .unwrap(),
+            path
+        );
+        assert_eq!(default_path("prod", &env).unwrap(), explicit);
         std::fs::write(&explicit, "").unwrap();
         assert_eq!(default_path("prod", &env).unwrap(), explicit);
+    }
+
+    #[test]
+    fn lookup_error_includes_exact_migration_hint() {
+        let error = ConfigError::NotFound {
+            candidates: vec!["/etc/prod/config.yaml".into()],
+            moved_from: Some("/etc/report/config.yaml".into()),
+        };
+        assert_eq!(
+            error.to_string(),
+            "configuration not found; searched:\n/etc/prod/config.yaml\nconfiguration moved to /etc/prod/config.yaml in 0.2.0"
+        );
+        assert!(
+            !candidate_paths("prod", &|k| (k == "PROD_CONFIG").then(|| "".into()))
+                .contains(&PathBuf::new())
+        );
     }
 
     #[test]

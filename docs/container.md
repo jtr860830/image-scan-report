@@ -66,7 +66,7 @@ when configured as above. All other mounted inputs can remain read-only.
 
 | Variable | Purpose |
 | --- | --- |
-| `JUDEX_CONFIG` | First configuration candidate when `--config` is omitted |
+| `JUDEX_CONFIG` | Authoritative configuration path when non-empty and `--config` is omitted; a missing file is an error |
 | `JUDEX_THEME_DIR` | Theme directory, after `theme.path` and before the embedded default |
 | `RUST_LOG` | Log filter |
 | `HARBOR_PASSWORD` | Harbor password when referenced by the configuration |
@@ -75,6 +75,9 @@ when configured as above. All other mounted inputs can remain read-only.
 
 Pass variables with `-e` in raw commands. The wrapper passes only the three
 secret variables above; pass other variables explicitly in raw commands.
+An empty `JUDEX_CONFIG` is ignored. With no explicit configuration, the image
+searches `/home/nonroot/.config/judex/config.yaml` (normally absent), then
+`/etc/judex/config.yaml`.
 A set `JUDEX_THEME_DIR` must be non-empty and contain a valid `theme.toml`.
 
 ## Building an edition image
@@ -86,6 +89,10 @@ FROM ghcr.io/jtr860830/judex:<ver>
 COPY theme/ /usr/share/<edition>/theme/
 ENV JUDEX_THEME_DIR=/usr/share/<edition>/theme
 ```
+
+Override the inherited OCI labels `org.opencontainers.image.source`,
+`org.opencontainers.image.description`, and `org.opencontainers.image.title`
+so the edition does not advertise upstream metadata.
 
 Configuration files then need no `theme:` block. An explicit `theme.path`
 overrides the environment theme. Set `[product] name` in `theme.toml` to name

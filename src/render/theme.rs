@@ -163,6 +163,11 @@ impl Theme {
     }
     fn validate(&self, path: &Path) -> Result<(), ThemeError> {
         let invalid = |message: String| ThemeError::Invalid(path.to_owned(), message);
+        if self.product.name.trim().is_empty() || self.product.name.chars().any(char::is_control) {
+            return Err(invalid(
+                "product.name must not be blank or contain control characters".into(),
+            ));
+        }
         if self.version != 1 {
             return Err(invalid("version must be 1".into()));
         }
@@ -263,7 +268,16 @@ pub fn resolve(
     } else {
         ThemeSource::Default
     };
-    Ok((load(config_dir.or(env_dir))?, source))
+    let dir = config_dir.or(env_dir);
+    if let Some(path) = dir
+        && path.as_os_str().to_string_lossy().trim().is_empty()
+    {
+        return Err(ThemeError::Invalid(
+            path.to_owned(),
+            "theme directory must not be empty".into(),
+        ));
+    }
+    Ok((load(dir)?, source))
 }
 
 /// Load `theme.toml` and an optional logo from `dir`, or return [`default_theme`] for `None`.
@@ -322,6 +336,27 @@ mod tests {
         .unwrap();
         dir
     }
+    #[test]
+    fn resolve_rejects_empty_directories() {
+        for value in ["", "  "] {
+            assert!(resolve(None, Some(Path::new(value))).is_err());
+            assert!(resolve(Some(Path::new(value)), None).is_err());
+        }
+    }
+
+    #[test]
+    fn product_name_must_be_nonblank_and_without_controls() {
+        default_theme().validate(Path::new("theme.toml")).unwrap();
+        for name in ["", "  ", "a\u{1}b"] {
+            let mut theme = default_theme();
+            theme.product.name = name.into();
+            let error = theme.validate(Path::new("theme.toml")).unwrap_err();
+            assert!(
+                matches!(error, ThemeError::Invalid(_, ref message) if message.contains("product.name"))
+            );
+        }
+    }
+
     #[test]
     fn resolve_prefers_config_over_env() {
         let (cfg_dir, env_dir) = (

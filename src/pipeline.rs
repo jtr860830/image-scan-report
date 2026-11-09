@@ -181,11 +181,17 @@ impl ProductInfo {
         }
         value
     }
-    /// Format HTTP identification, replacing whitespace in product names.
+    /// Format HTTP identification, replacing non-RFC 9110 token characters in product names.
     pub fn user_agent(&self) -> String {
         let token = |s: &str| {
             s.chars()
-                .map(|c| if c.is_whitespace() { '-' } else { c })
+                .map(|c| {
+                    if c.is_ascii_alphanumeric() || "!#$%&'*+-.^_`|~".contains(c) {
+                        c
+                    } else {
+                        '-'
+                    }
+                })
                 .collect::<String>()
         };
         let mut value = format!("{}/{}", token(&self.name), self.version);
@@ -429,6 +435,21 @@ pub fn check(cfg: &Config, runtime: &Runtime) -> Result<String, RunError> {
 #[cfg(test)]
 mod product_tests {
     use super::ProductInfo;
+    #[test]
+    fn user_agent_uses_only_http_token_characters() {
+        for (name, token) in [("A/B (C)", "A-B--C-"), ("中文", "--")] {
+            let product = ProductInfo {
+                name: name.into(),
+                upstream: "upstream".into(),
+                version: "0.2.0".into(),
+            };
+            assert_eq!(
+                product.user_agent(),
+                format!("{token}/0.2.0 upstream/0.2.0")
+            );
+        }
+    }
+
     #[test]
     fn edition_user_agent_replaces_whitespace() {
         let runtime = super::Runtime {

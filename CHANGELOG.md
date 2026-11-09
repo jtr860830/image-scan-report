@@ -15,12 +15,22 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   | `/etc/report/ca.pem` | `/etc/judex/ca.pem` |
   | `/etc/report/logo.png` | `/etc/judex/logo.png` |
   | `/output` | `/var/lib/judex/reports` |
+  | CronJob `image-scan-report` | `judex` |
+  | Job `image-scan-report-once` | `judex-once` |
+  | `/etc/report/harbor-ca.pem`, `/etc/report/neuvector-ca.pem` | `/etc/judex/ca.pem` |
+  | File-source example mount `/fixtures` | `/var/lib/judex/scans` |
+  | Image CMD `run --config /etc/report/config.yaml` | `run` |
   | Kubernetes namespace/labels `image-scan-report` | `judex` |
 
 - Display `judex <ver>` or `<edition> <ver> (judex)` for `--version` and
-  `version`. End `check` output with `; product: <display>; theme: <source>`.
+  `version`. Change the `check` tail from
+  `; theme: <theme product>; product: <name> <ver>` to
+  `; product: <display>; theme: <config|env|default>`.
+- Library API: `build_source`, `build_sinks`, `client_from_tls`, and `tls_client`
+  take `user_agent`; `run`, `check`, and `write_render_data` take `&Runtime`.
+  Remove `USER_AGENT`; reject `HttpOptions::default()` until `user_agent` is set.
 - Send `judex/<ver>` or `<edition>/<ver> judex/<ver>` as the HTTP User-Agent;
-  replace whitespace in the edition name with `-`.
+  replace every non-RFC 9110 token character in the edition name with `-`.
 
 ### Added
 
@@ -28,7 +38,9 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   is omitted: `$JUDEX_CONFIG`, `$XDG_CONFIG_HOME/judex/config.yaml`, then
   `/etc/judex/config.yaml`. Use `$HOME/.config/judex/config.yaml` when XDG is
   unset, empty or relative; skip that fallback when HOME is unset or empty.
-  Select the first existing file; otherwise exit 2 and list candidates, with a
+  A non-empty `JUDEX_CONFIG` is authoritative and used as-is; a missing file
+  is an error. Ignore an empty value. Otherwise select the first existing
+  file; if none exists, exit 2 and list candidates, with a
   migration hint when the pre-0.2.0 configuration still exists.
 - Select themes through `JUDEX_THEME_DIR`, after `theme.path` and before the
   embedded default. Report the theme source (`config`, `env`, or `default`)
