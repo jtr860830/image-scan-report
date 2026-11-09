@@ -13,33 +13,39 @@ use typst_pdf::{PdfOptions, Timestamp};
 const SOURCES: &[(&str, &str)] = &[
     (
         "parts/appendix.typ",
-        include_str!("../../templates/parts/appendix.typ"),
+        include_str!("../../assets/templates/parts/appendix.typ"),
     ),
     (
         "parts/images.typ",
-        include_str!("../../templates/parts/images.typ"),
+        include_str!("../../assets/templates/parts/images.typ"),
     ),
     (
         "parts/inventory.typ",
-        include_str!("../../templates/parts/inventory.typ"),
+        include_str!("../../assets/templates/parts/inventory.typ"),
     ),
     (
         "parts/remediation.typ",
-        include_str!("../../templates/parts/remediation.typ"),
+        include_str!("../../assets/templates/parts/remediation.typ"),
     ),
     (
         "parts/summary.typ",
-        include_str!("../../templates/parts/summary.typ"),
+        include_str!("../../assets/templates/parts/summary.typ"),
     ),
-    ("report.typ", include_str!("../../templates/report.typ")),
+    (
+        "report.typ",
+        include_str!("../../assets/templates/report.typ"),
+    ),
     (
         "lib/theme.typ",
-        include_str!("../../templates/lib/theme.typ"),
+        include_str!("../../assets/templates/lib/theme.typ"),
     ),
-    ("lib/fmt.typ", include_str!("../../templates/lib/fmt.typ")),
+    (
+        "lib/fmt.typ",
+        include_str!("../../assets/templates/lib/fmt.typ"),
+    ),
     (
         "parts/cover.typ",
-        include_str!("../../templates/parts/cover.typ"),
+        include_str!("../../assets/templates/parts/cover.typ"),
     ),
 ];
 

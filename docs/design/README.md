@@ -7,17 +7,17 @@ PNGs live in `target/visual/` at 110 ppi: `cover`, `toc`, `summary`,
 The additional table preview is `remediation-table-zh.png`.
 
 For interactive iteration, generate render data as described in the repository
-README, place it at `templates/data.json`, then run from the repository root:
+README, place it at `assets/templates/data.json`, then run from the repository root:
 
 ```sh
-typst watch templates/report.typ --root templates templates/out.pdf --font-path assets/fonts --ignore-system-fonts
+typst watch assets/templates/report.typ --root assets/templates assets/templates/out.pdf --font-path assets/fonts --ignore-system-fonts
 ```
 
-Edit chapter templates under `templates/parts/` and shared helpers in
-`templates/lib/theme.typ`. Review both languages and regenerate previews and
+Edit chapter templates under `assets/templates/parts/` and shared helpers in
+`assets/templates/lib/theme.typ`. Review both languages and regenerate previews and
 golden snapshots after intentional layout changes.
 
-The default palette comes from `themes/default/theme.toml`: ink #212529,
+The default palette comes from `assets/themes/default/theme.toml`: ink #212529,
 secondary #495057, muted #868e96, hairline #e9ecef, surface #f8f9fa,
 accent #4263eb. Severity pairs are Critical #6741d9 / #f3f0ff,
 High #e03131 / #fff5f5, Medium #f08c00 / #fff9db,

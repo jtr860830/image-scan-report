@@ -22,7 +22,7 @@ The container image is `ghcr.io/jtr860830/judex:<ver>`. See the
 ```sh
 tar -xzf judex-vX.Y.Z-<target>.tar.gz
 cd judex-vX.Y.Z-<target>
-cp examples/config.yaml ./config.yaml
+cp deploy/examples/config.yaml ./config.yaml
 # Edit config.yaml for your source, credentials and output.
 ./judex check --config ./config.yaml
 ./judex run --config ./config.yaml
@@ -57,19 +57,19 @@ then run these commands from the repository root:
 
 ```sh
 cargo run -- version
-cargo run -- check --config examples/config-trivy-files.yaml
-cargo run -- run --config examples/config-trivy-files.yaml
+cargo run -- check --config deploy/examples/config-trivy-files.yaml
+cargo run -- run --config deploy/examples/config-trivy-files.yaml
 ```
 
 For an environment with dependencies already cached and no network, add
 `--offline` after `cargo run` in each command.
-The [runnable example](examples/config-trivy-files.yaml) reads `./fixtures/trivy`
+The [runnable example](deploy/examples/config-trivy-files.yaml) reads `./tests/fixtures/trivy`
 and writes PDF and JSON to `./out`, creating the directory if needed. Relative paths
 resolve from the working directory, not the configuration file's directory.
-See [fixture provenance](fixtures/README.md) for how the scanner inputs were captured.
+See [fixture provenance](tests/fixtures/README.md) for how the scanner inputs were captured.
 
 `--version` (or `-V`) and `version` print `judex 0.1.0`. `check` fetches and parses the source and prints
-`Trivy (files): ./fixtures/trivy: 11 images (11 scanned, 0 failed, 0 not scanned), 4368 findings; theme: judex; product: judex 0.1.0`; it validates output configuration and the theme without
+`Trivy (files): ./tests/fixtures/trivy: 11 images (11 scanned, 0 failed, 0 not scanned), 4368 findings; theme: judex; product: judex 0.1.0`; it validates output configuration and the theme without
 writing artifacts. `run` prints `Report: 11 images, 4368 findings`, followed by
 one destination and filename per stored artifact. Counts depend on the inputs.
 The example produces `out/trivy-trivy-files-YYYY-MM-DD.pdf` and a matching JSON file, using the UTC run
@@ -105,10 +105,10 @@ optional fields default to `null`. `output` must contain at least one destinatio
 
 File sources recursively discover JSON files. Invalid reports are skipped with a
 warning; no usable reports is a source failure. For NeuVector standalone scanner
-files, use `neuvector-files` and a directory such as `./fixtures/neuvector-scanner`.
+files, use `neuvector-files` and a directory such as `./tests/fixtures/neuvector-scanner`.
 
-Start from the [Harbor example](examples/config.yaml) or the
-[NeuVector example](examples/config-neuvector.yaml): they are templates, so
+Start from the [Harbor example](deploy/examples/config.yaml) or the
+[NeuVector example](deploy/examples/config-neuvector.yaml): they are templates, so
 replace the URL, credentials and file paths (CA bundle, logo) with yours, then
 run `judex check --config <file>` followed by `judex run --config <file>`.
 `url` must use HTTP or HTTPS. `password_env` names an environment variable,
@@ -186,13 +186,13 @@ The configuration's `organization` is serialised as `organisation` in JSON.
 
 The optional top-level `theme.path` points to a directory containing `theme.toml`
 and an optional `logo.png` or `logo.svg`. Omit it to use the bundled default.
-Copy [themes/default/theme.toml](themes/default/theme.toml) to customise product
+Copy [assets/themes/default/theme.toml](assets/themes/default/theme.toml) to customise product
 branding, colors and font families. Unknown keys and invalid values fail with
 exit code 2 before fetching scans. Paths resolve from the working directory.
 
 ```yaml
 theme:
-  path: ./themes/default
+  path: ./assets/themes/default
 ```
 
 ### Output
@@ -261,8 +261,8 @@ These codes indicate pipeline outcomes, not vulnerability severity thresholds.
 Install Typst CLI **0.15.1**, matching the embedded crate version, then run:
 
 ```sh
-judex render-data --config examples/config-trivy-files.yaml --out templates/data.json
-typst watch templates/report.typ --root templates templates/out.pdf --font-path assets/fonts --ignore-system-fonts
+judex render-data --config deploy/examples/config-trivy-files.yaml --out assets/templates/data.json
+typst watch assets/templates/report.typ --root assets/templates assets/templates/out.pdf --font-path assets/fonts --ignore-system-fonts
 ```
 
 The CLI must see the bundled fonts through `--font-path assets/fonts`;

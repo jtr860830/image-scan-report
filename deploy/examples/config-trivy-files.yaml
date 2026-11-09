@@ -1,6 +1,6 @@
 source:
   type: trivy-files
-  path: ./fixtures/trivy
+  path: ./tests/fixtures/trivy
 report:
   language: en
   organization: "Example Org"
@@ -12,4 +12,4 @@ output:
 
 # Optional directory containing theme.toml and a logo.
 # theme:
-#   path: ./themes/default
+#   path: ./assets/themes/default

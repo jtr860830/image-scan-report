@@ -20,7 +20,7 @@ fn config(input: &Path, output: &Path) -> Config {
     serde_yaml_ng::from_str(&format!("source:\n  type: trivy-files\n  path: {}\nreport:\n  language: en\n  organization: Test\n  json: true\n  pdf: false\noutput:\n  - type: filesystem\n    path: {}\n", input.display(), output.display())).unwrap()
 }
 fn fixtures() -> std::path::PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/trivy")
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/trivy")
 }
 #[test]
 fn slug_and_base_name() {

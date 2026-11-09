@@ -13,7 +13,7 @@ cargo test
 
 The tests cover configuration, scanner parsing, severity classification, derived
 views, filesystem output and CLI/pipeline behavior. Real scanner inputs and their
-capture procedure are documented in [fixtures/README.md](../fixtures/README.md).
+capture procedure are documented in [tests/fixtures/README.md](../tests/fixtures/README.md).
 Do not hand-edit captured fixtures; recapture them. Synthetic edge cases live in
 `tests/data/`. No real failed-scan capture exists yet.
 
@@ -85,12 +85,12 @@ with configurable headers, TLS settings and retries.
 
 ## Rendering and templates
 
-`templates/report.typ` is the entry point, `templates/lib/` contains shared
-formatting and layout helpers, and `templates/parts/` contains report chapters.
+`assets/templates/report.typ` is the entry point, `assets/templates/lib/` contains shared
+formatting and layout helpers, and `assets/templates/parts/` contains report chapters.
 Use the [design iteration guide](design/README.md) with Typst CLI 0.15.1 and bundled fonts.
 
 `src/render/strings.rs` defines the canonical string keys and is the source of truth.
-To add a locale, add a complete translation JSON file under `strings/`,
+To add a locale, add a complete translation JSON file under `assets/strings/`,
 extend `model::Language` and the string loader, and update language mapping in
 `render::model`. Run string completeness and rendering tests for the new locale.
 Visual preview PNGs live under `target/visual/`.
@@ -98,7 +98,7 @@ Visual preview PNGs live under `target/visual/`.
 Rendering tests use the reduced fixture helper in `tests/support/data.rs` to
 keep layout checks fast while retaining real scanner data. PDF pipeline and binary integration tests copy only alpine-3.12.json,
 nginx-1.21.0.json and busybox-1.37.json into temporary directories using
-`tests/support/reduced_fixtures.rs`. JSON-only tests still cover the complete inputs. Do not reduce or modify captured files in `fixtures/`.
+`tests/support/reduced_fixtures.rs`. JSON-only tests still cover the complete inputs. Do not reduce or modify captured files in `tests/fixtures/`.
 
 ## Renaming
 
@@ -165,7 +165,7 @@ Peak RSS in the table comes from `/usr/bin/time -l`; the `peak_rss_mb=` line the
 test prints is authoritative on Linux (`VmHWM`) but only a point sample on macOS.
 
 The complete 11-image, 4,368-finding English report produced by
-`cargo run --offline -- run --config examples/config-trivy-files.yaml` decreased
+`cargo run --offline -- run --config deploy/examples/config-trivy-files.yaml` decreased
 from the previous layout's 705 pages to 429 pages. Descriptions are capped at
 600 characters and rendered only for Critical/High findings; remediation uses
 30 cards followed by a compact table.
@@ -177,7 +177,7 @@ API integration tests use httpmock with fixture-serving helpers in
 pipeline configuration or binary at the mock server and supply test credentials
 through the environment. The Harbor subset helper serves three repositories
 and one artifact each to keep PDF tests small. Use the captured fixture files without editing them; see
-[fixture capture instructions](../fixtures/README.md).
+[fixture capture instructions](../tests/fixtures/README.md).
 
 Mock servers bind loopback sockets. These tests, including the closed-port
 connection test, must run where loopback binding is permitted (some sandboxes deny it).

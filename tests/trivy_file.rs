@@ -10,7 +10,7 @@ use image_scan_report::source::{
 #[test]
 fn parses_nginx_fixture() {
     let (image, findings) = parse_trivy_report(
-        &std::fs::read("fixtures/trivy/nginx-1.21.0.json").unwrap(),
+        &std::fs::read("tests/fixtures/trivy/nginx-1.21.0.json").unwrap(),
         None,
     )
     .unwrap()
@@ -77,7 +77,7 @@ fn walk_skips_unrelated_files_and_sorts() {
 #[test]
 fn fetch_fixture_directory() {
     let s = TrivyFileSource {
-        dir: "fixtures/trivy".into(),
+        dir: "tests/fixtures/trivy".into(),
     }
     .fetch()
     .unwrap();
@@ -107,7 +107,7 @@ fn fetch_empty_directory_is_error() {
 fn malformed_json_is_skipped_with_warning() {
     let d = tempfile::tempdir().unwrap();
     std::fs::copy(
-        "fixtures/trivy/nginx-1.21.0.json",
+        "tests/fixtures/trivy/nginx-1.21.0.json",
         d.path().join("valid.json"),
     )
     .unwrap();

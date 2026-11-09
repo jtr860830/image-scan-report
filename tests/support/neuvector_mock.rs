@@ -12,7 +12,7 @@ pub fn fixture(name: &str) -> Value {
     serde_json::from_slice(
         &std::fs::read(
             Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join("fixtures/neuvector-api")
+                .join("tests/fixtures/neuvector-api")
                 .join(name),
         )
         .unwrap(),
@@ -80,7 +80,7 @@ pub fn capture(rescan: bool) -> (MockServer, NeuvectorSource) {
         let path = format!("images/{id}.json");
         // The rescan index has no captured report; an empty successful report suffices.
         let body = if Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("fixtures/neuvector-api")
+            .join("tests/fixtures/neuvector-api")
             .join(&path)
             .exists()
         {

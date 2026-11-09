@@ -18,7 +18,7 @@ fn version_prints_product_name_and_semver() {
 
 fn write_config(dir: &std::path::Path) -> std::path::PathBuf {
     let path = dir.join("config.yaml");
-    let input = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/trivy");
+    let input = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/trivy");
     std::fs::write(&path, format!("source:\n  type: trivy-files\n  path: {}\nreport:\n  language: en\n  organization: Test\n  json: true\n  pdf: false\noutput:\n  - type: filesystem\n    path: {}\n", input.display(), dir.display())).unwrap();
     path
 }
@@ -155,7 +155,8 @@ fn run_default_config_produces_pdf() {
     let dir = tempfile::tempdir().unwrap();
     let config = write_config(dir.path());
     let input = reduced_fixtures::input();
-    let original_input = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/trivy");
+    let original_input =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/trivy");
     let yaml = std::fs::read_to_string(&config)
         .unwrap()
         .replace("  json: true\n  pdf: false\n", "")

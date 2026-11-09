@@ -29,7 +29,7 @@ pub fn fixture(name: &str) -> Value {
     serde_json::from_slice(
         &std::fs::read(
             Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join("fixtures/harbor")
+                .join("tests/fixtures/harbor")
                 .join(name),
         )
         .unwrap(),
@@ -172,7 +172,7 @@ fn harbor_mock_selected_inner(
                     });
                     let file = format!("multiarch/vulns-{short}.json");
                     if Path::new(env!("CARGO_MANIFEST_DIR"))
-                        .join("fixtures/harbor")
+                        .join("tests/fixtures/harbor")
                         .join(&file)
                         .exists()
                     {
