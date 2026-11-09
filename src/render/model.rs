@@ -11,6 +11,14 @@ pub const PLACEHOLDER: &str = "—";
 /// Report settings from the `report:` configuration plus the summary ranking sizes.
 #[derive(Clone, Debug)]
 pub struct RenderOptions {
+    /// Findings below this band are omitted from detail tables; `None` keeps every band.
+    /// Unrated findings are always kept.
+    pub min_severity: Option<Severity>,
+    /// Per-image chapter content; defaults to `Full`.
+    pub image_detail: crate::model::ImageDetail,
+    /// Maximum rows in the inventory and each image table; `None` means no cap.
+    pub max_table_rows: Option<usize>,
+
     /// Bands whose findings show their description in the image tables.
     pub describe_severities: Vec<Severity>,
     /// Characters kept from each sanitised description before `…` is appended.
@@ -35,6 +43,9 @@ pub struct RenderOptions {
 impl Default for RenderOptions {
     fn default() -> Self {
         Self {
+            min_severity: None,
+            image_detail: crate::model::ImageDetail::Full,
+            max_table_rows: None,
             describe_severities: vec![Severity::Critical, Severity::High],
             description_chars: 600,
             remediation_cards: 30,

@@ -27,6 +27,17 @@ pub struct Report {
     pub findings: Vec<Finding>,
 }
 
+/// How much of each image's findings the per-image chapter shows.
+#[derive(Deserialize, Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum ImageDetail {
+    /// Show counts and the full findings table.
+    #[default]
+    Full,
+    /// Show counts without the findings table.
+    Counts,
+}
+
 /// Supported languages for report text.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(rename_all = "kebab-case")]

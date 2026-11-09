@@ -231,6 +231,9 @@ fn v2_only_scores_rank_and_display() {
     v2.image = report.images[0].reference.clone();
     report.findings = vec![v2];
     let opts = image_scan_report::render::model::RenderOptions {
+        min_severity: None,
+        image_detail: image_scan_report::model::ImageDetail::Full,
+        max_table_rows: None,
         describe_severities: vec![
             image_scan_report::model::Severity::Critical,
             image_scan_report::model::Severity::High,

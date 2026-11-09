@@ -15,6 +15,9 @@ mod pdf;
 fn fixture(language: Language) -> (Report, RenderOptions, RenderData) {
     let report = data::fixture_report(3);
     let opts = RenderOptions {
+        min_severity: None,
+        image_detail: image_scan_report::model::ImageDetail::Full,
+        max_table_rows: None,
         describe_severities: vec![
             image_scan_report::model::Severity::Critical,
             image_scan_report::model::Severity::High,

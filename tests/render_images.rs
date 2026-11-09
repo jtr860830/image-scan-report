@@ -71,6 +71,9 @@ fn oversized_description_is_contained() {
     let data = model::build(
         &report,
         &RenderOptions {
+            min_severity: None,
+            image_detail: image_scan_report::model::ImageDetail::Full,
+            max_table_rows: None,
             describe_severities: vec![
                 image_scan_report::model::Severity::Critical,
                 image_scan_report::model::Severity::High,
@@ -120,6 +123,9 @@ fn optional_facts_show_placeholder() {
     let data = model::build(
         &report,
         &RenderOptions {
+            min_severity: None,
+            image_detail: image_scan_report::model::ImageDetail::Full,
+            max_table_rows: None,
             describe_severities: vec![
                 image_scan_report::model::Severity::Critical,
                 image_scan_report::model::Severity::High,

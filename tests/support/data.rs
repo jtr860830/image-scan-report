@@ -18,6 +18,9 @@ pub fn fixture_report(max_images: usize) -> Report {
         .unwrap(),
         &ReportConfig {
             language: Language::En,
+            min_severity: None,
+            image_detail: image_scan_report::model::ImageDetail::Full,
+            max_table_rows: None,
             describe_severities: vec![
                 image_scan_report::model::Severity::Critical,
                 image_scan_report::model::Severity::High,
@@ -44,6 +47,9 @@ pub fn fixture_report(max_images: usize) -> Report {
 
 pub fn default_options(language: Language) -> RenderOptions {
     RenderOptions {
+        min_severity: None,
+        image_detail: image_scan_report::model::ImageDetail::Full,
+        max_table_rows: None,
         describe_severities: vec![
             image_scan_report::model::Severity::Critical,
             image_scan_report::model::Severity::High,

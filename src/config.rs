@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
 
-use crate::model::{Language, Severity};
+use crate::model::{ImageDetail, Language, Severity};
 
 /// Parsed configuration file; [`load`] validates it before returning it.
 #[derive(Debug, Deserialize)]
@@ -85,6 +85,17 @@ pub enum SourceConfig {
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ReportConfig {
+    /// Findings below this band are omitted from detail tables; `None` keeps every band.
+    /// Unrated findings are always kept.
+    #[serde(default)]
+    pub min_severity: Option<Severity>,
+    /// Per-image chapter content; defaults to `Full`.
+    #[serde(default)]
+    pub image_detail: ImageDetail,
+    /// Maximum rows in the inventory and each image table; `None` means no cap.
+    #[serde(default)]
+    pub max_table_rows: Option<usize>,
+
     /// Bands whose findings show their description in the image tables; defaults to critical
     /// and high.
     #[serde(default = "default_describe_severities")]
@@ -358,8 +369,19 @@ impl Config {
     /// `http` or `https` URL, `ca_file` is combined with `insecure_skip_verify`, a timeout is
     /// zero, `description_chars` is below 50, `output` is empty, neither `pdf` nor `json` is
     /// enabled, an output method is not PUT or POST, a PUT output lacks `{filename}` while
-    /// `json` is enabled, or `organization` is blank.
+    /// `json` is enabled, `organization` is blank, `min_severity` is unrated, or
+    /// `max_table_rows` is zero.
     pub fn validate(&self) -> Result<(), ConfigError> {
+        if self.report.min_severity == Some(Severity::Unrated) {
+            return Err(ConfigError::Invalid(
+                "report.min_severity must be critical, high, medium or low".into(),
+            ));
+        }
+        if self.report.max_table_rows == Some(0) {
+            return Err(ConfigError::Invalid(
+                "report.max_table_rows must be at least 1".into(),
+            ));
+        }
         if let SourceConfig::Harbor {
             url,
             ca_file,

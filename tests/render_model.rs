@@ -9,6 +9,9 @@ use image_scan_report::{
 use std::collections::BTreeMap;
 fn opts() -> RenderOptions {
     RenderOptions {
+        min_severity: None,
+        image_detail: image_scan_report::model::ImageDetail::Full,
+        max_table_rows: None,
         describe_severities: vec![
             image_scan_report::model::Severity::Critical,
             image_scan_report::model::Severity::High,
@@ -34,6 +37,9 @@ fn report() -> Report {
         set,
         &ReportConfig {
             language: Language::En,
+            min_severity: None,
+            image_detail: image_scan_report::model::ImageDetail::Full,
+            max_table_rows: None,
             describe_severities: vec![
                 image_scan_report::model::Severity::Critical,
                 image_scan_report::model::Severity::High,
