@@ -1,5 +1,5 @@
-#import "../lib/fmt.typ": t, num
-#import "../lib/theme.typ": sev-color, chip, mono, section-title, hairline-table, tile, fact-box, secondary, header
+#import "../lib/fmt.typ": t, num, breakable-id
+#import "../lib/theme.typ": sev-color, chip, mono, identifier, section-title, hairline-table, tile, fact-box, secondary, header
 
 #let summary(data) = {
   pagebreak(weak: true)
@@ -47,12 +47,15 @@
   if s.findings_total > 0 {
     section-title(theme, tr("sec_top_findings"))
     hairline-table(theme,
-      columns: (2.8cm, 1.9cm, 1cm, 1fr, 3cm, 1.1cm),
+      // Same fixed widths as the inventory table: 2.9cm holds a 14-character CVE id on one
+      // line in the monospace face, 2.8cm did not.
+      columns: (2.9cm, 1.9cm, 1cm, 1fr, 3.2cm, 1.2cm),
       align: (left, left, right, left, left, right),
       table.header(..("col_id", "col_severity", "col_cvss", "col_package", "col_fixed", "col_images").map(key => header(theme, tr(key)))),
       ..s.top_findings.map(row => (
-        mono(theme, row.id), chip(theme, tr("tile_" + row.severity_key), row.severity_key),
-        row.score, row.packages, mono(theme, row.fixed_versions), num(row.image_count),
+        identifier(theme, row.id), chip(theme, tr("tile_" + row.severity_key), row.severity_key),
+        row.score, text(hyphenate: false, breakable-id(row.packages)),
+        identifier(theme, row.fixed_versions), num(row.image_count),
       )).flatten())
   }
 }

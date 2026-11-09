@@ -125,8 +125,14 @@ fn remediation_caps_images_and_formats_counts() {
         .render_pdf(&data, None, None, report.generated_at)
         .unwrap();
     let (_, text) = chapter(&bytes, &data.strings["ch_remediation"]);
-    assert!(text.contains("unique-image-11"));
-    assert!(!text.contains("unique-image-12"));
+    // Extracted text carries zero-width spaces after monospace punctuation (the PDF maps each
+    // glyph to the text it was first shaped from), so compare without them.
+    let references: String = text
+        .chars()
+        .filter(|c| !c.is_whitespace() && *c != '\u{200b}')
+        .collect();
+    assert!(references.contains("unique-image-11"), "{text}");
+    assert!(!references.contains("unique-image-12"), "{text}");
     assert!(text.contains("+29"));
     assert!(text.contains("1,234"));
     let affects = data.strings["remediation_affects"].replace("{count}", "41");

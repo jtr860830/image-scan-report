@@ -3,6 +3,14 @@
 All notable changes are documented here, following [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- Summary table: vulnerability ids with seven-digit sequence numbers and long
+  fixed-version strings ran into the neighbouring columns (#15). The table now
+  uses the same identifier wrapping and column widths as the inventory.
+
 ## [0.1.0] - 2026-11-09
 
 ### Added
@@ -36,4 +44,5 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Scope is "images stored in the registry", not workloads running in a cluster.
 - No history: comparisons between runs are out of scope.
 
+[Unreleased]: https://github.com/jtr860830/judex/compare/v0.1.0...HEAD
 [0.1.0]: https://github.com/jtr860830/judex/releases/tag/v0.1.0
