@@ -11,7 +11,7 @@ Container-image vulnerability scans (Harbor, NeuVector, Trivy) → bilingual aud
 ## Rules
 
 - Code, comments and docs in English with British spelling. Google's Rust Style Guide; `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings` and `cargo test --offline` must pass before any commit.
-- The product name is a literal only in `src/main.rs` (`tests/naming_single_source.rs` enforces it). Anything derived from it — environment variable names, default directories — is computed there and passed down as values. In `src/` unit tests use neutral literals such as `"upstream"`.
+- The product name is a literal only in `src/main.rs`; derived names and directories are computed there — see the [rename procedure](docs/release.md#rename-procedure).
 - Where a published standard exists, follow it: FHS inside the image, XDG Base Directory on a host, OCI labels, RFC token rules for HTTP headers. Do not invent paths or conventions.
 - Prefer the newest crates, base images and GitHub Actions; verify the latest version before pinning; Actions are SHA-pinned with a version comment.
 - Secrets only from environment variables, never logged (including at trace level) and never in images or arguments.
@@ -23,7 +23,8 @@ Container-image vulnerability scans (Harbor, NeuVector, Trivy) → bilingual aud
 - Commits and PRs need the user's explicit word before push, merge, tag or publish. Tag and release deletion are the user's to run.
 - Plans live in `docs/superpowers/plans/`; implementation is delegated task by task (Codex via the rescue subagent, briefs as files), the controller verifies fmt/clippy/tests and commits, a fresh reviewer checks each task, and the whole branch gets a final review before the PR.
 - The Codex sandbox has no network, cannot bind loopback (mock-server tests fail there), cannot run podman and cannot write `.git`; plan briefs around that.
-- Building the image locally needs a podman machine with at least 8 GiB (the release build OOM-kills under 2 GiB).
-- To look at a PDF page there is no pdftoppm: use `typst compile --format png` for Typst sources, or a small Swift/PDFKit script; `qlmanage` renders page 1 only.
+- See [local image builds](docs/container.md#local-build) for podman machine sizing.
+- See [report design](docs/design/README.md) for PDF-page viewing tools.
+- Fixture files under `tests/fixtures/` are captured data — never hand-edit or reduce them.
 
 Personal and lab-environment details (test VM, accounts, this machine's tooling) are in `AGENTS.local.md`, git-ignored and not loaded automatically: read it when the lab or the local machine comes up.

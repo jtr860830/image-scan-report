@@ -76,14 +76,11 @@ multipart options.
 
 ## Resources and release tags
 
-Each container requests 1 CPU and 1Gi memory, with limits of 2 CPUs and 4Gi memory.
-The sizing rule is **0.8 GB + 70 MB per 1,000 findings**, or about 45,000 findings
-under 4 GiB. See [development sizing notes](../../docs/development.md). The PVC
-requests 1Gi; monitor retained reports and remove old artifacts or increase it.
-Job history limits do not prune files on the PVC.
+See [container sizing](../../docs/container.md#resources) and the resource settings
+in [cronjob.yaml](cronjob.yaml) and [pvc.yaml](pvc.yaml). Monitor retained reports
+and remove old artifacts or increase storage. Job history limits do not prune files on the PVC.
 
-Both workloads pin `ghcr.io/jtr860830/judex:0.1.0` to the current crate release.
-Update both tags when releasing; the Rust manifest test compares them with
-`env!("CARGO_PKG_VERSION")`. The image supplies the default `run` command,
-discovers configuration at `/etc/judex/config.yaml`, and runs as UID/GID 65532. The pod also sets
-fsGroup 65532 so a supporting storage driver grants write access to `/var/lib/judex/reports`.
+See the [release procedure](../../docs/release.md#cutting-a-release) for workload
+image-tag updates and [container installation](../../docs/container.md) for runtime
+paths and UID. The pod sets fsGroup so a supporting storage driver grants write
+access to the report volume.

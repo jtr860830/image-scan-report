@@ -2,87 +2,73 @@
 
 ## Cutting a release
 
-1. Bump `[package].version` in Cargo.toml and the judex package version in
-   Cargo.lock together. Keep the Kubernetes image tags in deploy/k8s/*.yaml and
-   deploy/podman/run.sh (including its default image tag) and version examples in README/docs aligned.
-2. Review CHANGELOG.md and replace `unreleased` in the version heading with the
-   release date (YYYY-MM-DD). Run the checks in [development.md](development.md).
-3. Commit the reviewed files, then sign and push the tag:
+1. Optionally run `gh workflow run release.yml --ref main` after the workflow
+   exists on the default branch. Dispatch pushes only
+   `ghcr.io/jtr860830/judex:sha-<7>` (the seven-character commit SHA), creates no
+   GitHub release and leaves native archives as workflow artifacts. Inspect both
+   platforms in the manifest.
+2. Bump `[package].version` in Cargo.toml and the matching package entry in
+   Cargo.lock together. Update the image tags in deploy/k8s/job.yaml and
+   deploy/k8s/cronjob.yaml and the `IMAGE` default in deploy/podman/run.sh.
+3. Rename `## [Unreleased]` in CHANGELOG.md to `## [X.Y.Z] - YYYY-MM-DD`, add a
+   fresh empty `## [Unreleased]`, and update the compare links at the bottom.
+4. Run `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings` and
+   `cargo test --offline`; see [development checks](development.md).
+5. Commit the reviewed files and tag only a CI-green commit: the release
+   workflow does not wait for CI. The signed tag must equal the Cargo version,
+   prefixed with `v`; the workflow also requires the matching dated changelog
+   heading before any build or publication.
 
    ```sh
    git tag -s vX.Y.Z -m 'Release X.Y.Z'
    git push origin vX.Y.Z
    ```
+
+6. Review the assets and notes in the workflow's draft release (a pre-release
+   for RC tags), then publish it by hand. For a stable release, run:
+
+   ```sh
+   gh release edit vX.Y.Z --draft=false --latest
+   ```
+
+   For an RC, publish with `--draft=false --latest=false` instead.
+
+Only stable versions (without a `-`) update the image's `latest` tag; release
+candidates never move `latest`. Deleting a tag or release is a manual step that
+needs the owner's explicit decision.
+
+## Assets
 
 The release workflow builds natively on ubuntu-24.04 (x86_64-unknown-linux-gnu)
 and ubuntu-24.04-arm (aarch64-unknown-linux-gnu). It installs the toolchain from
 rust-toolchain.toml and runs `cargo build --release --locked`; no cross compiler
 or emulation is involved. The two `judex-vX.Y.Z-<target>.tar.gz` archives contain
-a top-level `judex-vX.Y.Z-<target>/` directory containing the binary, LICENSE, THIRD_PARTY_NOTICES.md, README.md, docs/container.md, OFL texts in licenses/fonts/, all example YAML
-configs in examples/, and the Podman wrapper run.sh for offline use.
-Per-target checksums are merged into one SHA256SUMS. The workflow creates a
-**draft** GitHub release with those three assets and the matching CHANGELOG
-section. Delete a stale draft before re-running the release job. Review the assets and notes, then publish the draft manually.
+a top-level `judex-vX.Y.Z-<target>/` directory containing the binary, LICENSE,
+THIRD_PARTY_NOTICES.md, README.md, docs/container.md, OFL texts in licenses/fonts/,
+all example YAML configs in examples/, and the Podman wrapper run.sh for offline
+use. Per-target checksums are merged into one SHA256SUMS; the release has these
+three assets and the matching CHANGELOG section.
 
-Native image builds export digests; a manifest job combines both architectures
-at `ghcr.io/jtr860830/judex:X.Y.Z`, then verifies both architectures. Only stable
-versions (without a `-`) update `:latest`; release candidates never move it.
-Images publish before the draft is reviewed. After the first GHCR push, check in the
-package settings that the package is public and linked to the repository.
+Verify downloads from their directory:
+
+```sh
+sha256sum -c SHA256SUMS --ignore-missing
+```
 
 Native binaries require glibc >= 2.39 (built on ubuntu-24.04). Use the container
-image on hosts with older glibc. SHA256SUMS is checkable with `sha256sum -c
-SHA256SUMS` from the download directory.
+image on hosts with older glibc.
 
-## Dispatch dry-run
-
-`workflow_dispatch` is available only once release.yml exists on the default
-branch. Use this order:
-
-1. Merge the PR, then run `gh workflow run release.yml --ref main`.
-   Dispatch publishes only `ghcr.io/jtr860830/judex:sha-<7>` (the seven-character
-   commit SHA), never `:latest`, and creates no GitHub release. Native archives
-   remain workflow artifacts. Inspect both platforms in the manifest.
-2. After verification, either leave the test image or delete both its SHA tag
-   and the untagged per-architecture and attestation manifests it references
-   from the GHCR package versions page.
-3. Date the CHANGELOG section, bump nothing else, and commit the change.
-4. Tag only a CI-green commit: the release workflow does not wait for CI.
-
-   ```sh
-   git tag -s vX.Y.Z -m 'Release X.Y.Z'
-   git push origin vX.Y.Z
-   ```
-
-The version job requires an exactly matching dated CHANGELOG heading before any
-build or publication. RC tags produce a draft pre-release; stable tags produce a
-draft release. Review and publish the draft manually.
+Native image builds export digests; a manifest job combines both architectures
+at `ghcr.io/jtr860830/judex:X.Y.Z`, then verifies both architectures. Images
+publish before the draft is reviewed. After the first GHCR push, check in the
+package settings that the package is public and linked to the repository.
 
 ## Air-gap bundle
 
-On a connected machine, download both tarballs and SHA256SUMS from the release
-(or just the target tarball when using `--ignore-missing`), then:
-
-```sh
-sha256sum -c SHA256SUMS --ignore-missing
-podman pull ghcr.io/jtr860830/judex:0.1.0
-podman save -o judex-image.tar ghcr.io/jtr860830/judex:0.1.0
-sha256sum judex-image.tar > IMAGE-SHA256SUMS
-```
-
-Pull on a host matching the destination architecture; this saves that platform's
-image. Repeat for the other platform if needed. Transfer the image archive,
-IMAGE-SHA256SUMS, native tarball and SHA256SUMS together. On the isolated host:
-
-```sh
-sha256sum -c IMAGE-SHA256SUMS
-sha256sum -c SHA256SUMS --ignore-missing
-podman load -i judex-image.tar
-# Or extract the matching native tarball and put its executable on PATH.
-```
-
-Use `sha256sum -c SHA256SUMS` without `--ignore-missing` when both release
-archives are present. See [container.md](container.md) for mounts and invocation.
+Download the target tarball and SHA256SUMS on a connected machine, transfer them
+together, and verify them on the isolated host as described in [Assets](#assets)
+before extracting the tarball. See [air-gap image transfer](container.md#air-gap-transfer)
+for image archives.
 
 ## Rename procedure
 
@@ -121,12 +107,8 @@ For example, update the image repository without introducing kustomization:
 sed -i 's|ghcr.io/jtr860830/judex:|ghcr.io/jtr860830/NEW_NAME:|g' deploy/k8s/*.yaml deploy/podman/run.sh
 ```
 
-Regenerate notices and run the tests after the rename:
-
-```sh
-cargo about generate --config about.toml about.hbs -o THIRD_PARTY_NOTICES.md
-cargo test
-```
+Regenerate [third-party notices](development.md#third-party-notices) and run
+`cargo test` after the rename.
 
 `tests/naming_single_source.rs::product_name_appears_only_in_known_places`
 reads the package name dynamically, rejects new literals in src/, assets/templates/ and

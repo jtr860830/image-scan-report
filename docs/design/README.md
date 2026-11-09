@@ -6,12 +6,18 @@ PNGs live in `target/visual/` at 110 ppi: `cover`, `toc`, `summary`,
 `remediation`, `inventory`, `images`, and `appendix`, suffixed `-en` or `-zh`.
 The additional table preview is `remediation-table-zh.png`.
 
-For interactive iteration, generate render data as described in the repository
-README, place it at `assets/templates/data.json`, then run from the repository root:
+Install Typst CLI **0.15.1**, matching the embedded crate version, then run from the repository root:
 
 ```sh
+judex render-data --config deploy/examples/config-trivy-files.yaml --out assets/templates/data.json
 typst watch assets/templates/report.typ --root assets/templates assets/templates/out.pdf --font-path assets/fonts --ignore-system-fonts
 ```
+
+The CLI must see the bundled fonts through `--font-path assets/fonts`;
+`--ignore-system-fonts` keeps previews consistent with embedded rendering.
+Regenerate data after changing scan inputs or configuration. Theme logos are loaded
+by the embedded renderer; for CLI previews, make the logo file available under
+the template root with the filename recorded in the data.
 
 Edit chapter templates under `assets/templates/parts/` and shared helpers in
 `assets/templates/lib/theme.typ`. Review both languages and regenerate previews and
@@ -31,8 +37,7 @@ table headers 7.5 pt muted, sub-rows 7–7.5 pt, mono metadata 8 pt, and chips 7
 Image headings are 13 pt; TOC image entries are 8.5 pt mono. Summary tile counts
 are 30 pt bold. Identifiers may wrap at punctuation without visible hyphens.
 
-By default, descriptions appear for Critical/High findings and are capped at 600
-characters; configure these with `report.describe_severities` (`[]` disables descriptions)
-and `report.description_chars` (at least 50). Remediation defaults to 30 cards, then
-a compact table for remaining groups; `report.remediation_cards` changes the cutoff
-and accepts `0` for table only.
+See the [report configuration](../../README.md#report) for content controls.
+
+To view PDF pages, use `typst compile --format png` for Typst sources or a small
+Swift/PDFKit script for PDFs. There is no pdftoppm; `qlmanage` renders page 1 only.

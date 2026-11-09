@@ -34,17 +34,8 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
-- Look up configuration for `run`, `check`, and `render-data` when `--config`
-  is omitted: `$JUDEX_CONFIG`, `$XDG_CONFIG_HOME/judex/config.yaml`, then
-  `/etc/judex/config.yaml`. Use `$HOME/.config/judex/config.yaml` when XDG is
-  unset, empty or relative; skip that fallback when HOME is unset or empty.
-  A non-empty `JUDEX_CONFIG` is authoritative and used as-is; a missing file
-  is an error. Ignore an empty value. Otherwise select the first existing
-  file; if none exists, exit 2 and list candidates, with a
-  migration hint when the pre-0.2.0 configuration still exists.
-- Select themes through `JUDEX_THEME_DIR`, after `theme.path` and before the
-  embedded default. Report the theme source (`config`, `env`, or `default`)
-  in `check` output.
+- Add configuration discovery; see README › [Configuration reference](README.md#configuration-reference).
+- Add environment theme selection and theme-source reporting; see README › [Theme](README.md#theme).
 
 ### Removed
 

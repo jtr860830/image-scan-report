@@ -14,7 +14,7 @@ cargo test
 The tests cover configuration, scanner parsing, severity classification, derived
 views, filesystem output and CLI/pipeline behavior. Real scanner inputs and their
 capture procedure are documented in [tests/fixtures/README.md](../tests/fixtures/README.md).
-Do not hand-edit captured fixtures; recapture them. Synthetic edge cases live in
+Synthetic edge cases live in
 `tests/data/`. No real failed-scan capture exists yet.
 
 ## Third-party notices
@@ -25,12 +25,6 @@ Install the pinned generator and regenerate notices from the repository root:
 cargo install cargo-about --version 0.9.3 --locked --features cli
 cargo about generate --config about.toml about.hbs -o THIRD_PARTY_NOTICES.md
 ```
-
-A dependency bump requires running
-`cargo about generate --config about.toml about.hbs -o THIRD_PARTY_NOTICES.md`
-(the regeneration command reported by CI) and committing the result. CI generates
-its comparison with the exact command
-`cargo about generate --config about.toml about.hbs -o /tmp/THIRD_PARTY_NOTICES.md`.
 
 Commit the generated `THIRD_PARTY_NOTICES.md` whenever dependencies, `about.toml`,
 or `about.hbs` change. The CI `notices` job regenerates it and fails when the
@@ -87,7 +81,7 @@ with configurable headers, TLS settings and retries.
 
 `assets/templates/report.typ` is the entry point, `assets/templates/lib/` contains shared
 formatting and layout helpers, and `assets/templates/parts/` contains report chapters.
-Use the [design iteration guide](design/README.md) with Typst CLI 0.15.1 and bundled fonts.
+Use the [design iteration guide](design/README.md) for the Typst CLI and bundled fonts.
 
 `src/render/strings.rs` defines the canonical string keys and is the source of truth.
 To add a locale, add a complete translation JSON file under `assets/strings/`,
@@ -98,12 +92,11 @@ Visual preview PNGs live under `target/visual/`.
 Rendering tests use the reduced fixture helper in `tests/support/data.rs` to
 keep layout checks fast while retaining real scanner data. PDF pipeline and binary integration tests copy only alpine-3.12.json,
 nginx-1.21.0.json and busybox-1.37.json into temporary directories using
-`tests/support/reduced_fixtures.rs`. JSON-only tests still cover the complete inputs. Do not reduce or modify captured files in `tests/fixtures/`.
+`tests/support/reduced_fixtures.rs`. JSON-only tests still cover the complete inputs.
 
 ## Renaming
 
-Follow the [release and rename procedure](release.md). The library crate stays
-named `image_scan_report` across product renames.
+Follow the [rename procedure](release.md#rename-procedure).
 
 ## Golden and performance regression checks
 
@@ -147,13 +140,12 @@ smaller; the rule of thumb below keeps the more conservative numbers.
 
 Rule of thumb from the two points: **about 0.8 GB plus 70 MB per 1,000 findings**
 (the earlier "100 MB per 1,000" was an extrapolation from one point). A 20,000-finding
-report therefore peaks near 2.2 GB; the Kubernetes examples request 1 GiB and limit
-4 GiB, which covers roughly 45,000 findings. The CI perf job keeps a generous
+report therefore peaks near 2.2 GB. See the Kubernetes
+[resource settings](../deploy/k8s/cronjob.yaml) for deployment limits. The CI perf job keeps a generous
 150 s budget because GitHub runners are several times slower than this machine.
 
 Four template experiments from the plan-2 deferred list were measured against this
-baseline with the same protocol; none met the keep rule (≥ 5 % time or memory,
-golden text and preview PNGs unchanged), so the templates are as plan 2 left them:
+baseline with the same protocol; see the [decision](decisions.md#2026-11-09--template-experiments):
 
 | Experiment | Time | Peak RSS | Output | Verdict |
 |---|---|---|---|---|
@@ -166,9 +158,7 @@ test prints is authoritative on Linux (`VmHWM`) but only a point sample on macOS
 
 The complete 11-image, 4,368-finding English report produced by
 `cargo run --offline -- run --config deploy/examples/config-trivy-files.yaml` decreased
-from the previous layout's 705 pages to 429 pages. Descriptions are capped at
-600 characters and rendered only for Critical/High findings; remediation uses
-30 cards followed by a compact table.
+from the previous layout's 705 pages to 429 pages.
 
 ## API mock tests
 
@@ -176,7 +166,7 @@ API integration tests use httpmock with fixture-serving helpers in
 `tests/support/harbor_mock.rs` and `tests/support/neuvector_mock.rs`. Point the
 pipeline configuration or binary at the mock server and supply test credentials
 through the environment. The Harbor subset helper serves three repositories
-and one artifact each to keep PDF tests small. Use the captured fixture files without editing them; see
+and one artifact each to keep PDF tests small. See
 [fixture capture instructions](../tests/fixtures/README.md).
 
 Mock servers bind loopback sockets. These tests, including the closed-port
