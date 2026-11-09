@@ -248,20 +248,30 @@ fn version_flag_prints_product_and_version() {
 }
 
 #[test]
-fn default_config_path_is_etc_report() {
+fn missing_config_lists_candidates() {
     let temp = tempfile::tempdir().unwrap();
     let output = temp.path().join("unused.json");
-    assert!(!std::path::Path::new("/etc/report/config.yaml").exists());
     for command in ["run", "check", "render-data"] {
         let mut cmd = cargo_bin_cmd!("judex");
         cmd.env_remove("JUDEX_THEME_DIR");
-        cmd.env_remove("HOME").arg(command);
+        cmd.env("HOME", temp.path())
+            .env_remove("XDG_CONFIG_HOME")
+            .env_remove("JUDEX_CONFIG")
+            .arg(command);
         if command == "render-data" {
             cmd.arg("--out").arg(&output);
         }
         let out = cmd.output().unwrap();
         assert_eq!(out.status.code(), Some(2));
-        assert!(String::from_utf8_lossy(&out.stderr).contains("/etc/report/config.yaml"));
+        assert!(
+            String::from_utf8_lossy(&out.stderr).contains(
+                temp.path()
+                    .join(".config/judex/config.yaml")
+                    .to_str()
+                    .unwrap()
+            )
+        );
+        assert!(String::from_utf8_lossy(&out.stderr).contains("/etc/judex/config.yaml"));
     }
 }
 
@@ -325,4 +335,54 @@ fn version_warns_but_prints_when_theme_dir_env_is_invalid() {
             assert!(String::from_utf8_lossy(&out.stderr).contains("JUDEX_THEME_DIR:"));
         }
     }
+}
+
+#[test]
+fn config_found_under_xdg_config_home() {
+    let temp = tempfile::tempdir().unwrap();
+    let product = temp.path().join("judex");
+    std::fs::create_dir(&product).unwrap();
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let yaml = std::fs::read_to_string(root.join("deploy/examples/config-trivy-files.yaml"))
+        .unwrap()
+        .replace(
+            "./tests/fixtures/trivy",
+            root.join("tests/fixtures/trivy").to_str().unwrap(),
+        )
+        .replace("./out", temp.path().join("out").to_str().unwrap());
+    std::fs::write(product.join("config.yaml"), yaml).unwrap();
+    let out = cargo_bin_cmd!("judex")
+        .env_remove("JUDEX_THEME_DIR")
+        .env("HOME", temp.path())
+        .env_remove("JUDEX_CONFIG")
+        .env_remove("XDG_CONFIG_HOME")
+        .env("XDG_CONFIG_HOME", temp.path())
+        .arg("check")
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+}
+
+#[test]
+fn judex_config_env_overrides_lookup() {
+    let temp = tempfile::tempdir().unwrap();
+    let config = write_config(temp.path());
+    let out = cargo_bin_cmd!("judex")
+        .env_remove("JUDEX_THEME_DIR")
+        .env("HOME", temp.path())
+        .env_remove("XDG_CONFIG_HOME")
+        .env_remove("JUDEX_CONFIG")
+        .env("JUDEX_CONFIG", config)
+        .arg("check")
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
 }

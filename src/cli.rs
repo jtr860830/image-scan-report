@@ -16,21 +16,21 @@ pub struct Cli {
 pub enum Command {
     /// Fetch scan results and generate the configured artifacts.
     Run {
-        /// Path to the YAML configuration file.
-        #[arg(long, default_value = "/etc/report/config.yaml")]
-        config: PathBuf,
+        /// Path to the YAML configuration file (defaults to the standard locations, see README).
+        #[arg(long)]
+        config: Option<PathBuf>,
     },
     /// Validate configuration and summarize scan availability.
     Check {
-        /// Path to the YAML configuration file.
-        #[arg(long, default_value = "/etc/report/config.yaml")]
-        config: PathBuf,
+        /// Path to the YAML configuration file (defaults to the standard locations, see README).
+        #[arg(long)]
+        config: Option<PathBuf>,
     },
     /// Write serialized template inputs for diagnostic inspection.
     RenderData {
-        /// Path to the YAML configuration file.
-        #[arg(long, default_value = "/etc/report/config.yaml")]
-        config: PathBuf,
+        /// Path to the YAML configuration file (defaults to the standard locations, see README).
+        #[arg(long)]
+        config: Option<PathBuf>,
         /// Destination path for serialized rendering data.
         #[arg(long)]
         out: PathBuf,

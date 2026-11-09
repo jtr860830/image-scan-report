@@ -72,19 +72,29 @@ fn dispatch(
     version_warning: Option<&str>,
 ) -> Result<(), image_scan_report::pipeline::RunError> {
     use image_scan_report::{config, pipeline};
-    match command {
-        cli::Command::RenderData { config, out } => {
-            let cfg = config::load(&config)?;
-            pipeline::write_render_data(&cfg, chrono::Utc::now(), product, &out)?;
-        }
+    let config = match &command {
+        cli::Command::Run { config }
+        | cli::Command::Check { config }
+        | cli::Command::RenderData { config, .. } => config,
         cli::Command::Version => {
             if let Some(warning) = version_warning {
                 eprintln!("warning: {warning}");
             }
             println!("{}", version.display());
+            return Ok(());
         }
-        cli::Command::Run { config } => {
-            let cfg = config::load(&config)?;
+    };
+    let config = match config {
+        Some(path) => path.clone(),
+        None => config::default_path(PRODUCT_NAME, &|k| std::env::var_os(k))?,
+    };
+    let cfg = config::load(&config)?;
+    match command {
+        cli::Command::RenderData { out, .. } => {
+            pipeline::write_render_data(&cfg, chrono::Utc::now(), product, &out)?;
+        }
+        cli::Command::Version => unreachable!("version handled above"),
+        cli::Command::Run { .. } => {
             let summary = pipeline::run(&cfg, chrono::Utc::now(), product)?;
             println!(
                 "Report: {} images, {} findings",
@@ -97,8 +107,7 @@ fn dispatch(
                 eprintln!("failed sink: {failed}");
             }
         }
-        cli::Command::Check { config } => {
-            let cfg = config::load(&config)?;
+        cli::Command::Check { .. } => {
             println!("{}", pipeline::check(&cfg, product)?);
         }
     }
