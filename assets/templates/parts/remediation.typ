@@ -11,7 +11,7 @@
   secondary(theme, tr("remediation_lede"))
   v(10pt)
   if r.groups.len() == 0 {
-    secondary(theme, tr("no_findings"))
+    secondary(theme, tr(if data.filters.min_severity_key != "" { "filters_none_at_floor" } else { "no_findings" }, band: data.filters.min_severity_label))
   }
   for (i, group) in r.groups.slice(0, calc.min(r.cards, r.groups.len())).enumerate() {
     if i > 0 { v(6pt) }
@@ -41,6 +41,9 @@
         num(group.resolves.critical), num(group.resolves.high),
         num(group.resolves.medium), num(group.resolves.low), num(group.images.len()),
       )).flatten())
+  }
+  if data.remediation_groups_omitted > 0 {
+    secondary(theme, tr("filters_groups_omitted", count: num(data.remediation_groups_omitted), band: data.filters.min_severity_label))
   }
   section-title(theme, tr("remediation_unfixable_title"))
   secondary(theme, tr("remediation_unfixable_lede", count: num(r.unfixable_total)))

@@ -214,3 +214,40 @@ fn empty_unfixable_statuses_show_dash_without_headers() {
     assert!(tail.contains('—'), "{tail}");
     assert!(!tail.contains(&data.strings["col_status"]), "{tail}");
 }
+
+#[test]
+fn remediation_explains_hidden_groups_in_both_languages() {
+    for lang in [Language::En, Language::ZhTw] {
+        let (mut report, mut opts, _) = fixture(lang.clone());
+        for finding in &mut report.findings {
+            finding.severity = image_scan_report::model::Severity::Medium;
+        }
+        opts.min_severity = Some(image_scan_report::model::Severity::High);
+        let data = image_scan_report::render::model::build(
+            &report,
+            &opts,
+            image_scan_report::render::strings::load(lang),
+            image_scan_report::render::theme::default_theme().to_render_value(),
+        );
+        assert!(data.remediation_groups_omitted > 0);
+        let bytes = Renderer::new()
+            .render_pdf(&data, None, None, report.generated_at)
+            .unwrap();
+        let (_, text) = chapter(&bytes, &data.strings["remediation_lede"]);
+        let text = text.split(&data.strings["ch_inventory"]).next().unwrap();
+        let compact = |s: &str| {
+            s.chars()
+                .filter(|c| !c.is_whitespace() && *c != '\u{200b}')
+                .collect::<String>()
+        };
+        for expected in [
+            data.strings["filters_groups_omitted"]
+                .replace("{count}", &data.remediation_groups_omitted.to_string())
+                .replace("{band}", "High"),
+            data.strings["filters_none_at_floor"].replace("{band}", "High"),
+        ] {
+            assert!(compact(text).contains(&compact(&expected)), "{text}");
+        }
+        assert!(!compact(text).contains(&compact(&data.strings["no_findings"])));
+    }
+}

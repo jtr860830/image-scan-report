@@ -100,6 +100,8 @@ pub struct RenderData {
     pub filters: Filters,
     /// Inventory rows omitted by the row cap.
     pub inventory_omitted: usize,
+    /// Upgrade groups omitted because all resolved findings are below the floor.
+    pub remediation_groups_omitted: usize,
     /// Cover and generation facts.
     pub meta: Meta,
     /// Scanner provenance as display strings.
@@ -436,22 +438,20 @@ pub fn build(
     let summaries = views::image_summaries(&report.images, &report.findings);
     let full_inventory = inventory_rows(&report.findings);
     let summary = summary(report, opts, &summaries, &full_inventory);
-    let kept: std::borrow::Cow<'_, [Finding]> = match opts.min_severity {
-        None => std::borrow::Cow::Borrowed(&report.findings),
-        Some(floor) => std::borrow::Cow::Owned(
-            report
-                .findings
-                .iter()
-                .filter(|f| f.severity == Severity::Unrated || f.severity >= floor)
-                .cloned()
-                .collect(),
-        ),
+    let visible = |severity: Severity| {
+        opts.min_severity
+            .is_none_or(|floor| severity == Severity::Unrated || severity >= floor)
     };
-    let mut inventory = if kept.len() == report.findings.len() {
-        full_inventory
-    } else {
-        inventory_rows(&kept)
-    };
+    let mut inventory = full_inventory;
+    inventory.retain(|row| {
+        visible(match row.severity_key.as_str() {
+            "critical" => Severity::Critical,
+            "high" => Severity::High,
+            "medium" => Severity::Medium,
+            "low" => Severity::Low,
+            _ => Severity::Unrated,
+        })
+    });
     let inventory_omitted = inventory
         .len()
         .saturating_sub(opts.max_table_rows.unwrap_or(inventory.len()));
@@ -459,7 +459,7 @@ pub fn build(
         inventory.truncate(cap);
     }
     let mut grouped: HashMap<&str, Vec<&Finding>> = HashMap::new();
-    for finding in kept.iter() {
+    for finding in &report.findings {
         grouped
             .entry(finding.image.as_str())
             .or_default()
@@ -472,6 +472,21 @@ pub fn build(
             .or_insert(image);
     }
     let images = image_details(&summaries, &images_by_reference, &grouped, opts);
+    let mut remediation = remediation(&report.findings, &grouped, opts);
+    let full_groups = remediation.groups.len();
+    remediation.groups.retain(|group| {
+        let c = &group.resolves;
+        [
+            (Severity::Critical, c.critical),
+            (Severity::High, c.high),
+            (Severity::Medium, c.medium),
+            (Severity::Low, c.low),
+            (Severity::Unrated, c.unrated),
+        ]
+        .into_iter()
+        .any(|(severity, count)| count > 0 && visible(severity))
+    });
+    let remediation_groups_omitted = full_groups - remediation.groups.len();
     RenderData {
         filters: Filters {
             min_severity_key: opts
@@ -482,7 +497,11 @@ pub fn build(
                 .min_severity
                 .map(|s| s.label().into())
                 .unwrap_or_default(),
-            hidden_findings: report.findings.len() - kept.len(),
+            hidden_findings: report
+                .findings
+                .iter()
+                .filter(|f| !visible(f.severity))
+                .count(),
             image_detail: if opts.image_detail == crate::model::ImageDetail::Counts {
                 "counts"
             } else {
@@ -496,6 +515,7 @@ pub fn build(
                 || opts.max_table_rows.is_some(),
         },
         inventory_omitted,
+        remediation_groups_omitted,
         meta: Meta {
             product_name: sanitize(&opts.product_name),
             product_version: sanitize(&opts.product_version),
@@ -521,7 +541,7 @@ pub fn build(
         },
         scope: sanitize(&report.scope),
         summary,
-        remediation: remediation(&kept, &grouped, opts),
+        remediation,
         inventory,
         images,
         appendix: appendix(report, opts),
@@ -707,20 +727,26 @@ fn image_details(
                 .get(s.reference.as_str())
                 .cloned()
                 .unwrap_or_default();
-            findings.sort_by(|a, b| {
-                b.severity
-                    .cmp(&a.severity)
-                    .then_with(
-                        || match (a.score_v3.or(a.score_v2), b.score_v3.or(b.score_v2)) {
-                            (Some(a), Some(b)) => b.total_cmp(&a),
-                            (Some(_), None) => std::cmp::Ordering::Less,
-                            (None, Some(_)) => std::cmp::Ordering::Greater,
-                            _ => std::cmp::Ordering::Equal,
-                        },
-                    )
-                    .then_with(|| a.id.cmp(&b.id))
-            });
             let show_findings = opts.image_detail == crate::model::ImageDetail::Full;
+            if show_findings {
+                findings.retain(|f| {
+                    opts.min_severity
+                        .is_none_or(|floor| f.severity == Severity::Unrated || f.severity >= floor)
+                });
+                findings.sort_by(|a, b| {
+                    b.severity
+                        .cmp(&a.severity)
+                        .then_with(|| {
+                            match (a.score_v3.or(a.score_v2), b.score_v3.or(b.score_v2)) {
+                                (Some(a), Some(b)) => b.total_cmp(&a),
+                                (Some(_), None) => std::cmp::Ordering::Less,
+                                (None, Some(_)) => std::cmp::Ordering::Greater,
+                                _ => std::cmp::Ordering::Equal,
+                            }
+                        })
+                        .then_with(|| a.id.cmp(&b.id))
+                });
+            }
             let findings_omitted = if show_findings {
                 let omitted = findings
                     .len()

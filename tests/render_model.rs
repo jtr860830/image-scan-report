@@ -434,7 +434,7 @@ fn min_severity_hides_lower_bands_but_keeps_unrated_and_summary_counts() {
     assert!(d.filters.active && d.filters.json_artifact);
     assert_eq!(d.filters.min_severity_key, "high");
     assert_eq!(d.filters.min_severity_label, "High");
-    assert_eq!(d.remediation.unfixable_total, 6);
+    assert_eq!(d.remediation.unfixable_total, 15);
     assert_eq!(d.appendix, baseline.appendix);
     assert_eq!(d.images.iter().map(|i| i.counts.total()).sum::<usize>(), 15);
 }
@@ -508,4 +508,67 @@ fn no_filters_means_inactive_and_zero_omissions() {
             .iter()
             .all(|i| i.show_findings && i.findings_omitted == 0)
     );
+}
+
+#[test]
+fn floor_keeps_complete_inventory_images_and_remediation_counts() {
+    let mut r = band_report(&[Severity::High, Severity::Medium, Severity::Low]);
+    r.findings[1].id = r.findings[0].id.clone();
+    r.findings[1].image = r.images[1].reference.clone();
+    for f in &mut r.findings {
+        f.fixed_version = Some("2".into());
+    }
+    r.findings[2].package = "hidden".into();
+    let baseline = render(&r);
+    let mut options = opts();
+    options.min_severity = Some(Severity::High);
+    let d = build(&r, &options, BTreeMap::new(), serde_json::Value::Null);
+    assert_eq!(d.inventory[0].images, baseline.inventory[0].images);
+    assert_eq!(d.inventory[0].image_count, 2);
+    assert_eq!(d.remediation.groups.len(), 1);
+    assert_eq!(d.remediation.groups[0], baseline.remediation.groups[0]);
+    assert_eq!(d.remediation_groups_omitted, 1);
+}
+
+#[test]
+fn floor_and_cap_retain_complete_sorted_identifier_sequence() {
+    let mut r = band_report(&[
+        Severity::Critical,
+        Severity::Critical,
+        Severity::Critical,
+        Severity::Critical,
+        Severity::Medium,
+    ]);
+    for (f, (id, score)) in
+        r.findings
+            .iter_mut()
+            .zip([("Z", 9.1), ("B", 9.8), ("A", 9.8), ("C", 9.5), ("M", 5.0)])
+    {
+        f.id = id.into();
+        f.score_v3 = Some(score);
+    }
+    for floor in [None, Some(Severity::High)] {
+        let mut options = opts();
+        options.min_severity = floor;
+        options.max_table_rows = Some(3);
+        let d = build(&r, &options, BTreeMap::new(), serde_json::Value::Null);
+        assert_eq!(
+            d.inventory
+                .iter()
+                .map(|f| f.id.as_str())
+                .collect::<Vec<_>>(),
+            ["A", "B", "C"]
+        );
+        let image = d.images.iter().find(|i| i.counts.total() == 5).unwrap();
+        assert_eq!(
+            image
+                .findings
+                .iter()
+                .map(|f| f.id.as_str())
+                .collect::<Vec<_>>(),
+            ["A", "B", "C"]
+        );
+        assert_eq!(d.inventory_omitted, if floor.is_some() { 1 } else { 2 });
+        assert_eq!(image.findings_omitted, d.inventory_omitted);
+    }
 }

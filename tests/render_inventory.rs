@@ -167,3 +167,28 @@ fn inventory_explains_capped_rows_with_optional_json() {
         assert!(text.contains(&compact_inventory(&lede)), "{lede}");
     }
 }
+
+#[test]
+fn filtered_inventory_uses_floor_lede_in_both_languages() {
+    for lang in [Language::En, Language::ZhTw] {
+        let (report, mut opts, _) = fixture(lang.clone());
+        opts.min_severity = Some(image_scan_report::model::Severity::High);
+        let data = image_scan_report::render::model::build(
+            &report,
+            &opts,
+            image_scan_report::render::strings::load(lang),
+            image_scan_report::render::theme::default_theme().to_render_value(),
+        );
+        let bytes = Renderer::new()
+            .render_pdf(&data, None, None, report.generated_at)
+            .unwrap();
+        let (_, text) = chapter(&bytes, &data.strings["ch_inventory"]);
+        let expected = data.strings["inventory_lede_floor"]
+            .replace("{count}", &data.inventory.len().to_string())
+            .replace("{band}", "High");
+        assert!(
+            compact_inventory(&text).contains(&compact_inventory(&expected)),
+            "{text}"
+        );
+    }
+}

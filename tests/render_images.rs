@@ -262,7 +262,7 @@ fn images_explain_caps_and_counts_only() {
             let (_, text) = chapter(&render(&data), &data.strings["ch_images"]);
             let text = text.split(&data.strings["ch_appendix"]).next().unwrap();
             if counts {
-                assert_eq!(compact(text).matches(&compact("Findings are listed per vulnerability in the inventory; this report shows counts per image.")).count(), 1);
+                assert_eq!(compact(text).matches(&compact("Findings are listed per vulnerability in the inventory, subject to the same filters; this chapter shows counts per image.")).count(), 1);
                 assert!(!compact(text).contains(&compact("Rows not shown:")));
                 assert!(!compact(text).contains(&compact(&data.strings["image_findings_title"])));
             } else {
@@ -283,5 +283,38 @@ fn images_explain_caps_and_counts_only() {
                 assert!(compact(text).contains(&compact(&expected)), "{expected}");
             }
         }
+    }
+}
+
+#[test]
+fn below_floor_images_explain_empty_tables_in_both_languages() {
+    for language in [Language::En, Language::ZhTw] {
+        let mut report = data::fixture_report(3);
+        for finding in &mut report.findings {
+            finding.severity = image_scan_report::model::Severity::Medium;
+        }
+        let mut opts = data::default_options(language.clone());
+        opts.min_severity = Some(image_scan_report::model::Severity::High);
+        let data = model::build(
+            &report,
+            &opts,
+            strings::load(language.clone()),
+            theme::default_theme().to_render_value(),
+        );
+        let (_, text) = chapter(&render(&data), &data.strings["ch_images"]);
+        let text = compact(text.split(&data.strings["ch_appendix"]).next().unwrap());
+        let (empty, note) = match language {
+            Language::En => (
+                "No findings at or above High.",
+                "Tables list findings at or above High (Unrated is always listed); counts include every finding.",
+            ),
+            Language::ZhTw => (
+                "沒有 High 及以上等級的弱點。",
+                "表格列出 High 及以上等級的弱點（未評級弱點一律列出）；統計數量包含所有弱點。",
+            ),
+        };
+        assert!(text.contains(&compact(empty)), "{text}");
+        assert!(text.contains(&compact(note)), "{text}");
+        assert!(!text.contains(&compact(&data.strings["no_findings"])));
     }
 }

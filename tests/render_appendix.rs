@@ -152,13 +152,13 @@ fn traditional_chinese_explains_floor_cap_and_counts() {
         assert!(text.contains(&compact(&omitted)), "{omitted}");
         assert_eq!(
             text.matches(&compact(
-                "弱點依識別碼列於清單中；本報告於映像檔章節僅顯示各映像檔的統計數量。"
+                "弱點依識別碼列於弱點盤點中，並套用相同篩選條件；本章僅顯示各映像檔的統計數量。"
             ))
             .count(),
             1
         );
         assert!(text.contains(&compact(
-            "已套用篩選條件：最低嚴重程度為 Medium；映像檔章節僅顯示統計數量；每個表格最多 1 列。"
+            "已套用篩選條件：最低嚴重等級為 Medium；映像檔章節僅顯示統計數量；每個表格最多 1 筆。"
         )));
     }
 }

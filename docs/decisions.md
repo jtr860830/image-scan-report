@@ -13,6 +13,8 @@ design; this file holds what changed or was settled afterwards.
 - Never filter Unrated findings: missing severity evidence is not low risk.
 - Use `min_severity`, `image_detail` and `max_table_rows` to reduce detail while
   stating omissions, so readers can distinguish presentation from coverage.
+- Show the summary filter note only when a severity floor hides findings; cap-only
+  tables and the counts-only image chapter state their own limits instead.
 - Do not add CSV: the complete JSON artifact already carries every row.
 - Keep chunked rendering shelved: per-scope reports and content controls address
   the artifact’s size first ([#11](https://github.com/jtr860830/judex/issues/11)).

@@ -7,6 +7,9 @@
   let tr(key, ..args) = t(data.strings, key, ..args)
   set text(number-width: "tabular")
   heading(level: 1, tr("ch_images"))
+  if data.filters.min_severity_key != "" {
+    secondary(theme, tr("filters_image_floor", band: tr("tile_" + data.filters.min_severity_key)))
+  }
   if data.filters.image_detail == "counts" {
     secondary(theme, tr("filters_image_counts_only"))
   }
@@ -42,7 +45,7 @@
     } else if image.show_findings {
       section-title(theme, tr("image_findings_title"))
       if image.findings.len() == 0 {
-        secondary(theme, tr("no_findings"))
+        secondary(theme, tr(if data.filters.min_severity_key != "" { "filters_none_at_floor" } else { "no_findings" }, band: data.filters.min_severity_label))
       } else {
         hairline-table(theme,
           columns: (2.9cm, 1.9cm, 1cm, 1fr, 2.6cm, 2.6cm),

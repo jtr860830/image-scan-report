@@ -440,6 +440,25 @@ pub fn check(cfg: &Config, runtime: &Runtime) -> Result<String, RunError> {
 mod product_tests {
     use super::ProductInfo;
     #[test]
+    fn render_options_propagates_json_artifact() {
+        let mut cfg =
+            crate::config::load(std::path::Path::new("tests/data/config/trivy-files.yaml"))
+                .expect("valid fixture configuration");
+        let product = ProductInfo {
+            name: "upstream".into(),
+            upstream: "upstream".into(),
+            version: "0.2.0".into(),
+        };
+        for enabled in [false, true] {
+            cfg.report.json = enabled;
+            assert_eq!(
+                super::render_options(&cfg.report, &product).json_artifact,
+                enabled
+            );
+        }
+    }
+
+    #[test]
     fn user_agent_uses_only_http_token_characters() {
         for (name, token) in [("A/B (C)", "A-B--C-"), ("中文", "--")] {
             let product = ProductInfo {

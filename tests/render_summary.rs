@@ -192,12 +192,12 @@ fn summary_explains_hidden_findings_in_both_languages() {
         assert!(data.filters.hidden_findings > 0);
         let expected = if lang == Language::En {
             format!(
-                "Inventory, remediation and image tables show High and above; {} findings below that level are counted above but not listed.",
+                "Inventory, remediation and image tables show High and above (Unrated is always listed); {} findings below that level are counted above but not listed.",
                 data.filters.hidden_findings
             )
         } else {
             format!(
-                "清單、修補建議及映像檔表格僅列出 High 及以上等級；{} 個較低等級弱點僅計入上方統計，未列於表格中。",
+                "弱點盤點、修補建議及映像檔表格列出 High 及以上等級的弱點（未評級弱點一律列出）；{} 筆較低等級弱點僅計入上方統計，未列於表格中。",
                 data.filters.hidden_findings
             )
         };
