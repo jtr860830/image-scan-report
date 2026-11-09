@@ -44,8 +44,9 @@ and ubuntu-24.04-arm (aarch64-unknown-linux-gnu). It installs the toolchain from
 rust-toolchain.toml and runs `cargo build --release --locked`; no cross compiler
 or emulation is involved. The two `judex-vX.Y.Z-<target>.tar.gz` archives contain
 a top-level `judex-vX.Y.Z-<target>/` directory containing the binary, LICENSE,
-THIRD_PARTY_NOTICES.md, README.md, docs/container.md, the manuals docs/deploying.md
-and docs/reading-the-report.md, OFL texts in licenses/fonts/,
+THIRD_PARTY_NOTICES.md, README.md, docs/container.md, the manuals
+docs/manual/deploying.md and docs/manual/reading-the-report.md, OFL texts in
+licenses/fonts/,
 all example YAML configs in examples/, and the Podman wrapper run.sh for offline
 use. Per-target checksums are merged into one SHA256SUMS; the release has these
 three assets and the matching CHANGELOG section.

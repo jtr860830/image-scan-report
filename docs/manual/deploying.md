@@ -1,27 +1,59 @@
-# Deploy judex
+# Deploying judex
 
 Use judex to turn existing Harbor, NeuVector or Trivy vulnerability results into
 an audit PDF. It never scans images. Each invocation runs once, writes the
-configured PDF and optional normalised JSON to directories or HTTP endpoints,
-and exits. Schedule invocations externally.
+configured PDF and optional normalised JSON artifact (a structured data file in a
+common format) to directories or HTTP endpoints, and exits. Schedule invocations
+externally.
 
 Read [the report guide](reading-the-report.md) before distributing a report.
-The links below refer to the repository checkout; native release bundles also
-include both manual files beside `docs/container.md`.
+Native release bundles preserve `docs/manual/` and include `docs/container.md`;
+`examples/` is their copy of the repository's `deploy/examples/`. Links into
+`deploy/`, `tests/fixtures/` and `docs/samples/` refer to the repository.
 
-## Enable scanning first
+## Installation
+
+Follow [Install](../../README.md#install) for a native binary (glibc ≥ 2.39) or
+the image `ghcr.io/jtr860830/judex:<ver>`. Replace `<ver>` with a release tag.
+
+## Local check
+
+Check sample file inputs before configuring scanner credentials. From a repository
+checkout, with the binary on PATH, run:
+
+```sh
+judex check --config deploy/examples/config-trivy-files.yaml
+```
+
+In an extracted native bundle, use:
+
+```sh
+./judex check --config examples/config-trivy-files.yaml
+```
+
+The archive includes the configuration, not the sample JSON inputs. Before the
+bundle command, copy the Trivy sample files from a checkout's `tests/fixtures/trivy/`
+and set `source.path` in the example configuration to that local directory.
+See [fixture provenance](../../tests/fixtures/README.md) for the sample inputs.
+`check` fetches and parses data without producing a PDF or JSON artifact.
+
+## Prerequisites
 
 In Harbor, open the project's Configuration and enable “Automatically scan
 images on push”. Also configure a scheduled scan-all under Administration →
 Interrogation Services → Vulnerability. Push scanning covers new images;
 scan-all refreshes existing images against updated vulnerability databases.
-Create a read-only robot account or user for judex; a project Guest is sufficient.
-Use credentials that can see every project you intend to report on.
+A read-only project member (Guest) is verified; a robot account is not. A robot
+needs list/read access to repositories, artifacts and scan reports; all-projects
+mode requires a system-level robot. Use credentials that can see every project
+you intend to report on.
 
 In NeuVector, open Assets → Registries, add the registry with Auto Scan and a
 repository filter covering the intended images, and create a reader account for
 judex. The API source reads that registry configuration's results, rather than
-starting scans. Console wording can vary with the scanner version.
+starting scans. Check the registry's rescan options for periodic refreshes rather
+than looking for a Harbor-style scan-all equivalent. Console wording and rescan
+options are version-dependent and have not been verified from this repository.
 
 For Trivy files, save `trivy image --format json` output for each image into an
 input directory. For the NeuVector standalone scanner, collect its
@@ -36,18 +68,19 @@ successful scans older than `report.stale_after_days` (30 by default), including
 successful scans with no timestamp. A newly generated PDF can contain old scans.
 
 File sources use an embedded scan timestamp when available and otherwise the JSON
-file's modification time. Preserve
-modification times when transferring files; copying them can make old results
-appear recent.
+file's modification time. Preserve modification times when transferring files;
+copying them can make old results appear recent.
 
-## Configure Harbor
+## Configuration
 
 Copy [the Harbor example](../../deploy/examples/config.yaml) into your own
 configuration file. Follow the [configuration reference](../../README.md#configuration-reference)
 for accepted fields and defaults; do not use the example's placeholder endpoints
 or paths unchanged. Relative paths resolve from the working directory.
 
-Set `source.url` to the Harbor API's final HTTP(S) endpoint. Set `source.project`
+Set `source.url` to Harbor's base URL as used in the browser, including any path
+prefix but without `/api/v2.0`; judex appends the API path. Use the final address
+because redirects are not followed. Set `source.project`
 to one project for a bounded report; omit it to include every project accessible
 to the account. Use separate configurations per project when a combined report
 is too large or readers have different responsibilities.
@@ -66,14 +99,16 @@ Set `report.language` to `en` or `zh-TW`, and `report.organization` to the custo
 organisation printed on the cover. Set `report.logo` to a readable local PNG or
 SVG, or remove it when no logo is needed. Choose `stale_after_days` to match the
 scanner's refresh policy, rather than using the PDF generation date as evidence
-of freshness.
+of freshness. `report.logo` and `source.ca_file` must refer to files available
+inside the runtime environment; missing mounts make `check` fail with exit 2.
 
 Keep PDF enabled and set `report.json: true` when auditors need complete data
-for reconciliation. For large reports, first split the scope, then consider:
+for reconciliation. For large reports, first split the scope, then consider a
+severity floor (the minimum severity band retained in detail) or other detail limits:
 
 | Setting | Use it when |
 | --- | --- |
-| `min_severity` | Readers need higher severity detail; Unrated remains visible and summary counts stay complete. |
+| `min_severity` | Readers need detail only for the higher bands; Unrated remains visible and summary counts stay complete. |
 | `image_detail: counts` | Repeated per-image findings make the PDF too long; retain metadata and full counts. |
 | `max_table_rows` | Limit the inventory and each image table after sorting, most severe first. |
 
@@ -93,7 +128,7 @@ can reference `${UPLOAD_TOKEN}` from the environment. Set the output's own
 does not test an upload. See [HTTP output](../../README.md#output) for the wire
 formats, timeouts, TLS and retry behaviour.
 
-### Adapt the source
+### Other sources
 
 For the [NeuVector example](../../deploy/examples/config-neuvector.yaml), use
 `type: neuvector`, a controller URL, and `registry` instead of `project`.
@@ -104,31 +139,24 @@ work the same way.
 For [Trivy files](../../deploy/examples/config-trivy-files.yaml), use
 `type: trivy-files` and `path` pointing to the input directory. For standalone
 NeuVector results, use `type: neuvector-files` with the same directory approach.
-API credentials and TLS settings are unnecessary for file sources. Mount the
-input read-only in a container and use its container path in the configuration.
+Remove API credentials and TLS settings: file sources reject API keys (exit 2).
+Keep only `type` and `path` in `source`. Mount the input read-only in a container
+and use its container path in the configuration.
 
-## Locate the configuration
+## Configuration location
 
-Pass `--config` explicitly for repeatable scheduled runs. Otherwise a non-empty
-`JUDEX_CONFIG` is authoritative: a missing file is an error, not a reason to
-search elsewhere. With no override, judex tries the XDG configuration path and
-then `/etc/judex/config.yaml`. A valid `XDG_CONFIG_HOME` gives
-`$XDG_CONFIG_HOME/judex/config.yaml`; otherwise the fallback is
-`$HOME/.config/judex/config.yaml` when HOME is available. See the
-[exact lookup rule](../../README.md#configuration-reference), including empty
-and relative environment values.
+Use `--config` for scheduled runs. See the README's
+[lookup rule](../../README.md#configuration-reference) for discovery when it is
+omitted. The container sets `HOME=/home/nonroot`; its normally absent XDG file
+means the image finds `/etc/judex/config.yaml` when mounted there and no override
+is set.
 
-Use these container paths and configure the matching mounts:
+## Mounts
 
-| Path | Purpose |
-| --- | --- |
-| `/etc/judex/config.yaml` | Read-only YAML configuration |
-| `/etc/judex/ca.pem` | Optional read-only CA bundle |
-| `/etc/judex/logo.png` | Optional read-only cover logo |
-| `/var/lib/judex/scans` | Read-only file-source inputs |
-| `/var/lib/judex/reports` | Writable report directory |
+Follow the container guide's [mounts](../container.md#mounts) for configuration,
+CA, logo, file inputs and writable report storage.
 
-## Check, then run
+## Execution
 
 ```sh
 judex check --config ./config.yaml
@@ -136,7 +164,7 @@ judex run --config ./config.yaml
 ```
 
 `check` loads configuration, validates the theme and output settings, and fetches
-and parses the source without rendering or storing artifacts. Its line has this
+and parses the source as in the local check above. Its line has this
 shape (counts and source description vary):
 
 ```text
@@ -147,30 +175,34 @@ Inspect **failed** and **not scanned** first after deployment. A zero findings
 count does not establish coverage when images have no successful scan. Check the
 scanner's status and permissions before treating the report as complete.
 `theme` is `config`, `env` or `default`, identifying how the theme was selected.
-`run` prints `Report: N images, N findings`, followed by stored destinations and
-filenames. Errors and warnings go to stderr.
+See the README for [run output](../../README.md#quick-start) and
+[exit-code meanings](../../README.md#exit-codes). Use the actions below to
+respond to each result.
 
 | Exit code | Operator action |
 | --- | --- |
-| `0` | Inspect coverage and sink warnings; partial artifact storage success also returns zero. |
+| `0` | Inspect coverage and sink warnings; confirm every expected artifact arrived. |
 | `2` | Correct configuration, CLI arguments, missing secret variables, CA files or theme setup. |
 | `3` | Restore source connectivity/permissions or provide usable input reports. |
-| `4` | Investigate rendering or JSON serialisation failure. |
-| `5` | Restore output access; every artifact write failed. |
+| `4` | Inspect rendering diagnostics and the input data. |
+| `5` | Check destination access, available storage and upload logs. |
 
 These are pipeline outcomes, not severity thresholds. Failed or unscanned images
 can still appear in a successfully produced report. API authentication or
 authorisation failures abort the source; other per-artifact failures can become
 Failed rows. Use `RUST_LOG=debug` for diagnostics.
 
-## Schedule and retrieve reports
+## Scheduling and report retrieval
 
 Follow [Kubernetes deployment](../../deploy/k8s/README.md) for the ConfigMap,
 Secret, CA, PVC, CronJob and one-off Job. Schedule judex after the scanner's
-refresh window: for example, Harbor scan-all daily at 02:00 and judex Monday at
-06:00. Adjust the supplied CronJob, which runs Monday at 02:00 in the controller's
-timezone. Leave enough time for scans to finish and confirm completion in the
-scanner; scheduling alone does not guarantee fresh results.
+refresh window: for example, Harbor scan-all daily at 02:00 UTC using a custom
+cron schedule, then judex Monday at 06:00 UTC. Harbor's Daily preset runs at
+midnight UTC, so it does not express that example. Set the CronJob's
+`spec.timeZone` explicitly to align with Harbor's UTC; without it, the supplied
+CronJob uses the controller's timezone. Leave enough time for scans to finish
+and confirm completion in the scanner; scheduling alone does not guarantee fresh
+results.
 
 After a report Job completes, mount `report-output` in a temporary helper pod
 and copy `/var/lib/judex/reports` with `kubectl cp`. Use the exact helper commands
@@ -186,7 +218,7 @@ For Podman, follow [container installation](../container.md) for the wrapper,
 UID 65532 write permissions, read-only input mounts, secret forwarding and
 air-gap transfer. Configure paths as seen inside the container.
 
-## Size the run
+## Resources
 
 Use [resource guidance](../container.md#resources) for measured memory estimates
 and allow disk space for both formats. Split per project before increasing
@@ -194,7 +226,7 @@ limits indefinitely. Use the large-report settings above when readers need a
 shorter PDF; they reduce displayed detail while preserving full summary counts
 and JSON. Monitor memory and retained files for the actual scope.
 
-## Use an edition image
+## Edition images
 
 An edition built with `FROM` the upstream image, a theme directory and
 `JUDEX_THEME_DIR` behaves identically. With no `theme.path` override, `check`
@@ -202,14 +234,14 @@ shows `theme: env` and the edition's product display, such as
 `Arishem <ver> (judex)`. Follow [Building an edition image](../container.md#building-an-edition-image)
 and the [theme reference](../../README.md#theme).
 
-## Resolve common failures
+## Troubleshooting
 
 | Symptom | Check |
 | --- | --- |
-| TLS or CA error | Check the final URL and readable PEM mount; set the CA on the source or output that failed. |
+| TLS or CA error | Exit 2: correct an unreadable or invalid CA file/mount. Exit 3 from the source: check the URL and trust roots when the TLS handshake is rejected. For uploads, inspect sink diagnostics. |
 | Wrong credentials / HTTP 401 or 403 | Check `password_env`, the runtime secret and read permissions for the intended scope. |
-| “No images found” or no usable input | Check the selected project/registry, account visibility, directory mount and parser warnings. |
+| API: `no images found in <scope>`; files: `no scan results found in <dir>` | Check the selected project/registry, account visibility, directory mount and parser warnings. |
 | Configuration not found | Read the listed candidates; correct `--config` or the authoritative `JUDEX_CONFIG`. |
-| Container OOM-killed | Increase available memory or split scope; consult resource guidance and reduce PDF detail. |
+| Kubernetes `OOMKilled` / exit 137 | Increase available memory or split scope; consult resource guidance and reduce PDF detail. |
 | Theme error | Check the selected directory and `theme.toml`; selection is `theme.path`, then `JUDEX_THEME_DIR`, then default. |
 | Empty-looking report / nothing scanned | Inspect failed and not-scanned counts, scanner scheduling and the appendix; generation does not scan images. |
