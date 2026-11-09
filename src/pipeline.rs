@@ -135,6 +135,19 @@ impl RunError {
     }
 }
 
+/// What the binary knows and the library must not spell: upstream identity and environment.
+#[derive(Clone, Debug)]
+pub struct Runtime {
+    /// Upstream product name, `PRODUCT_NAME` in `main.rs`.
+    pub upstream: String,
+    /// Crate version.
+    pub version: String,
+    /// Value of `<NAME>_THEME_DIR`, already read from the environment; `None` when unset.
+    pub theme_dir: Option<PathBuf>,
+    /// Name of that variable, for messages only.
+    pub theme_dir_env: String,
+}
+
 /// Name and version of the application producing the report.
 #[derive(Clone, Debug)]
 pub struct ProductInfo {
@@ -166,6 +179,7 @@ fn render_options(
 
 struct Inputs {
     theme: crate::render::theme::Theme,
+    theme_source: crate::render::theme::ThemeSource,
     customer_logo: Option<crate::render::theme::Logo>,
     source_description: String,
     report: Report,
@@ -174,8 +188,10 @@ struct Inputs {
 
 /// Configuration has already been validated by the loader. Preserve the
 /// theme -> sinks -> source error order for every pipeline entry point.
-fn load_inputs(cfg: &Config, now: DateTime<Utc>) -> Result<Inputs, RunError> {
-    let theme = crate::render::theme::load(cfg.theme.path.as_deref()).map_err(ConfigError::from)?;
+fn load_inputs(cfg: &Config, runtime: &Runtime, now: DateTime<Utc>) -> Result<Inputs, RunError> {
+    let (theme, theme_source) =
+        crate::render::theme::resolve(cfg.theme.path.as_deref(), runtime.theme_dir.as_deref())
+            .map_err(ConfigError::from)?;
     let customer_logo = cfg
         .report
         .logo
@@ -190,6 +206,7 @@ fn load_inputs(cfg: &Config, now: DateTime<Utc>) -> Result<Inputs, RunError> {
     Ok(Inputs {
         customer_logo,
         theme,
+        theme_source,
         source_description,
         report,
         sinks,
@@ -215,10 +232,10 @@ pub struct RenderDataSummary {
 pub fn write_render_data(
     cfg: &Config,
     now: DateTime<Utc>,
-    product: &ProductInfo,
+    runtime: &Runtime,
     out: &Path,
 ) -> Result<RenderDataSummary, RunError> {
-    let data = render_data(cfg, now, product)?;
+    let data = render_data(cfg, now, runtime)?;
     let bytes = serde_json::to_vec_pretty(&data).map_err(|e| RunError::Render(e.to_string()))?;
     std::fs::write(out, bytes)
         .map_err(|e| RunError::Render(format!("cannot write {}: {e}", out.display())))?;
@@ -237,15 +254,21 @@ pub fn write_render_data(
 pub fn render_data(
     cfg: &Config,
     now: DateTime<Utc>,
-    product: &ProductInfo,
+    runtime: &Runtime,
 ) -> Result<crate::render::model::RenderData, RunError> {
     let Inputs {
         theme,
         report,
         customer_logo,
         ..
-    } = load_inputs(cfg, now)?;
-    let mut opts = render_options(&cfg.report, product);
+    } = load_inputs(cfg, runtime, now)?;
+    let mut opts = render_options(
+        &cfg.report,
+        &ProductInfo {
+            name: runtime.upstream.clone(),
+            version: runtime.version.clone(),
+        },
+    );
     opts.customer_logo = customer_logo;
     Ok(crate::render::model::build(
         &report,
@@ -261,18 +284,14 @@ pub fn render_data(
 ///
 /// Fails if the theme, customer logo, sinks or source cannot be set up, collection fails,
 /// JSON serialisation or PDF rendering fails, or no artifact could be stored anywhere.
-pub fn run(
-    cfg: &Config,
-    now: DateTime<Utc>,
-    product: &ProductInfo,
-) -> Result<RunSummary, RunError> {
+pub fn run(cfg: &Config, now: DateTime<Utc>, runtime: &Runtime) -> Result<RunSummary, RunError> {
     let Inputs {
         customer_logo,
         theme,
         report,
         sinks,
         ..
-    } = load_inputs(cfg, now)?;
+    } = load_inputs(cfg, runtime, now)?;
     let mut artifacts = Vec::new();
     if cfg.report.json {
         artifacts.push(Artifact {
@@ -290,7 +309,13 @@ pub fn run(
         });
     }
     if cfg.report.pdf {
-        let mut opts = render_options(&cfg.report, product);
+        let mut opts = render_options(
+            &cfg.report,
+            &ProductInfo {
+                name: runtime.upstream.clone(),
+                version: runtime.version.clone(),
+            },
+        );
         opts.customer_logo = customer_logo;
         let bytes = crate::render::render_pdf(&report, &opts, &theme)
             .map_err(|err| RunError::Render(err.to_string()))?;
@@ -340,8 +365,8 @@ pub fn run(
 /// # Errors
 ///
 /// Fails if the theme, customer logo, sinks or source cannot be set up, or collection fails.
-pub fn check(cfg: &Config, product: &ProductInfo) -> Result<String, RunError> {
-    let inputs = load_inputs(cfg, Utc::now())?;
+pub fn check(cfg: &Config, runtime: &Runtime) -> Result<String, RunError> {
+    let inputs = load_inputs(cfg, runtime, Utc::now())?;
     let mut scanned = 0usize;
     let mut failed = 0usize;
     let mut not_scanned = 0usize;
@@ -353,15 +378,15 @@ pub fn check(cfg: &Config, product: &ProductInfo) -> Result<String, RunError> {
         }
     }
     Ok(format!(
-        "{}: {} images ({} scanned, {} failed, {} not scanned), {} findings; theme: {}; product: {} {}",
+        "{}: {} images ({} scanned, {} failed, {} not scanned), {} findings; product: {} {}; theme: {}",
         inputs.source_description,
         inputs.report.images.len(),
         scanned,
         failed,
         not_scanned,
         inputs.report.findings.len(),
-        inputs.theme.product.name,
-        product.name,
-        product.version
+        runtime.upstream,
+        runtime.version,
+        inputs.theme_source
     ))
 }

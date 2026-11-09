@@ -8,7 +8,7 @@ use image_scan_report::{
     config::Config,
     model::{Report, SourceKind},
     naming::{artifact_base_name, slug},
-    pipeline::{ProductInfo, RunError, check, run, write_render_data},
+    pipeline::{RunError, Runtime, check, run, write_render_data},
     source::SourceError,
 };
 use std::path::Path;
@@ -77,9 +77,10 @@ fn check_reports_counts() {
     assert_eq!(
         check(&cfg, &product()).unwrap(),
         format!(
-            "Trivy (files): {}: 11 images (11 scanned, 0 failed, 0 not scanned), {} findings; theme: judex; product: judex 0.1.0",
+            "Trivy (files): {}: 11 images (11 scanned, 0 failed, 0 not scanned), {} findings; product: judex {}; theme: default",
             fixtures().display(),
-            summary.findings
+            summary.findings,
+            env!("CARGO_PKG_VERSION")
         )
     );
 }
@@ -99,10 +100,12 @@ fn partial_sink_failure_preserves_success() {
     assert!(summary.failed_sinks[0].contains(&file.path().display().to_string()));
 }
 
-fn product() -> ProductInfo {
-    ProductInfo {
-        name: "judex".into(),
-        version: "0.1.0".into(),
+fn product() -> Runtime {
+    Runtime {
+        upstream: "judex".into(),
+        theme_dir: None,
+        theme_dir_env: "JUDEX_THEME_DIR".into(),
+        version: env!("CARGO_PKG_VERSION").into(),
     }
 }
 #[test]
@@ -530,4 +533,37 @@ fn json_artifact_goes_to_http_sink_too() {
     for m in mocks {
         m.assert_calls(1);
     }
+}
+
+#[test]
+fn check_reports_env_theme_and_config_precedence() {
+    let input = reduced_fixtures::input();
+    let output = tempfile::tempdir().unwrap();
+    let env_dir = tempfile::tempdir().unwrap();
+    let cfg_dir = tempfile::tempdir().unwrap();
+    for (dir, name) in [(&env_dir, "Env Edition"), (&cfg_dir, "Config Edition")] {
+        let mut theme = image_scan_report::render::theme::default_theme();
+        theme.product.name = name.into();
+        std::fs::write(
+            dir.path().join("theme.toml"),
+            toml::to_string(&theme).unwrap(),
+        )
+        .unwrap();
+    }
+    let mut cfg = config(input.path(), output.path());
+    let mut runtime = product();
+    runtime.theme_dir = Some(env_dir.path().into());
+    assert!(check(&cfg, &runtime).unwrap().ends_with("; theme: env"));
+    cfg.report.pdf = true;
+    cfg.report.json = false;
+    run(&cfg, now(), &runtime).unwrap();
+    let path = std::fs::read_dir(output.path())
+        .unwrap()
+        .next()
+        .unwrap()
+        .unwrap()
+        .path();
+    assert!(pdf::text(&std::fs::read(path).unwrap()).contains("Env Edition"));
+    cfg.theme.path = Some(cfg_dir.path().into());
+    assert!(check(&cfg, &runtime).unwrap().ends_with("; theme: config"));
 }

@@ -246,3 +246,20 @@ fn default_config_path_is_etc_report() {
         assert!(String::from_utf8_lossy(&out.stderr).contains("/etc/report/config.yaml"));
     }
 }
+
+#[test]
+fn check_fails_with_exit_2_when_theme_dir_env_is_invalid() {
+    let dir = tempfile::tempdir().unwrap();
+    let empty = tempfile::tempdir().unwrap();
+    let config = write_config(dir.path());
+    let out = cargo_bin_cmd!("judex")
+        .args(["check", "--config"])
+        .arg(config)
+        .env("JUDEX_THEME_DIR", empty.path())
+        .output()
+        .unwrap();
+    assert_eq!(out.status.code(), Some(2));
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains(empty.path().to_str().unwrap()));
+    assert!(stderr.contains("theme.toml"));
+}

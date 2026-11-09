@@ -32,8 +32,11 @@ fn main() -> ExitCode {
 
 fn dispatch(command: cli::Command) -> Result<(), image_scan_report::pipeline::RunError> {
     use image_scan_report::{config, pipeline};
-    let product = pipeline::ProductInfo {
-        name: PRODUCT_NAME.into(),
+    let theme_dir_env = format!("{}_THEME_DIR", PRODUCT_NAME.to_uppercase());
+    let product = pipeline::Runtime {
+        theme_dir: std::env::var_os(&theme_dir_env).map(std::path::PathBuf::from),
+        theme_dir_env,
+        upstream: PRODUCT_NAME.into(),
         version: PRODUCT_VERSION.into(),
     };
     match command {

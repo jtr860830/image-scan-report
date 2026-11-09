@@ -227,6 +227,45 @@ pub fn default_theme() -> Theme {
     )
     .expect("embedded default theme must be valid")
 }
+/// Where the active theme came from, for `check` output and diagnostics.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ThemeSource {
+    /// Directory selected by configuration.
+    Config,
+    /// Directory selected by the environment.
+    Env,
+    /// Embedded default theme.
+    Default,
+}
+impl std::fmt::Display for ThemeSource {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::Config => "config",
+            Self::Env => "env",
+            Self::Default => "default",
+        })
+    }
+}
+
+/// Configuration path first, then the environment directory, then the embedded default.
+///
+/// # Errors
+///
+/// Fails if the selected directory cannot be loaded by [`load`].
+pub fn resolve(
+    config_dir: Option<&Path>,
+    env_dir: Option<&Path>,
+) -> Result<(Theme, ThemeSource), ThemeError> {
+    let source = if config_dir.is_some() {
+        ThemeSource::Config
+    } else if env_dir.is_some() {
+        ThemeSource::Env
+    } else {
+        ThemeSource::Default
+    };
+    Ok((load(config_dir.or(env_dir))?, source))
+}
+
 /// Load `theme.toml` and an optional logo from `dir`, or return [`default_theme`] for `None`.
 ///
 /// # Errors
@@ -267,4 +306,52 @@ pub fn load(dir: Option<&Path>) -> Result<Theme, ThemeError> {
         }
     }
     Ok(theme)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    fn theme_dir_named(name: &str) -> tempfile::TempDir {
+        let dir = tempfile::tempdir().unwrap();
+        let mut theme = default_theme();
+        theme.product.name = name.into();
+        fs::write(
+            dir.path().join("theme.toml"),
+            toml::to_string(&theme).unwrap(),
+        )
+        .unwrap();
+        dir
+    }
+    #[test]
+    fn resolve_prefers_config_over_env() {
+        let (cfg_dir, env_dir) = (
+            theme_dir_named("Config Edition"),
+            theme_dir_named("Env Edition"),
+        );
+        let (theme, source) = resolve(Some(cfg_dir.path()), Some(env_dir.path())).unwrap();
+        assert_eq!(
+            (theme.product.name.as_str(), source),
+            ("Config Edition", ThemeSource::Config)
+        );
+    }
+    #[test]
+    fn resolve_uses_env_when_config_is_absent() {
+        let env_dir = theme_dir_named("Env Edition");
+        let (theme, source) = resolve(None, Some(env_dir.path())).unwrap();
+        assert_eq!(
+            (theme.product.name.as_str(), source),
+            ("Env Edition", ThemeSource::Env)
+        );
+    }
+    #[test]
+    fn resolve_falls_back_to_default_when_neither_is_set() {
+        let (theme, source) = resolve(None, None).unwrap();
+        assert_eq!((theme, source), (default_theme(), ThemeSource::Default));
+    }
+    #[test]
+    fn resolve_rejects_an_env_dir_without_theme_toml() {
+        let empty = tempfile::tempdir().unwrap();
+        let err = resolve(None, Some(empty.path())).unwrap_err();
+        assert!(matches!(err, ThemeError::Read(path, _) if path.ends_with("theme.toml")));
+    }
 }
