@@ -19,6 +19,12 @@ report:
   stale_after_days: 30
   pdf: true
   json: false
+  # Omit lower bands from detail tables; always keep Unrated (default: no floor).
+  # min_severity: high
+  # Show only image metadata and full severity counts (default: full).
+  # image_detail: counts
+  # Cap inventory and each image table after sorting (default: no cap).
+  # max_table_rows: 100
 
 output:
   # Persist reports to a mounted output directory.

@@ -11,6 +11,16 @@ pub const PLACEHOLDER: &str = "—";
 /// Report settings from the `report:` configuration plus the summary ranking sizes.
 #[derive(Clone, Debug)]
 pub struct RenderOptions {
+    /// Findings below this band are omitted from detail tables; `None` keeps every band.
+    /// Unrated findings are always kept.
+    pub min_severity: Option<Severity>,
+    /// Per-image chapter content; defaults to `Full`.
+    pub image_detail: crate::model::ImageDetail,
+    /// Maximum rows in the inventory and each image table; `None` means no cap.
+    pub max_table_rows: Option<usize>,
+    /// Whether a JSON artifact accompanies the report.
+    pub json_artifact: bool,
+
     /// Bands whose findings show their description in the image tables.
     pub describe_severities: Vec<Severity>,
     /// Characters kept from each sanitised description before `…` is appended.
@@ -35,6 +45,10 @@ pub struct RenderOptions {
 impl Default for RenderOptions {
     fn default() -> Self {
         Self {
+            min_severity: None,
+            image_detail: crate::model::ImageDetail::Full,
+            max_table_rows: None,
+            json_artifact: false,
             describe_severities: vec![Severity::Critical, Severity::High],
             description_chars: 600,
             remediation_cards: 30,
@@ -48,9 +62,46 @@ impl Default for RenderOptions {
         }
     }
 }
+/// What the configured filters left out of the inventory, remediation and image chapters.
+#[derive(Serialize, Debug, Clone, PartialEq, Eq)]
+pub struct Filters {
+    /// Lowercase key of the severity floor, or empty when none.
+    pub min_severity_key: String,
+    /// English label of the floor, or empty.
+    pub min_severity_label: String,
+    /// Findings below the floor that the summary counts but the tables omit.
+    pub hidden_findings: usize,
+    /// `full` or `counts`.
+    pub image_detail: String,
+    /// Row cap, or 0 when none.
+    pub max_table_rows: usize,
+    /// Whether a JSON artifact is written alongside the report.
+    pub json_artifact: bool,
+    /// Whether a severity floor, counts mode or row cap is configured.
+    pub active: bool,
+}
+impl Default for Filters {
+    fn default() -> Self {
+        Self {
+            min_severity_key: String::new(),
+            min_severity_label: String::new(),
+            hidden_findings: 0,
+            image_detail: "full".into(),
+            max_table_rows: 0,
+            json_artifact: false,
+            active: false,
+        }
+    }
+}
 /// Template input, serialised to `data.json` for the Typst templates.
 #[derive(Serialize, Debug, Clone, PartialEq)]
 pub struct RenderData {
+    /// Configured content controls and their omission facts.
+    pub filters: Filters,
+    /// Inventory rows omitted by the row cap.
+    pub inventory_omitted: usize,
+    /// Upgrade groups omitted because all resolved findings are below the floor.
+    pub remediation_groups_omitted: usize,
     /// Cover and generation facts.
     pub meta: Meta,
     /// Scanner provenance as display strings.
@@ -223,6 +274,10 @@ pub struct ImageDetail {
     pub counts: SeverityCounts,
     /// The image's findings, worst severity first, then highest score, then id.
     pub findings: Vec<FindingRow>,
+    /// Finding rows omitted by the row cap; zero in counts mode.
+    pub findings_omitted: usize,
+    /// Whether to show the findings table.
+    pub show_findings: bool,
 }
 /// Display-ready finding in an image's detail table.
 #[derive(Serialize, Debug, Clone, PartialEq)]
@@ -381,23 +436,28 @@ pub fn build(
     theme: serde_json::Value,
 ) -> RenderData {
     let summaries = views::image_summaries(&report.images, &report.findings);
-    let inventory: Vec<_> = views::unique_vulnerabilities(&report.findings)
-        .into_iter()
-        .map(|v| UniqueRow {
-            id: sanitize(&v.id),
-            severity_label: v.severity.label().into(),
-            severity_key: v.severity.label().to_lowercase(),
-            score: score(v.score),
-            packages: sanitize(&v.packages.join(", ")),
-            fixed_versions: if v.fixed_versions.is_empty() {
-                PLACEHOLDER.into()
-            } else {
-                sanitize(&v.fixed_versions.join(", "))
-            },
-            image_count: v.images.len(),
-            images: sanitized_strings(&v.images),
+    let full_inventory = inventory_rows(&report.findings);
+    let summary = summary(report, opts, &summaries, &full_inventory);
+    let visible = |severity: Severity| {
+        opts.min_severity
+            .is_none_or(|floor| severity == Severity::Unrated || severity >= floor)
+    };
+    let mut inventory = full_inventory;
+    inventory.retain(|row| {
+        visible(match row.severity_key.as_str() {
+            "critical" => Severity::Critical,
+            "high" => Severity::High,
+            "medium" => Severity::Medium,
+            "low" => Severity::Low,
+            _ => Severity::Unrated,
         })
-        .collect();
+    });
+    let inventory_omitted = inventory
+        .len()
+        .saturating_sub(opts.max_table_rows.unwrap_or(inventory.len()));
+    if let Some(cap) = opts.max_table_rows {
+        inventory.truncate(cap);
+    }
     let mut grouped: HashMap<&str, Vec<&Finding>> = HashMap::new();
     for finding in &report.findings {
         grouped
@@ -412,7 +472,50 @@ pub fn build(
             .or_insert(image);
     }
     let images = image_details(&summaries, &images_by_reference, &grouped, opts);
+    let mut remediation = remediation(&report.findings, &grouped, opts);
+    let full_groups = remediation.groups.len();
+    remediation.groups.retain(|group| {
+        let c = &group.resolves;
+        [
+            (Severity::Critical, c.critical),
+            (Severity::High, c.high),
+            (Severity::Medium, c.medium),
+            (Severity::Low, c.low),
+            (Severity::Unrated, c.unrated),
+        ]
+        .into_iter()
+        .any(|(severity, count)| count > 0 && visible(severity))
+    });
+    let remediation_groups_omitted = full_groups - remediation.groups.len();
     RenderData {
+        filters: Filters {
+            min_severity_key: opts
+                .min_severity
+                .map(|s| s.label().to_lowercase())
+                .unwrap_or_default(),
+            min_severity_label: opts
+                .min_severity
+                .map(|s| s.label().into())
+                .unwrap_or_default(),
+            hidden_findings: report
+                .findings
+                .iter()
+                .filter(|f| !visible(f.severity))
+                .count(),
+            image_detail: if opts.image_detail == crate::model::ImageDetail::Counts {
+                "counts"
+            } else {
+                "full"
+            }
+            .into(),
+            max_table_rows: opts.max_table_rows.unwrap_or(0),
+            json_artifact: opts.json_artifact,
+            active: opts.min_severity.is_some()
+                || opts.image_detail == crate::model::ImageDetail::Counts
+                || opts.max_table_rows.is_some(),
+        },
+        inventory_omitted,
+        remediation_groups_omitted,
         meta: Meta {
             product_name: sanitize(&opts.product_name),
             product_version: sanitize(&opts.product_version),
@@ -437,14 +540,34 @@ pub fn build(
             db_updated_at: date(report.source.db_updated_at),
         },
         scope: sanitize(&report.scope),
-        summary: summary(report, opts, &summaries, &inventory),
-        remediation: remediation(report, &grouped, opts),
+        summary,
+        remediation,
         inventory,
         images,
-        appendix: appendix(report, opts, &grouped),
+        appendix: appendix(report, opts),
         strings,
         theme,
     }
+}
+
+fn inventory_rows(findings: &[Finding]) -> Vec<UniqueRow> {
+    views::unique_vulnerabilities(findings)
+        .into_iter()
+        .map(|v| UniqueRow {
+            id: sanitize(&v.id),
+            severity_label: v.severity.label().into(),
+            severity_key: v.severity.label().to_lowercase(),
+            score: score(v.score),
+            packages: sanitize(&v.packages.join(", ")),
+            fixed_versions: if v.fixed_versions.is_empty() {
+                PLACEHOLDER.into()
+            } else {
+                sanitize(&v.fixed_versions.join(", "))
+            },
+            image_count: v.images.len(),
+            images: sanitized_strings(&v.images),
+        })
+        .collect()
 }
 
 fn sanitized_strings(values: &[String]) -> Vec<String> {
@@ -501,15 +624,15 @@ fn summary(
 }
 
 fn remediation(
-    report: &Report,
+    findings: &[Finding],
     grouped: &HashMap<&str, Vec<&Finding>>,
     opts: &RenderOptions,
 ) -> Remediation {
-    let rows = report.findings.len();
-    let fixable = views::fixable(&report.findings);
+    let rows = findings.len();
+    let fixable = views::fixable(findings);
     Remediation {
         cards: opts.remediation_cards,
-        groups: views::remediation_groups(&report.findings)
+        groups: views::remediation_groups(findings)
             .into_iter()
             .map(|g| RemediationRow {
                 package: sanitize(&g.package),
@@ -534,11 +657,7 @@ fn remediation(
     }
 }
 
-fn appendix(
-    report: &Report,
-    opts: &RenderOptions,
-    grouped: &HashMap<&str, Vec<&Finding>>,
-) -> Appendix {
+fn appendix(report: &Report, opts: &RenderOptions) -> Appendix {
     Appendix {
         failed_images: report
             .images
@@ -575,9 +694,9 @@ fn appendix(
         .map(|(a, b)| (a.into(), b.into()))
         .collect(),
         score_sources: frequencies(
-            grouped
-                .values()
-                .flatten()
+            report
+                .findings
+                .iter()
                 .map(|f| display(f.score_source.as_deref())),
         ),
         limitations: [
@@ -608,19 +727,38 @@ fn image_details(
                 .get(s.reference.as_str())
                 .cloned()
                 .unwrap_or_default();
-            findings.sort_by(|a, b| {
-                b.severity
-                    .cmp(&a.severity)
-                    .then_with(
-                        || match (a.score_v3.or(a.score_v2), b.score_v3.or(b.score_v2)) {
-                            (Some(a), Some(b)) => b.total_cmp(&a),
-                            (Some(_), None) => std::cmp::Ordering::Less,
-                            (None, Some(_)) => std::cmp::Ordering::Greater,
-                            _ => std::cmp::Ordering::Equal,
-                        },
-                    )
-                    .then_with(|| a.id.cmp(&b.id))
-            });
+            let show_findings = opts.image_detail == crate::model::ImageDetail::Full;
+            if show_findings {
+                findings.retain(|f| {
+                    opts.min_severity
+                        .is_none_or(|floor| f.severity == Severity::Unrated || f.severity >= floor)
+                });
+                findings.sort_by(|a, b| {
+                    b.severity
+                        .cmp(&a.severity)
+                        .then_with(|| {
+                            match (a.score_v3.or(a.score_v2), b.score_v3.or(b.score_v2)) {
+                                (Some(a), Some(b)) => b.total_cmp(&a),
+                                (Some(_), None) => std::cmp::Ordering::Less,
+                                (None, Some(_)) => std::cmp::Ordering::Greater,
+                                _ => std::cmp::Ordering::Equal,
+                            }
+                        })
+                        .then_with(|| a.id.cmp(&b.id))
+                });
+            }
+            let findings_omitted = if show_findings {
+                let omitted = findings
+                    .len()
+                    .saturating_sub(opts.max_table_rows.unwrap_or(findings.len()));
+                if let Some(cap) = opts.max_table_rows {
+                    findings.truncate(cap);
+                }
+                omitted
+            } else {
+                findings.clear();
+                0
+            };
             let reference = image
                 .reference
                 .split(" (")
@@ -654,6 +792,8 @@ fn image_details(
                 scan_error: display(image.scan.error.as_deref()),
                 scanner_version: display(image.scan.scanner_version.as_deref()),
                 counts: s.counts.clone(),
+                findings_omitted,
+                show_findings,
                 findings: findings.into_iter().map(|f| finding_row(f, opts)).collect(),
             })
         })

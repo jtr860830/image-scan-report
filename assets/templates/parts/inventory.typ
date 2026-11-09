@@ -7,10 +7,10 @@
   let tr(key, ..args) = t(data.strings, key, ..args)
   set text(number-width: "tabular")
   heading(level: 1, tr("ch_inventory"))
-  secondary(theme, tr("inventory_lede", count: num(data.inventory.len())))
+  secondary(theme, tr(if data.filters.min_severity_key != "" { "inventory_lede_floor" } else { "inventory_lede" }, count: num(data.inventory.len() + data.inventory_omitted), band: data.filters.min_severity_label))
   v(10pt)
   if data.inventory.len() == 0 {
-    secondary(theme, tr("no_findings"))
+    secondary(theme, tr(if data.filters.min_severity_key != "" { "filters_none_at_floor" } else { "no_findings" }, band: data.filters.min_severity_label))
   } else {
     hairline-table(theme,
       columns: (2.9cm, 1.9cm, 1cm, 1fr, 3.2cm, 1.2cm),
@@ -27,5 +27,8 @@
           ]
         ],
       )).flatten())
+  }
+  if data.inventory_omitted > 0 {
+    secondary(theme, tr(if data.filters.json_artifact { "filters_rows_omitted_json" } else { "filters_rows_omitted" }, count: num(data.inventory_omitted)))
   }
 }

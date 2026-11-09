@@ -6,6 +6,21 @@ with a new one. The design document
 (`superpowers/specs/2026-11-07-product-redesign-design.md`) holds the original
 design; this file holds what changed or was settled afterwards.
 
+## 2026-11-09 — Large-report settings (#11)
+
+- Keep the summary complete so content limits cannot understate risk; keep
+  per-image counts full so an image’s totals remain useful for reconciliation.
+- Never filter Unrated findings: missing severity evidence is not low risk.
+- Use `min_severity`, `image_detail` and `max_table_rows` to reduce detail while
+  stating omissions, so readers can distinguish presentation from coverage.
+- Show the summary filter note only when a severity floor hides findings; cap-only
+  tables and the counts-only image chapter state their own limits instead.
+- Do not add CSV: the complete JSON artifact already carries every row.
+- Keep chunked rendering shelved: per-scope reports and content controls address
+  the artifact’s size first ([#11](https://github.com/jtr860830/judex/issues/11)).
+- See [report settings](../README.md#report) and the
+  [CHANGELOG](../CHANGELOG.md#unreleased).
+
 ## 2026-11-08 — Template experiments
 
 Keep template changes only with ≥ 5 % time or memory improvement and unchanged

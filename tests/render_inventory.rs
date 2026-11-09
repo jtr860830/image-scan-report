@@ -14,6 +14,10 @@ mod pdf;
 fn fixture(language: Language) -> (Report, RenderOptions, RenderData) {
     let report = data::fixture_report(3);
     let opts = RenderOptions {
+        min_severity: None,
+        image_detail: image_scan_report::model::ImageDetail::Full,
+        max_table_rows: None,
+        json_artifact: false,
         describe_severities: vec![
             image_scan_report::model::Severity::Critical,
             image_scan_report::model::Severity::High,
@@ -70,7 +74,7 @@ fn inventory_lists_every_unique_vulnerability() {
         .unwrap();
     let (_, text) = chapter(&small, &data.strings["ch_inventory"]);
     let inventory_text = text.split(&data.strings["ch_images"]).next().unwrap();
-    assert!(!compact_inventory(inventory_text).contains(&removed_id));
+    assert!(!compact_inventory(inventory_text).contains(&compact_inventory(&removed_id)));
 }
 
 #[test]
@@ -112,7 +116,7 @@ fn inventory_caps_images_and_handles_empty_inventory() {
         .unwrap();
     let (_, text) = chapter(&bytes, &data.strings["ch_inventory"]);
     assert!(text.contains("affected19"));
-    assert!(!text.contains("affected20"));
+    assert!(!compact_inventory(&text).contains(&compact_inventory("affected20")));
     assert!(text.contains("+5"));
     data.inventory.clear();
     let bytes = renderer
@@ -121,4 +125,70 @@ fn inventory_caps_images_and_handles_empty_inventory() {
     let (_, text) = chapter(&bytes, &data.strings["ch_inventory"]);
     assert!(text.contains(&data.strings["no_findings"]));
     assert!(text.contains(&data.strings["inventory_lede"].replace("{count}", "0")));
+}
+
+#[test]
+fn inventory_explains_capped_rows_with_optional_json() {
+    for json in [false, true] {
+        let (report, mut opts, _) = fixture(Language::En);
+        opts.max_table_rows = Some(1);
+        opts.json_artifact = json;
+        let data = image_scan_report::render::model::build(
+            &report,
+            &opts,
+            image_scan_report::render::strings::load(Language::En),
+            image_scan_report::render::theme::default_theme().to_render_value(),
+        );
+        assert!(data.inventory_omitted > 0);
+        let bytes = Renderer::new()
+            .render_pdf(&data, None, None, report.generated_at)
+            .unwrap();
+        let (_, text) = chapter(&bytes, &data.strings["ch_inventory"]);
+        let text = text.split(&data.strings["ch_images"]).next().unwrap();
+        let expected = format!(
+            "Rows not shown: {}{}",
+            data.inventory_omitted,
+            if json {
+                " (complete list in the JSON artifact)"
+            } else {
+                ""
+            }
+        );
+        assert!(
+            compact_inventory(text).contains(&compact_inventory(&expected)),
+            "{expected}"
+        );
+        let text = compact_inventory(text);
+        assert_eq!(text.contains(&compact_inventory("JSON artifact")), json);
+        let lede = data.strings["inventory_lede"].replace(
+            "{count}",
+            &(data.inventory.len() + data.inventory_omitted).to_string(),
+        );
+        assert!(text.contains(&compact_inventory(&lede)), "{lede}");
+    }
+}
+
+#[test]
+fn filtered_inventory_uses_floor_lede_in_both_languages() {
+    for lang in [Language::En, Language::ZhTw] {
+        let (report, mut opts, _) = fixture(lang.clone());
+        opts.min_severity = Some(image_scan_report::model::Severity::High);
+        let data = image_scan_report::render::model::build(
+            &report,
+            &opts,
+            image_scan_report::render::strings::load(lang),
+            image_scan_report::render::theme::default_theme().to_render_value(),
+        );
+        let bytes = Renderer::new()
+            .render_pdf(&data, None, None, report.generated_at)
+            .unwrap();
+        let (_, text) = chapter(&bytes, &data.strings["ch_inventory"]);
+        let expected = data.strings["inventory_lede_floor"]
+            .replace("{count}", &data.inventory.len().to_string())
+            .replace("{band}", "High");
+        assert!(
+            compact_inventory(&text).contains(&compact_inventory(&expected)),
+            "{text}"
+        );
+    }
 }

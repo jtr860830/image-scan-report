@@ -46,6 +46,15 @@ fn placeholders_match_between_locales() {
     let en = load(Language::En);
     for key in KEYS {
         let expected: BTreeSet<_> = match *key {
+            "filters_summary_note" | "inventory_lede_floor" | "filters_groups_omitted" => {
+                vec!["band", "count"]
+            }
+            "filters_rows_omitted" | "filters_rows_omitted_json" => vec!["count"],
+            "filters_method_note" => vec!["details"],
+            "filters_min_severity" | "filters_none_at_floor" | "filters_image_floor" => {
+                vec!["band"]
+            }
+            "filters_max_rows" => vec!["n"],
             "summary_lede" => vec!["images", "unique"],
             "fact_fixable" => vec!["percent"],
             "fact_high_or_worse" => vec!["total"],

@@ -34,6 +34,9 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Add optional report settings `min_severity`, `image_detail` and `max_table_rows`
+  for large reports, with omission statements below the summary lede and capped
+  tables and in the appendix Method section.
 - Add configuration discovery; see README › [Configuration reference](README.md#configuration-reference).
 - Add environment theme selection and theme-source reporting; see README › [Theme](README.md#theme).
 

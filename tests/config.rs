@@ -4,7 +4,7 @@ static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 use std::path::Path;
 
 use image_scan_report::config::{self, Config, ConfigError, HttpMode, OutputConfig, SourceConfig};
-use image_scan_report::model::Language;
+use image_scan_report::model::{ImageDetail, Language};
 
 fn minimal() -> Config {
     config::load(Path::new("tests/data/config/trivy-files.yaml")).unwrap()
@@ -267,11 +267,21 @@ fn report_length_settings() {
     );
     assert_eq!(defaults.report.description_chars, 600);
     assert_eq!(defaults.report.remediation_cards, 30);
+    assert_eq!(defaults.report.min_severity, None);
+    assert_eq!(defaults.report.image_detail, ImageDetail::Full);
+    assert_eq!(defaults.report.max_table_rows, None);
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("config.yaml");
     let yaml = include_str!("data/config/trivy-files.yaml");
     for (settings, expected) in [
         ("describe_severities: [critical, high, medium]", "ok"),
+        ("min_severity: high", "ok"),
+        ("min_severity: unrated", "invalid"),
+        ("min_severity: nonsense", "parse"),
+        ("image_detail: counts", "ok"),
+        ("image_detail: table", "parse"),
+        ("max_table_rows: 200", "ok"),
+        ("max_table_rows: 0", "invalid"),
         ("description_chars: 10", "invalid"),
         ("describe_severities: [unknown]", "parse"),
         (
@@ -285,16 +295,29 @@ fn report_length_settings() {
         )
         .unwrap();
         match (expected, config::load(&path)) {
-            ("ok", Ok(cfg)) => assert_eq!(
-                cfg.report.describe_severities,
-                vec![Severity::Critical, Severity::High, Severity::Medium]
-            ),
+            ("ok", Ok(cfg)) => match settings {
+                "min_severity: high" => assert_eq!(cfg.report.min_severity, Some(Severity::High)),
+                "image_detail: counts" => assert_eq!(cfg.report.image_detail, ImageDetail::Counts),
+                "max_table_rows: 200" => assert_eq!(cfg.report.max_table_rows, Some(200)),
+                _ => assert_eq!(
+                    cfg.report.describe_severities,
+                    vec![Severity::Critical, Severity::High, Severity::Medium]
+                ),
+            },
             ("empty", Ok(cfg)) => {
                 assert!(cfg.report.describe_severities.is_empty());
                 assert_eq!(cfg.report.remediation_cards, 0);
             }
             ("invalid", Err(ConfigError::Invalid(message))) => {
-                assert!(message.contains("description_chars"))
+                assert_eq!(
+                    message,
+                    match settings {
+                        "min_severity: unrated" =>
+                            "report.min_severity must be critical, high, medium or low",
+                        "max_table_rows: 0" => "report.max_table_rows must be at least 1",
+                        _ => "report.description_chars must be at least 50",
+                    }
+                )
             }
             ("parse", Err(ConfigError::Parse(_))) => (),
             (_, result) => panic!("unexpected result: {result:?}"),

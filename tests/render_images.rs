@@ -60,7 +60,7 @@ fn failed_image_shows_error_callout() {
     data.images[0].findings[0].id = "MUST-NOT-RENDER".into();
     let (_, text) = chapter(&render(&data), &data.strings["ch_images"]);
     assert!(text.contains("manifest unknown"));
-    assert!(!text.contains("MUST-NOT-RENDER"));
+    assert!(!compact(&text).contains(&compact("MUST-NOT-RENDER")));
 }
 #[test]
 fn oversized_description_is_contained() {
@@ -71,6 +71,10 @@ fn oversized_description_is_contained() {
     let data = model::build(
         &report,
         &RenderOptions {
+            min_severity: None,
+            image_detail: image_scan_report::model::ImageDetail::Full,
+            max_table_rows: None,
+            json_artifact: false,
             describe_severities: vec![
                 image_scan_report::model::Severity::Critical,
                 image_scan_report::model::Severity::High,
@@ -120,6 +124,10 @@ fn optional_facts_show_placeholder() {
     let data = model::build(
         &report,
         &RenderOptions {
+            min_severity: None,
+            image_detail: image_scan_report::model::ImageDetail::Full,
+            max_table_rows: None,
+            json_artifact: false,
             describe_severities: vec![
                 image_scan_report::model::Severity::Critical,
                 image_scan_report::model::Severity::High,
@@ -139,7 +147,10 @@ fn optional_facts_show_placeholder() {
     );
     let (_, text) = chapter(&render(&data), &data.strings["ch_images"]);
     assert!(text.matches('—').count() >= 4, "{text}");
-    assert!(!text.to_lowercase().contains("none") && !text.to_lowercase().contains("null"));
+    assert!(
+        !compact(&text).to_lowercase().contains(&compact("none"))
+            && !compact(&text).to_lowercase().contains(&compact("null"))
+    );
     assert!(text.contains(&data.strings["no_findings"]));
 }
 #[test]
@@ -150,7 +161,7 @@ fn medium_description_is_not_rendered() {
     row.severity_label = "Medium".into();
     row.show_description = false;
     row.description = "MEDIUM-DESCRIPTION-SENTINEL".into();
-    assert!(!pdf::text(&render(&data)).contains("MEDIUM-DESCRIPTION-SENTINEL"));
+    assert!(!compact(&pdf::text(&render(&data))).contains(&compact("MEDIUM-DESCRIPTION-SENTINEL")));
 }
 
 #[test]
@@ -184,7 +195,9 @@ fn not_scanned_has_its_own_callout() {
     let image_text = text.split(&data.strings["ch_appendix"]).next().unwrap();
     assert!(compact(image_text).contains(&compact(&data.strings["scan_state_not_scanned"])));
     assert!(
-        !image_text.to_lowercase().contains("failed"),
+        !compact(image_text)
+            .to_lowercase()
+            .contains(&compact("failed")),
         "{image_text}"
     );
 }
@@ -217,9 +230,91 @@ fn image_detail_lists_every_tag() {
         let (_, text) = chapter(&render(&opts), &opts.strings["ch_images"]);
         let detail = text.split(&opts.strings["ch_appendix"]).next().unwrap();
         assert_eq!(opts.images[0].show_tags, show);
-        assert_eq!(detail.contains(&opts.strings["image_meta_tags"]), show);
+        assert_eq!(
+            compact(detail).contains(&compact(&opts.strings["image_meta_tags"])),
+            show
+        );
         if show {
             assert!(compact(detail).contains(&compact(&tags.join(", "))));
         }
+    }
+}
+
+#[test]
+fn images_explain_caps_and_counts_only() {
+    for json in [false, true] {
+        for counts in [false, true] {
+            let mut report = data::fixture_report(3);
+            // The reduced fixture has one finding per image; repeat one to exercise the cap.
+            report.findings.push(report.findings[0].clone());
+            let mut opts = data::default_options(Language::En);
+            opts.max_table_rows = Some(1);
+            opts.json_artifact = json;
+            if counts {
+                opts.image_detail = image_scan_report::model::ImageDetail::Counts;
+            }
+            let data = model::build(
+                &report,
+                &opts,
+                strings::load(Language::En),
+                theme::default_theme().to_render_value(),
+            );
+            let (_, text) = chapter(&render(&data), &data.strings["ch_images"]);
+            let text = text.split(&data.strings["ch_appendix"]).next().unwrap();
+            if counts {
+                assert_eq!(compact(text).matches(&compact("Findings are listed per vulnerability in the inventory, subject to the same filters; this chapter shows counts per image.")).count(), 1);
+                assert!(!compact(text).contains(&compact("Rows not shown:")));
+                assert!(!compact(text).contains(&compact(&data.strings["image_findings_title"])));
+            } else {
+                let omitted = data
+                    .images
+                    .iter()
+                    .find(|i| i.findings_omitted > 0)
+                    .unwrap()
+                    .findings_omitted;
+                let expected = format!(
+                    "Rows not shown: {omitted}{}",
+                    if json {
+                        " (complete list in the JSON artifact)"
+                    } else {
+                        ""
+                    }
+                );
+                assert!(compact(text).contains(&compact(&expected)), "{expected}");
+            }
+        }
+    }
+}
+
+#[test]
+fn below_floor_images_explain_empty_tables_in_both_languages() {
+    for language in [Language::En, Language::ZhTw] {
+        let mut report = data::fixture_report(3);
+        for finding in &mut report.findings {
+            finding.severity = image_scan_report::model::Severity::Medium;
+        }
+        let mut opts = data::default_options(language.clone());
+        opts.min_severity = Some(image_scan_report::model::Severity::High);
+        let data = model::build(
+            &report,
+            &opts,
+            strings::load(language.clone()),
+            theme::default_theme().to_render_value(),
+        );
+        let (_, text) = chapter(&render(&data), &data.strings["ch_images"]);
+        let text = compact(text.split(&data.strings["ch_appendix"]).next().unwrap());
+        let (empty, note) = match language {
+            Language::En => (
+                "No findings at or above High.",
+                "Tables list findings at or above High (Unrated is always listed); counts include every finding.",
+            ),
+            Language::ZhTw => (
+                "沒有 High 及以上等級的弱點。",
+                "表格列出 High 及以上等級的弱點（未評級弱點一律列出）；統計數量包含所有弱點。",
+            ),
+        };
+        assert!(text.contains(&compact(empty)), "{text}");
+        assert!(text.contains(&compact(note)), "{text}");
+        assert!(!text.contains(&compact(&data.strings["no_findings"])));
     }
 }

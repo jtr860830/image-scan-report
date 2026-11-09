@@ -86,5 +86,18 @@
   "scan_state_ok": "掃描成功",
   "scan_state_failed": "掃描失敗",
   "scan_state_not_scanned": "尚未掃描",
-  "col_source": "來源"
+  "col_source": "來源",
+  "filters_summary_note": "弱點盤點、修補建議及映像檔表格列出 {band} 及以上等級的弱點（未評級弱點一律列出）；{count} 筆較低等級弱點僅計入上方統計，未列於表格中。",
+  "filters_rows_omitted": "未顯示 {count} 筆",
+  "filters_rows_omitted_json": "未顯示 {count} 筆（完整清單見 JSON 檔案）",
+  "filters_image_counts_only": "弱點依識別碼列於弱點盤點中，並套用相同篩選條件；本章僅顯示各映像檔的統計數量。",
+  "filters_method_note": "已套用篩選條件：{details}。",
+  "filters_min_severity": "最低嚴重等級為 {band}",
+  "filters_image_counts": "映像檔章節僅顯示統計數量",
+  "filters_max_rows": "每個表格最多 {n} 筆",
+  "filters_detail_sep": "；",
+  "filters_none_at_floor": "沒有 {band} 及以上等級的弱點。",
+  "filters_image_floor": "表格列出 {band} 及以上等級的弱點（未評級弱點一律列出）；統計數量包含所有弱點。",
+  "inventory_lede_floor": "{count} 個 {band} 及以上等級的不重複弱點（包含未評級弱點）。",
+  "filters_groups_omitted": "未顯示 {count} 個套件群組（低於 {band} 等級）。"
 }

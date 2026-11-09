@@ -9,6 +9,10 @@ use image_scan_report::{
 use std::collections::BTreeMap;
 fn opts() -> RenderOptions {
     RenderOptions {
+        min_severity: None,
+        image_detail: image_scan_report::model::ImageDetail::Full,
+        max_table_rows: None,
+        json_artifact: false,
         describe_severities: vec![
             image_scan_report::model::Severity::Critical,
             image_scan_report::model::Severity::High,
@@ -34,6 +38,9 @@ fn report() -> Report {
         set,
         &ReportConfig {
             language: Language::En,
+            min_severity: None,
+            image_detail: image_scan_report::model::ImageDetail::Full,
+            max_table_rows: None,
             describe_severities: vec![
                 image_scan_report::model::Severity::Critical,
                 image_scan_report::model::Severity::High,
@@ -368,4 +375,200 @@ fn configurable_descriptions_and_card_limit() {
     options.describe_severities.clear();
     let d = build(&r, &options, BTreeMap::new(), serde_json::Value::Null);
     assert!(d.images[0].findings.iter().all(|row| !row.show_description));
+}
+
+fn band_report(bands: &[Severity]) -> Report {
+    let mut r = report();
+    r.images.truncate(2);
+    r.findings = bands
+        .iter()
+        .enumerate()
+        .map(|(n, &severity)| {
+            let mut f = finding();
+            f.id = format!("CVE-{n:03}");
+            f.image = r.images[usize::from(n >= 5)].reference.clone();
+            f.severity = severity;
+            f
+        })
+        .collect();
+    r
+}
+
+#[test]
+fn min_severity_hides_lower_bands_but_keeps_unrated_and_summary_counts() {
+    let bands: Vec<_> = [
+        (Severity::Critical, 2),
+        (Severity::High, 3),
+        (Severity::Medium, 4),
+        (Severity::Low, 5),
+        (Severity::Unrated, 1),
+    ]
+    .into_iter()
+    .flat_map(|(s, n)| std::iter::repeat_n(s, n))
+    .collect();
+    let r = band_report(&bands);
+    let baseline = render(&r);
+    let mut options = opts();
+    options.min_severity = Some(Severity::High);
+    options.json_artifact = true;
+    let d = build(&r, &options, BTreeMap::new(), serde_json::Value::Null);
+    assert_eq!(d.inventory.len(), 6);
+    assert!(
+        d.images
+            .iter()
+            .flat_map(|i| &i.findings)
+            .all(|f| !matches!(f.severity_key.as_str(), "medium" | "low"))
+    );
+    assert_eq!(d.summary, baseline.summary);
+    assert_eq!((d.summary.counts.medium, d.summary.counts.low), (4, 5));
+    for image in &d.images {
+        let summary = d
+            .summary
+            .top_images
+            .iter()
+            .find(|row| row.reference == image.reference)
+            .unwrap();
+        assert_eq!(image.counts, summary.counts);
+    }
+    assert_eq!(d.filters.hidden_findings, 9);
+    assert!(d.filters.active && d.filters.json_artifact);
+    assert_eq!(d.filters.min_severity_key, "high");
+    assert_eq!(d.filters.min_severity_label, "High");
+    assert_eq!(d.remediation.unfixable_total, 15);
+    assert_eq!(d.appendix, baseline.appendix);
+    assert_eq!(d.images.iter().map(|i| i.counts.total()).sum::<usize>(), 15);
+}
+
+#[test]
+fn max_table_rows_caps_after_sorting_and_counts_the_rest() {
+    let r = band_report(&[
+        Severity::Low,
+        Severity::High,
+        Severity::Critical,
+        Severity::Medium,
+        Severity::Unrated,
+        Severity::Low,
+        Severity::High,
+    ]);
+    let baseline = render(&r);
+    let mut options = opts();
+    options.max_table_rows = Some(3);
+    let d = build(&r, &options, BTreeMap::new(), serde_json::Value::Null);
+    assert_eq!(d.inventory.len(), 3);
+    assert_eq!(d.inventory[0].severity_key, "critical");
+    assert_eq!(d.inventory_omitted, 4);
+    assert_eq!(d.summary, baseline.summary);
+    let image = d.images.iter().find(|i| i.counts.total() == 5).unwrap();
+    assert_eq!(image.findings.len(), 3);
+    assert_eq!(image.findings[0].severity_key, "critical");
+    assert_eq!(image.findings_omitted, 2);
+    assert!(d.filters.active);
+    assert_eq!(d.filters.max_table_rows, 3);
+}
+
+#[test]
+fn image_detail_counts_drops_rows_but_keeps_counts() {
+    let r = band_report(&[
+        Severity::Low,
+        Severity::High,
+        Severity::Critical,
+        Severity::Medium,
+        Severity::Unrated,
+        Severity::Low,
+        Severity::High,
+    ]);
+    let baseline = render(&r);
+    let mut options = opts();
+    options.image_detail = image_scan_report::model::ImageDetail::Counts;
+    options.max_table_rows = Some(3);
+    let d = build(&r, &options, BTreeMap::new(), serde_json::Value::Null);
+    for (image, original) in d.images.iter().zip(&baseline.images) {
+        assert!(image.findings.is_empty());
+        assert!(!image.show_findings);
+        assert_eq!(image.findings_omitted, 0);
+        assert_eq!(image.counts, original.counts);
+    }
+    assert_eq!(d.inventory, baseline.inventory[..3]);
+    options.max_table_rows = None;
+    let d = build(&r, &options, BTreeMap::new(), serde_json::Value::Null);
+    assert_eq!(d.inventory, baseline.inventory);
+    assert_eq!(d.filters.image_detail, "counts");
+    assert!(d.filters.active);
+}
+
+#[test]
+fn no_filters_means_inactive_and_zero_omissions() {
+    let d = render(&band_report(&[Severity::High]));
+    assert_eq!(d.filters, Filters::default());
+    assert_eq!(d.filters.image_detail, "full");
+    assert!(!d.filters.active);
+    assert_eq!(d.inventory_omitted, 0);
+    assert!(
+        d.images
+            .iter()
+            .all(|i| i.show_findings && i.findings_omitted == 0)
+    );
+}
+
+#[test]
+fn floor_keeps_complete_inventory_images_and_remediation_counts() {
+    let mut r = band_report(&[Severity::High, Severity::Medium, Severity::Low]);
+    r.findings[1].id = r.findings[0].id.clone();
+    r.findings[1].image = r.images[1].reference.clone();
+    for f in &mut r.findings {
+        f.fixed_version = Some("2".into());
+    }
+    r.findings[2].package = "hidden".into();
+    let baseline = render(&r);
+    let mut options = opts();
+    options.min_severity = Some(Severity::High);
+    let d = build(&r, &options, BTreeMap::new(), serde_json::Value::Null);
+    assert_eq!(d.inventory[0].images, baseline.inventory[0].images);
+    assert_eq!(d.inventory[0].image_count, 2);
+    assert_eq!(d.remediation.groups.len(), 1);
+    assert_eq!(d.remediation.groups[0], baseline.remediation.groups[0]);
+    assert_eq!(d.remediation_groups_omitted, 1);
+}
+
+#[test]
+fn floor_and_cap_retain_complete_sorted_identifier_sequence() {
+    let mut r = band_report(&[
+        Severity::Critical,
+        Severity::Critical,
+        Severity::Critical,
+        Severity::Critical,
+        Severity::Medium,
+    ]);
+    for (f, (id, score)) in
+        r.findings
+            .iter_mut()
+            .zip([("Z", 9.1), ("B", 9.8), ("A", 9.8), ("C", 9.5), ("M", 5.0)])
+    {
+        f.id = id.into();
+        f.score_v3 = Some(score);
+    }
+    for floor in [None, Some(Severity::High)] {
+        let mut options = opts();
+        options.min_severity = floor;
+        options.max_table_rows = Some(3);
+        let d = build(&r, &options, BTreeMap::new(), serde_json::Value::Null);
+        assert_eq!(
+            d.inventory
+                .iter()
+                .map(|f| f.id.as_str())
+                .collect::<Vec<_>>(),
+            ["A", "B", "C"]
+        );
+        let image = d.images.iter().find(|i| i.counts.total() == 5).unwrap();
+        assert_eq!(
+            image
+                .findings
+                .iter()
+                .map(|f| f.id.as_str())
+                .collect::<Vec<_>>(),
+            ["A", "B", "C"]
+        );
+        assert_eq!(d.inventory_omitted, if floor.is_some() { 1 } else { 2 });
+        assert_eq!(image.findings_omitted, d.inventory_omitted);
+    }
 }

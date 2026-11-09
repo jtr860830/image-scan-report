@@ -15,6 +15,10 @@ mod pdf;
 fn fixture(language: Language) -> (Report, RenderOptions, RenderData) {
     let report = data::fixture_report(3);
     let opts = RenderOptions {
+        min_severity: None,
+        image_detail: image_scan_report::model::ImageDetail::Full,
+        max_table_rows: None,
+        json_artifact: false,
         describe_severities: vec![
             image_scan_report::model::Severity::Critical,
             image_scan_report::model::Severity::High,
@@ -172,4 +176,42 @@ fn edition_metadata_and_appendix_credit_agree() {
         1,
         "{text}"
     );
+}
+
+#[test]
+fn summary_explains_hidden_findings_in_both_languages() {
+    for lang in [Language::En, Language::ZhTw] {
+        let (report, mut opts, _) = fixture(lang.clone());
+        opts.min_severity = Some(image_scan_report::model::Severity::High);
+        let data = model::build(
+            &report,
+            &opts,
+            strings::load(lang.clone()),
+            theme::default_theme().to_render_value(),
+        );
+        assert!(data.filters.hidden_findings > 0);
+        let expected = if lang == Language::En {
+            format!(
+                "Inventory, remediation and image tables show High and above (Unrated is always listed); {} findings below that level are counted above but not listed.",
+                data.filters.hidden_findings
+            )
+        } else {
+            format!(
+                "弱點盤點、修補建議及映像檔表格列出 High 及以上等級的弱點（未評級弱點一律列出）；{} 筆較低等級弱點僅計入上方統計，未列於表格中。",
+                data.filters.hidden_findings
+            )
+        };
+        let bytes = Renderer::new()
+            .render_pdf(&data, None, None, report.generated_at)
+            .unwrap();
+        let compact = |s: &str| {
+            s.chars()
+                .filter(|c| !c.is_whitespace() && *c != '\u{200b}')
+                .collect::<String>()
+        };
+        assert!(
+            compact(&pdf::text(&bytes)).contains(&compact(&expected)),
+            "{expected}"
+        );
+    }
 }
