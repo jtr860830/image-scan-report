@@ -1,11 +1,17 @@
 # Container installation
 
 The release image is `ghcr.io/jtr860830/judex:<ver>`. Replace `<ver>` with
-an available release tag. Build a development image from the repository root:
+an available release tag.
+
+## Local build
+
+Build a development image from the repository root:
 
 ```sh
 podman build -t judex:dev -f Containerfile .
 ```
+
+Use a podman machine with at least 8 GiB; the release build OOM-kills under 2 GiB.
 
 The builder uses Rust 1.99 on Debian 13 (trixie); runtime uses
 `gcr.io/distroless/cc-debian13:nonroot`, with UID/GID 65532.
@@ -31,7 +37,7 @@ podman run --rm --read-only --security-opt no-new-privileges \
   -v ./out:/var/lib/judex/reports:Z -e HARBOR_PASSWORD judex:dev
 ```
 
-The default command is `run`; it finds `/etc/judex/config.yaml`. To validate first:
+To validate first:
 
 ```sh
 IMAGE=judex:dev deploy/podman/run.sh check --config /etc/judex/config.yaml
@@ -66,8 +72,8 @@ when configured as above. All other mounted inputs can remain read-only.
 
 | Variable | Purpose |
 | --- | --- |
-| `JUDEX_CONFIG` | Authoritative configuration path when non-empty and `--config` is omitted; a missing file is an error |
-| `JUDEX_THEME_DIR` | Theme directory, after `theme.path` and before the embedded default |
+| `JUDEX_CONFIG` | Configuration path; see [Configuration reference](../README.md#configuration-reference) |
+| `JUDEX_THEME_DIR` | Theme directory; see [Theme](../README.md#theme) |
 | `RUST_LOG` | Log filter |
 | `HARBOR_PASSWORD` | Harbor password when referenced by the configuration |
 | `NEUVECTOR_PASSWORD` | NeuVector password when referenced by the configuration |
@@ -75,10 +81,8 @@ when configured as above. All other mounted inputs can remain read-only.
 
 Pass variables with `-e` in raw commands. The wrapper passes only the three
 secret variables above; pass other variables explicitly in raw commands.
-An empty `JUDEX_CONFIG` is ignored. With no explicit configuration, the image
-searches `/home/nonroot/.config/judex/config.yaml` (normally absent), then
-`/etc/judex/config.yaml`.
-A set `JUDEX_THEME_DIR` must be non-empty and contain a valid `theme.toml`.
+See the README for [configuration lookup](../README.md#configuration-reference) and
+[theme selection and product identity](../README.md#theme).
 
 ## Building an edition image
 
@@ -94,12 +98,8 @@ Override the inherited OCI labels `org.opencontainers.image.source`,
 `org.opencontainers.image.description`, and `org.opencontainers.image.title`
 so the edition does not advertise upstream metadata.
 
-Configuration files then need no `theme:` block. An explicit `theme.path`
-overrides the environment theme. Set `[product] name` in `theme.toml` to name
-the edition; `--version` displays `<name> <ver> (judex)`. If the environment
-theme is invalid, `--version` prints the upstream identity with one stderr
-warning and exits 0; `run`, `check`, and `render-data` exit 2 when selecting
-that invalid theme.
+Set `[product] name` in `theme.toml` to name the edition; see
+[Theme](../README.md#theme) for selection and identity behaviour.
 
 ## Air-gap transfer
 
@@ -108,11 +108,15 @@ On a connected host, pull the release and save it; replace `<ver>` throughout:
 ```sh
 podman pull ghcr.io/jtr860830/judex:<ver>
 podman save -o judex-<ver>.tar ghcr.io/jtr860830/judex:<ver>
+sha256sum judex-<ver>.tar > IMAGE-SHA256SUMS
 ```
 
-Transfer the tar file to the isolated host, then load and run it:
+Pull on a host matching the destination architecture; this saves that platform's
+image. Repeat for the other platform if needed. Transfer the tar file and
+IMAGE-SHA256SUMS to the isolated host, then verify, load and run it:
 
 ```sh
+sha256sum -c IMAGE-SHA256SUMS
 podman load -i judex-<ver>.tar
 IMAGE=ghcr.io/jtr860830/judex:<ver> deploy/podman/run.sh
 ```
@@ -120,14 +124,17 @@ IMAGE=ghcr.io/jtr860830/judex:<ver> deploy/podman/run.sh
 File-based scans work offline; API sources and HTTP outputs still need access
 to their configured services.
 
-## Resources and troubleshooting
+## Resources
 
-Memory use is about 0.8 GB plus 70 MB per 1,000 findings; the Kubernetes examples request 1 GiB and limit 4 GiB (about 45,000 findings).
+Memory use is about 0.8 GB plus 70 MB per 1,000 findings; see the
+[measurements and derivation](development.md#rendering-performance-measured-2026-11-08-release-build-apple-silicon-median-of-three).
 Allow sufficient output disk space for both PDF and JSON when enabled.
+
+## Troubleshooting
 
 Distroless has no shell, and a `:debug-nonroot` variant of this image is not
 provided. Reports land in the `/var/lib/judex/reports` mount, so nothing needs to be copied
 out of the container; to investigate configuration or rendering problems, run
 the same binary locally with the same configuration file. `podman run --rm
-judex:dev --version` prints the theme-derived product display; the OCI `version` and
+judex:dev --version` prints the [product display](../README.md#theme); the OCI `version` and
 `revision` labels describe the image build separately.

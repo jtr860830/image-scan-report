@@ -30,6 +30,9 @@ Download the native Linux tarball for x86_64 or aarch64 and `SHA256SUMS` from
 The container image is `ghcr.io/jtr860830/judex:<ver>`. See the
 [release guide](docs/release.md) for assets and air-gap bundles.
 
+Native binaries require glibc >= 2.39 (built on ubuntu-24.04). Use the container
+image on hosts with older glibc.
+
 ### First run from the tarball
 
 ```sh
@@ -56,7 +59,7 @@ For air-gapped hosts, transfer the image with `podman save` and `podman load`.
 See [container installation](docs/container.md) for the wrapper script, mounts,
 permissions, secrets, local builds, and air-gap commands.
 
-Sizing: about 0.8 GB plus 70 MB per 1,000 findings; the Kubernetes examples request 1 GiB and limit 4 GiB. See [container sizing](docs/container.md).
+See [container sizing](docs/container.md#resources).
 
 ## Kubernetes
 
@@ -81,8 +84,8 @@ and writes PDF and JSON to `./out`, creating the directory if needed. Relative p
 resolve from the working directory, not the configuration file's directory.
 See [fixture provenance](tests/fixtures/README.md) for how the scanner inputs were captured.
 
-`--version` (or `-V`) and `version` print `judex 0.1.0`. `check` fetches and parses the source and prints
-`Trivy (files): ./tests/fixtures/trivy: 11 images (11 scanned, 0 failed, 0 not scanned), 4368 findings; product: judex 0.1.0; theme: default`; it validates output configuration and the theme without
+`--version` (or `-V`) and `version` print `judex <ver>`. `check` fetches and parses the source and prints
+`Trivy (files): ./tests/fixtures/trivy: 11 images (11 scanned, 0 failed, 0 not scanned), 4368 findings; product: judex <ver>; theme: default`; it validates output configuration and the theme without
 writing artifacts. `run` prints `Report: 11 images, 4368 findings`, followed by
 one destination and filename per stored artifact. Counts depend on the inputs.
 The example produces `out/trivy-trivy-files-YYYY-MM-DD.pdf` and a matching JSON file, using the UTC run
@@ -102,9 +105,6 @@ empty. The distroless container sets `HOME=/home/nonroot`, so it searches
 `/home/nonroot/.config/judex/config.yaml`, which is normally absent.
 If no file exists, exit 2 and list every candidate; if the pre-0.2.0
 configuration still exists, include a migration hint.
-The `check` counts show scanned, failed, and not scanned images before the
-findings count, followed by the product display and theme source
-(`config`, `env`, or `default`).
 
 Configuration is YAML with required `source`, `report`, and `output` sections.
 Unknown keys are rejected. “Required” below means there is no default;
@@ -207,6 +207,8 @@ The configuration's `organization` is serialised as `organisation` in JSON.
 
 ### Theme
 
+Set `report.logo` to a local PNG or SVG file to place the customer logo on the cover. Theme logos appear beside the product credit in the appendix.
+
 The optional top-level `theme.path` points to a directory containing `theme.toml`
 and an optional `logo.png` or `logo.svg`. Select the theme in this order:
 `theme.path`, `$JUDEX_THEME_DIR`, embedded default. A set `JUDEX_THEME_DIR` must
@@ -290,28 +292,10 @@ Errors are printed to stderr as `error: ...`; warnings also go to stderr.
 A run with some successful writes returns `0` and reports failed sinks on stderr.
 These codes indicate pipeline outcomes, not vulnerability severity thresholds.
 
-## Design iteration
-
-Install Typst CLI **0.15.1**, matching the embedded crate version, then run:
-
-```sh
-judex render-data --config deploy/examples/config-trivy-files.yaml --out assets/templates/data.json
-typst watch assets/templates/report.typ --root assets/templates assets/templates/out.pdf --font-path assets/fonts --ignore-system-fonts
-```
-
-The CLI must see the bundled fonts through `--font-path assets/fonts`;
-`--ignore-system-fonts` keeps previews consistent with embedded rendering.
-Regenerate data after changing scan inputs or configuration. Theme logos are loaded
-by the embedded renderer; for CLI previews, make the logo file available under
-the template root with the filename recorded in the data.
+See the [design iteration guide](docs/design/README.md) for Typst previews.
 
 ## Development and licence
 
 See [development notes](docs/development.md) for checks, snapshots and module layout.
 Licensed under [Apache-2.0](LICENSE).
-Regenerate third-party notices with `cargo about generate --config about.toml about.hbs -o THIRD_PARTY_NOTICES.md` using cargo-about 0.9.3; see [development notes](docs/development.md#third-party-notices).
-
-Set `report.logo` to a local PNG or SVG file to place the customer logo on the cover. Theme logos appear beside the product credit in the appendix.
-
-Native binaries require glibc >= 2.39 (built on ubuntu-24.04). Use the container
-image on hosts with older glibc.
+See [third-party notices](docs/development.md#third-party-notices) for regeneration.
