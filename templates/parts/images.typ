@@ -14,7 +14,7 @@
     #text(size: 8pt)[
       #grid(
         columns: (3.6cm, 1fr), row-gutter: 3.5pt,
-        ..(
+        ..((if image.show_tags { (("image_meta_tags", identifier(theme, image.tags.join(", "))),) } else { () }) + (
           ("image_meta_digest", identifier(theme, image.digest)),
           ("image_meta_platform", image.platform),
           ("image_meta_os", image.os),
@@ -27,7 +27,7 @@
               h(3pt)
             }
           }),
-        ).map(pair => (text(fill: rgb(theme.colors.muted), tr(pair.at(0))), pair.at(1))).flatten()
+        )).map(pair => (text(fill: rgb(theme.colors.muted), tr(pair.at(0))), pair.at(1))).flatten()
       )
     ]
     ]

@@ -45,3 +45,11 @@ assert_cmd = "2"
 insta = { version = "1", features = ["json"] }
 rstest = "0.28"
 tempfile = "3"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = true
+
+[lints.rust]
+missing_docs = "warn"

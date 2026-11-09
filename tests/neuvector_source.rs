@@ -1,3 +1,4 @@
+//! Integration checks for neuvector source behavior.
 #[path = "support/neuvector_mock.rs"]
 mod neuvector_mock;
 use httpmock::MockServer;
@@ -12,7 +13,11 @@ use serde_json::json;
 fn fetches_registry_images_and_findings() {
     let (_server, src) = capture(false);
     let result = src.fetch().unwrap();
-    assert_eq!(result.images.len(), 11);
+    assert_eq!(
+        result.images.len(),
+        11,
+        "neuvector_source: result.images.len() mismatch"
+    );
     assert!(
         result
             .findings
@@ -21,7 +26,11 @@ fn fetches_registry_images_and_findings() {
             .count()
             > 1000
     );
-    assert_eq!(result.source.db_version.as_deref(), Some("4.318"));
+    assert_eq!(
+        result.source.db_version.as_deref(),
+        Some("4.318"),
+        "neuvector_source: result.source.db_version.as_deref() mismatch"
+    );
     assert_eq!(
         result.scope,
         format!("{}/harbor-lab", url_authority(&src.base_url))
@@ -31,7 +40,11 @@ fn fetches_registry_images_and_findings() {
 fn rescan_capture_lists_multiarch_as_one_image() {
     let (_server, src) = capture(true);
     let result = src.fetch().unwrap();
-    assert_eq!(result.images.len(), 12);
+    assert_eq!(
+        result.images.len(),
+        12,
+        "neuvector_source: result.images.len() mismatch"
+    );
     assert_eq!(
         result
             .images
@@ -78,15 +91,27 @@ fn failed_scan_is_failed_not_dropped() {
         t.status(200);
     });
     let result = src.fetch().unwrap();
-    assert_eq!(result.images[0].scan.state, ScanState::Failed);
-    assert_eq!(result.images[0].scan.error.as_deref(), Some("failed"));
+    assert_eq!(
+        result.images[0].scan.state,
+        ScanState::Failed,
+        "neuvector_source: result.images[0].scan.state mismatch"
+    );
+    assert_eq!(
+        result.images[0].scan.error.as_deref(),
+        Some("failed"),
+        "neuvector_source: result.images[0].scan.error.as_deref() mismatch"
+    );
     report.assert_calls(0);
 }
 #[test]
 fn in_progress_images_are_not_scanned() {
     let (_server, src) = synthetic("scanning", "", 200);
     let result = src.fetch().unwrap();
-    assert_eq!(result.images[0].scan.state, ScanState::NotScanned);
+    assert_eq!(
+        result.images[0].scan.state,
+        ScanState::NotScanned,
+        "neuvector_source: result.images[0].scan.state mismatch"
+    );
     assert_eq!(
         result.images[0].scan.error.as_deref(),
         Some("scan in progress")
@@ -106,7 +131,11 @@ fn logout_runs_on_failure() {
     );
     let report = get(&server, &format!("{ROOT}/image/id"), json!({}), 500);
     let result = source(&server).fetch().unwrap();
-    assert_eq!(result.images[0].scan.state, ScanState::Failed);
+    assert_eq!(
+        result.images[0].scan.state,
+        ScanState::Failed,
+        "neuvector_source: result.images[0].scan.state mismatch"
+    );
     report.assert_calls(3);
     out.assert_calls(1);
 }
@@ -170,12 +199,24 @@ fn captured_payloads_map_without_sockets() {
     use image_scan_report::source::neuvector::{api::*, report::compose_reference};
     use image_scan_report::source::neuvector_api::scan_status;
     let list: RegistryImages = serde_json::from_value(fixture("registry-images.json")).unwrap();
-    assert_eq!(list.images.len(), 11);
+    assert_eq!(
+        list.images.len(),
+        11,
+        "neuvector_source: list.images.len() mismatch"
+    );
     for entry in list.images {
         let scan = scan_status(&entry);
-        assert_eq!(scan.state, ScanState::Ok);
+        assert_eq!(
+            scan.state,
+            ScanState::Ok,
+            "neuvector_source: scan.state mismatch"
+        );
         assert!(scan.scanned_at.is_some());
-        assert_eq!(scan.scanner_version.as_deref(), Some("4.318"));
+        assert_eq!(
+            scan.scanner_version.as_deref(),
+            Some("4.318"),
+            "neuvector_source: scan.scanner_version.as_deref() mismatch"
+        );
         let report: ImageReport =
             serde_json::from_value(fixture(&format!("images/{}.json", entry.image_id))).unwrap();
         assert!(report.report.unwrap().vulnerabilities.is_some());
@@ -193,7 +234,7 @@ fn captured_payloads_map_without_sockets() {
             serde_json::from_value(json!({"status":status,"result":result,"scanned_timestamp":1}))
                 .unwrap();
         let scan = scan_status(&entry);
-        assert_eq!(scan.state, state);
+        assert_eq!(scan.state, state, "neuvector_source: scan.state mismatch");
         assert!(scan.scanned_at.is_some());
     }
 }
@@ -279,8 +320,12 @@ fn status_table_without_sockets() {
         let entry: ImageSummary =
             serde_json::from_value(json!({"status":status,"result":result})).unwrap();
         let scan = scan_status(&entry);
-        assert_eq!(scan.state, state);
-        assert_eq!(scan.error.as_deref(), error);
+        assert_eq!(scan.state, state, "neuvector_source: scan.state mismatch");
+        assert_eq!(
+            scan.error.as_deref(),
+            error,
+            "neuvector_source: scan.error.as_deref() mismatch"
+        );
     }
 }
 
@@ -306,7 +351,11 @@ fn shared_digest_under_two_tags_preserves_both_rows() {
         200,
     );
     let result = source(&server).fetch().unwrap();
-    assert_eq!(result.images.len(), 2);
+    assert_eq!(
+        result.images.len(),
+        2,
+        "neuvector_source: result.images.len() mismatch"
+    );
     for tag in ["a", "b"] {
         let image = result
             .images

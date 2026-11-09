@@ -1,3 +1,4 @@
+//! Integration checks for render images behavior.
 use image_scan_report::{
     model::Language,
     render::{
@@ -186,4 +187,39 @@ fn not_scanned_has_its_own_callout() {
         !image_text.to_lowercase().contains("failed"),
         "{image_text}"
     );
+}
+
+#[test]
+fn image_detail_lists_every_tag() {
+    let mut report = data::fixture_report(1);
+    let reference = report.images[0].reference.clone();
+    let mut opts = data::fixture_data(Language::En, 1);
+    let tag = reference.rsplit_once(':').unwrap().1;
+    let multi_arch = format!("{reference} (linux/arm64)");
+    for (reference, tags, show) in [
+        (reference.as_str(), vec!["latest", "v2"], true),
+        (reference.as_str(), vec!["other"], true),
+        (reference.as_str(), vec![], false),
+        (reference.as_str(), vec![tag], false),
+        (multi_arch.as_str(), vec![tag], false),
+    ] {
+        report.images[0].reference = reference.to_owned();
+        report.images[0].tags = tags.iter().map(|s| (*s).to_owned()).collect();
+        let options = data::default_options(Language::En);
+        opts.images = model::build(
+            &report,
+            &options,
+            strings::load(Language::En),
+            theme::default_theme().to_render_value(),
+        )
+        .images;
+        assert_eq!(opts.images[0].tags, report.images[0].tags);
+        let (_, text) = chapter(&render(&opts), &opts.strings["ch_images"]);
+        let detail = text.split(&opts.strings["ch_appendix"]).next().unwrap();
+        assert_eq!(opts.images[0].show_tags, show);
+        assert_eq!(detail.contains(&opts.strings["image_meta_tags"]), show);
+        if show {
+            assert!(compact(detail).contains(&compact(&tags.join(", "))));
+        }
+    }
 }

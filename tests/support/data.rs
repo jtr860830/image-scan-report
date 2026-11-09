@@ -42,9 +42,8 @@ pub fn fixture_report(max_images: usize) -> Report {
     report
 }
 
-pub fn fixture_data(language: Language, max_images: usize) -> RenderData {
-    let report = fixture_report(max_images);
-    let opts = RenderOptions {
+pub fn default_options(language: Language) -> RenderOptions {
+    RenderOptions {
         describe_severities: vec![
             image_scan_report::model::Severity::Critical,
             image_scan_report::model::Severity::High,
@@ -52,13 +51,18 @@ pub fn fixture_data(language: Language, max_images: usize) -> RenderData {
         description_chars: 600,
         remediation_cards: 30,
         customer_logo: None,
-        language: language.clone(),
+        language,
         stale_after_days: 30,
         product_name: "judex".into(),
         product_version: "0.1.0".into(),
         top_images: 10,
         top_findings: 15,
-    };
+    }
+}
+
+pub fn fixture_data(language: Language, max_images: usize) -> RenderData {
+    let report = fixture_report(max_images);
+    let opts = default_options(language.clone());
     model::build(
         &report,
         &opts,

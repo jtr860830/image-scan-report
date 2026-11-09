@@ -1,12 +1,15 @@
-//! Shared discovery, timestamps, and stable deduplication.
+//! Directory walking, file timestamps and image deduplication shared by the sources.
 use super::{ParseError, SourceError};
 use crate::model::{Finding, Image, ScanSet, SourceInfo};
 use chrono::{DateTime, Utc};
-use std::{
-    collections::{HashMap, HashSet},
-    path::{Path, PathBuf},
-};
+use std::collections::{HashMap, HashSet};
+use std::path::{Path, PathBuf};
 
+/// List `*.json` files (extension in any case) under `dir` recursively, sorted by path.
+///
+/// # Errors
+///
+/// Fails if the directory is missing or unreadable, or a directory entry cannot be traversed.
 pub fn walk_json_files(dir: &Path) -> Result<Vec<PathBuf>, SourceError> {
     let metadata = std::fs::metadata(dir).map_err(|e| SourceError::Unreadable(dir.into(), e))?;
     if !metadata.is_dir() {
@@ -30,6 +33,7 @@ pub fn walk_json_files(dir: &Path) -> Result<Vec<PathBuf>, SourceError> {
     paths.sort();
     Ok(paths)
 }
+/// Read a file modification time as UTC, or `None` when the platform cannot provide it.
 pub fn file_modified_at(path: &Path) -> Option<DateTime<Utc>> {
     std::fs::metadata(path)
         .ok()?
@@ -37,6 +41,10 @@ pub fn file_modified_at(path: &Path) -> Option<DateTime<Utc>> {
         .ok()
         .map(Into::into)
 }
+/// Keep one record per digest, or per reference when there is no digest, preferring the
+/// latest scan.
+///
+/// Findings repeated within an image (same id, package and installed version) are dropped.
 pub fn dedupe_images(items: Vec<(Image, Vec<Finding>)>) -> (Vec<Image>, Vec<Finding>) {
     let mut positions = HashMap::new();
     let mut selected: Vec<(Image, Vec<Finding>)> = Vec::new();
@@ -68,6 +76,10 @@ pub fn dedupe_images(items: Vec<(Image, Vec<Finding>)>) -> (Vec<Image>, Vec<Find
     (images, findings)
 }
 
+/// Keep one record per reference and digest pair, preferring a successful scan, then the
+/// latest.
+///
+/// Findings repeated within an image (same id, package and installed version) are dropped.
 pub fn dedupe_images_by_reference(items: Vec<(Image, Vec<Finding>)>) -> (Vec<Image>, Vec<Finding>) {
     let mut positions = HashMap::new();
     let mut selected: Vec<(Image, Vec<Finding>)> = Vec::new();
@@ -105,12 +117,16 @@ pub fn dedupe_images_by_reference(items: Vec<(Image, Vec<Finding>)>) -> (Vec<Ima
 
 /// Deduplicated scan results and the directory scope shared by file sources.
 pub struct FetchedDirectory {
+    /// Final component of the canonicalised input directory.
     pub scope: String,
+    /// Deduplicated images from every parsed report.
     pub images: Vec<Image>,
+    /// Findings of the kept images.
     pub findings: Vec<Finding>,
 }
 
 impl FetchedDirectory {
+    /// Attach source metadata to the images and findings collected from a directory.
     pub fn into_scan_set(self, source: SourceInfo) -> ScanSet {
         ScanSet {
             source,
@@ -121,7 +137,14 @@ impl FetchedDirectory {
     }
 }
 
-/// Read reports in sorted path order, skipping unrelated or invalid files.
+/// Parse every JSON file under `dir` with `parse`, then deduplicate the images by digest.
+///
+/// Files that cannot be read or parsed, or that `parse` does not recognise, are skipped
+/// with a warning.
+///
+/// # Errors
+///
+/// Fails if `dir` is missing, unreadable or not a directory, or no file yields a report.
 pub fn fetch_directory<F>(dir: &Path, mut parse: F) -> Result<FetchedDirectory, SourceError>
 where
     F: FnMut(

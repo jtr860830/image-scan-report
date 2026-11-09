@@ -1,11 +1,10 @@
 //! Conversion of Harbor responses into scanner-independent rows.
-use super::api::*;
-use crate::{
-    model::*,
-    severity::{ScoreInput, classify, cvss_from_map},
-};
-use std::fmt::Write;
+use super::api::{ExtraAttrs, Platform, ScanOverview, Vuln};
+use crate::model::{Finding, FixStatus, ScanState, ScanStatus};
+use crate::severity::ScoreInput;
 
+/// Format `os/architecture[/variant]`, ignoring an empty variant.
+#[must_use]
 pub fn platform_string(p: &Platform) -> String {
     let mut value = format!("{}/{}", p.os, p.architecture);
     if let Some(v) = p.variant.as_ref().filter(|s| !s.is_empty()) {
@@ -14,12 +13,17 @@ pub fn platform_string(p: &Platform) -> String {
     }
     value
 }
+/// Build `repository:tag` from the lexicographically smallest tag, or
+/// `repository@<first 12 digest hex digits>` when untagged, plus ` (platform)` if given.
+#[must_use]
 pub fn image_reference(
     repository: &str,
     tags: &[String],
     digest: &str,
     platform: Option<&str>,
 ) -> String {
+    use std::fmt::Write;
+
     let mut value = if let Some(tag) = tags.iter().min() {
         format!("{repository}:{tag}")
     } else {
@@ -30,6 +34,8 @@ pub fn image_reference(
     }
     value
 }
+/// Map Harbor's `scan_status` to a scan state, with the scan end time and scanner version.
+#[must_use]
 pub fn scan_status(overview: Option<&ScanOverview>) -> ScanStatus {
     let status = overview.map(|o| o.scan_status.as_str()).unwrap_or("");
     let (state, error) = match status.to_ascii_lowercase().as_str() {
@@ -50,13 +56,15 @@ pub fn scan_status(overview: Option<&ScanOverview>) -> ScanStatus {
             .and_then(|s| s.version.clone()),
     }
 }
+/// Normalise a Harbor vulnerability and select its effective severity.
+#[must_use]
 pub fn finding(v: &Vuln, image_reference: &str) -> Finding {
     let cvss = v
         .vendor_attributes
         .as_ref()
-        .map(|a| cvss_from_map(&a.cvss))
+        .map(|a| crate::severity::cvss_from_map(&a.cvss))
         .unwrap_or_default();
-    let c = classify(&ScoreInput {
+    let c = crate::severity::classify(&ScoreInput {
         cvss: &cvss,
         scanner_label: Some(&v.severity),
     });
@@ -79,7 +87,9 @@ pub fn finding(v: &Vuln, image_reference: &str) -> Finding {
     }
 }
 
-/// Infer a usable platform from child or single-manifest metadata.
+/// Build a platform label from artifact attributes; `None` if the OS or architecture is
+/// empty or `unknown`.
+#[must_use]
 pub fn platform_from_attrs(attrs: &ExtraAttrs) -> Option<String> {
     let os = attrs
         .os

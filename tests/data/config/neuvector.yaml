@@ -20,10 +20,10 @@ output:
     ca_file: /certs/upload.pem
     timeout_secs: 60
   - type: http
-    url: https://second.example.test
+    url: https://second.example.test/{filename}
     headers:
       X-Token: '${JUDEX_CONFIG_OUTPUTS_7}'
   - type: http
-    url: https://third.example.test
+    url: https://third.example.test/{filename}
     headers:
       X-Token: '${JUDEX_CONFIG_OUTPUTS_7}'

@@ -1,34 +1,38 @@
 //! Harbor v2 API source.
 pub mod api;
 pub mod map;
-use super::{
-    ScanSource, SourceError,
-    files::dedupe_images_by_reference,
-    http::{Auth, HttpClient, HttpError, encode_segment, row_failure, url_authority},
-};
-use crate::model::*;
-use api::*;
-use map::digest12;
+use super::http::{Auth, HttpClient, HttpError};
+use super::{ScanSource, SourceError};
+use crate::model::{Finding, Image, ScanSet, ScanState, SourceInfo, SourceKind};
+use api::{Artifact, Project, Repository, Scanner, VulnReport};
 use serde::de::DeserializeOwned;
 use std::collections::{BTreeMap, BTreeSet};
 
-/// Connection fields kept independent of pipeline configuration.
+/// Connection settings for [`HarborSource::from_config`], apart from the password.
 pub struct HarborParams {
+    /// Harbor base URL; API paths under `/api/v2.0` are appended to it.
     pub url: String,
+    /// Harbor project to report on; `None` walks every project the account can list.
     pub project: Option<String>,
+    /// Account name for HTTP Basic authentication.
     pub username: String,
 }
+/// Harbor v2 API input with project filtering and authenticated transport.
 pub struct HarborSource {
+    /// Harbor base URL with trailing slashes removed.
     pub base_url: String,
+    /// Harbor project to report on; `None` walks every project the account can list.
     pub project: Option<String>,
     auth: Auth,
+    /// HTTP transport used for every request.
     pub client: HttpClient,
     host: String,
 }
 impl HarborSource {
+    /// Build a scanner source from connection settings and a resolved password.
     pub fn from_config(cfg: &HarborParams, client: HttpClient, password: String) -> Self {
         Self {
-            host: url_authority(&cfg.url),
+            host: super::http::url_authority(&cfg.url),
             base_url: cfg.url.trim_end_matches('/').into(),
             project: cfg.project.clone(),
             auth: Auth::Basic {
@@ -110,7 +114,7 @@ impl HarborSource {
                             ..Artifact::default()
                         },
                         RowKind::Child(platform),
-                        Some(row_failure(error)?),
+                        Some(super::http::row_failure(error)?),
                     )),
                 }
             }
@@ -135,7 +139,7 @@ impl HarborSource {
                 RowKind::Child(_) => Some(
                     platform
                         .clone()
-                        .unwrap_or_else(|| digest12(&artifact.digest)),
+                        .unwrap_or_else(|| map::digest12(&artifact.digest)),
                 ),
             };
             let mut reference =
@@ -144,7 +148,7 @@ impl HarborSource {
                 let suffix = format!(
                     "{}, {}",
                     suffix.unwrap_or_default(),
-                    digest12(&artifact.digest)
+                    map::digest12(&artifact.digest)
                 );
                 reference =
                     map::image_reference(repository, &tags, &artifact.digest, Some(&suffix));
@@ -186,7 +190,7 @@ impl HarborSource {
                             }
                         }
                     }
-                    Err(error) => failure = Some(row_failure(error)?),
+                    Err(error) => failure = Some(super::http::row_failure(error)?),
                 }
             }
             if let Some(error) = failure {
@@ -229,14 +233,17 @@ impl ScanSource for HarborSource {
         for project in projects {
             let path = format!(
                 "/api/v2.0/projects/{}/repositories",
-                encode_segment(&project.name)
+                super::http::encode_segment(&project.name)
             );
             for repo in self.pages::<Repository>(&path, "")? {
                 let name = repo
                     .name
                     .strip_prefix(&format!("{}/", project.name))
                     .unwrap_or(&repo.name);
-                let path = format!("{path}/{}/artifacts", encode_segment(&encode_segment(name)));
+                let path = format!(
+                    "{path}/{}/artifacts",
+                    super::http::encode_segment(&super::http::encode_segment(name))
+                );
                 let artifacts =
                     self.pages::<Artifact>(&path, "&with_tag=true&with_scan_overview=true")?;
                 tracing::info!("repository {}: {} artifacts", repo.name, artifacts.len());
@@ -245,7 +252,7 @@ impl ScanSource for HarborSource {
                 }
             }
         }
-        let (images, findings) = dedupe_images_by_reference(rows);
+        let (images, findings) = super::files::dedupe_images_by_reference(rows);
         if images.is_empty() {
             return Err(SourceError::NoImages(self.scope()));
         }
@@ -337,7 +344,7 @@ mod tests {
                 headers: BTreeMap::from([("x-total-count".into(), "20000".into())]),
             })
         })
-        .unwrap();
+        .expect("valid pagination response");
         assert_eq!(calls, 2);
         assert_eq!(rows.len(), 1);
         calls = 0;
@@ -350,7 +357,7 @@ mod tests {
                 headers: BTreeMap::from([("x-total-count".into(), "20000".into())]),
             })
         })
-        .unwrap();
+        .expect("valid pagination response");
         assert_eq!(calls, MAX_PAGES);
         assert_eq!(rows.len(), MAX_PAGES);
     }

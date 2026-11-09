@@ -1,16 +1,19 @@
 //! Fetch scan results, assemble reports, and store artifacts.
-use crate::{
-    config::{Config, ConfigError, ReportConfig, SourceConfig},
-    model::{Report, ScanSet},
-    naming::artifact_base_name,
-    sink::{Artifact, ReportSink, build_sinks},
-    source::{
-        ScanSource, SourceError, neuvector_file::NeuvectorFileSource, trivy_file::TrivyFileSource,
-    },
-};
+use crate::config::{Config, ConfigError, ReportConfig, SourceConfig};
+use crate::model::{Report, ScanSet};
+use crate::sink::{Artifact, ReportSink};
+use crate::source::neuvector_file::NeuvectorFileSource;
+use crate::source::trivy_file::TrivyFileSource;
+use crate::source::{ScanSource, SourceError};
 use chrono::{DateTime, Utc};
 use std::path::{Path, PathBuf};
 
+/// Construct the configured scan source, reading its password and building its transport.
+///
+/// # Errors
+///
+/// Fails if a Harbor or NeuVector password variable is unset, or the TLS options conflict or
+/// name an unusable CA file.
 pub fn build_source(cfg: &SourceConfig) -> Result<Box<dyn ScanSource>, ConfigError> {
     match cfg {
         SourceConfig::TrivyFiles { path } => Ok(Box::new(TrivyFileSource { dir: path.clone() })),
@@ -27,7 +30,8 @@ pub fn build_source(cfg: &SourceConfig) -> Result<Box<dyn ScanSource>, ConfigErr
             insecure_skip_verify,
         } => {
             let password = crate::config::secret_from_env(password_env)?;
-            let client = source_client(
+            let client = crate::source::http::tls_client(
+                "source",
                 url,
                 ca_file.as_deref(),
                 *timeout_secs,
@@ -53,7 +57,8 @@ pub fn build_source(cfg: &SourceConfig) -> Result<Box<dyn ScanSource>, ConfigErr
             insecure_skip_verify,
         } => {
             let password = crate::config::secret_from_env(password_env)?;
-            let client = source_client(
+            let client = crate::source::http::tls_client(
+                "source",
                 url,
                 ca_file.as_deref(),
                 *timeout_secs,
@@ -74,28 +79,7 @@ pub fn build_source(cfg: &SourceConfig) -> Result<Box<dyn ScanSource>, ConfigErr
     }
 }
 
-fn source_client(
-    url: &str,
-    ca_file: Option<&Path>,
-    timeout_secs: u64,
-    insecure_skip_verify: bool,
-) -> Result<crate::source::http::HttpClient, ConfigError> {
-    let client = crate::source::http::HttpClient::new(&crate::source::http::HttpOptions {
-        ca_file: ca_file.map(Path::to_owned),
-        insecure_skip_verify,
-        timeout: std::time::Duration::from_secs(timeout_secs),
-        user_agent: crate::source::http::USER_AGENT.into(),
-    })
-    .map_err(|e| ConfigError::Invalid(format!("source.ca_file: {e}")))?;
-    if insecure_skip_verify {
-        tracing::warn!(
-            "source {}: TLS certificate verification is disabled",
-            crate::source::http::url_authority(url)
-        );
-    }
-    Ok(client)
-}
-
+/// Combine scan results with report settings and a UTC generation time.
 pub fn assemble_report(set: ScanSet, cfg: &ReportConfig, now: DateTime<Utc>) -> Report {
     Report {
         generated_at: now,
@@ -108,27 +92,39 @@ pub fn assemble_report(set: ScanSet, cfg: &ReportConfig, now: DateTime<Utc>) -> 
     }
 }
 
+/// Outcome of [`run`]: report totals plus the successful and failed writes.
 #[derive(Debug)]
 pub struct RunSummary {
+    /// Number of images in the report.
     pub images: usize,
+    /// Number of findings in the report.
     pub findings: usize,
+    /// One `<sink description>: <file name>` entry per artifact written.
     pub stored: Vec<String>,
+    /// Descriptions of sinks that rejected at least one artifact; the errors are only logged.
     pub failed_sinks: Vec<String>,
 }
 
+/// Configuration, source, rendering, or complete output failure during a run.
 #[derive(thiserror::Error, Debug)]
+#[must_use]
 pub enum RunError {
+    /// Configuration, theme, logo, credential or TLS setup failed.
     #[error(transparent)]
     Config(#[from] ConfigError),
+    /// Scan data collection failed.
     #[error(transparent)]
     Source(#[from] SourceError),
+    /// Serialisation, PDF rendering, or writing the render-data file failed.
     #[error("rendering failed: {0}")]
     Render(String),
+    /// No artifact was stored anywhere; carries the failed sink descriptions.
     #[error("every output failed: {0:?}")]
     AllSinksFailed(Vec<String>),
 }
 
 impl RunError {
+    /// Map a failure to its exit status: 2 config, 3 source, 4 render, 5 all sinks failed.
     pub fn exit_code(&self) -> i32 {
         match self {
             Self::Config(_) => 2,
@@ -139,10 +135,14 @@ impl RunError {
     }
 }
 
-/// Product identity supplied by the application.
+/// Name and version of the application producing the report.
 #[derive(Clone, Debug)]
 pub struct ProductInfo {
+    /// Application name as the binary reports it (`PRODUCT_NAME` in `main.rs`); shown in
+    /// `check` output and carried in the render data, while the PDF credit uses the theme's
+    /// product name.
     pub name: String,
+    /// Application version, the crate version for the binary.
     pub version: String,
 }
 
@@ -183,7 +183,7 @@ fn load_inputs(cfg: &Config, now: DateTime<Utc>) -> Result<Inputs, RunError> {
         .map(crate::render::theme::Logo::load)
         .transpose()
         .map_err(|err| ConfigError::Invalid(format!("report.logo: {err}")))?;
-    let sinks = build_sinks(&cfg.output)?;
+    let sinks = crate::sink::build_sinks(&cfg.output)?;
     let source = build_source(&cfg.source)?;
     let source_description = source.describe();
     let report = assemble_report(source.fetch()?, &cfg.report, now);
@@ -196,14 +196,22 @@ fn load_inputs(cfg: &Config, now: DateTime<Utc>) -> Result<Inputs, RunError> {
     })
 }
 
+/// Outcome of [`write_render_data`]: the output file and the report totals.
 #[derive(Debug)]
 pub struct RenderDataSummary {
+    /// File the render data was written to.
     pub path: PathBuf,
+    /// Number of images in the render data.
     pub images: usize,
+    /// Number of findings in the render data.
     pub findings: usize,
 }
 
-/// Write display-ready JSON for template iteration.
+/// Write the template input as pretty-printed JSON to `out`, for template iteration.
+///
+/// # Errors
+///
+/// Fails for the reasons [`render_data`] does, or if serialising or writing `out` fails.
 pub fn write_render_data(
     cfg: &Config,
     now: DateTime<Utc>,
@@ -222,6 +230,10 @@ pub fn write_render_data(
 }
 
 /// Build display-ready JSON using the same inputs and options as PDF rendering.
+///
+/// # Errors
+///
+/// Fails if the theme, customer logo, sinks or source cannot be set up, or collection fails.
 pub fn render_data(
     cfg: &Config,
     now: DateTime<Utc>,
@@ -243,6 +255,12 @@ pub fn render_data(
     ))
 }
 
+/// Fetch scan results, render enabled artifacts, and store them in each destination.
+///
+/// # Errors
+///
+/// Fails if the theme, customer logo, sinks or source cannot be set up, collection fails,
+/// JSON serialisation or PDF rendering fails, or no artifact could be stored anywhere.
 pub fn run(
     cfg: &Config,
     now: DateTime<Utc>,
@@ -260,7 +278,11 @@ pub fn run(
         artifacts.push(Artifact {
             file_name: format!(
                 "{}.json",
-                artifact_base_name(&report.scope, report.source.kind, now.date_naive())
+                crate::naming::artifact_base_name(
+                    &report.scope,
+                    report.source.kind,
+                    now.date_naive()
+                )
             ),
             media_type: "application/json",
             bytes: serde_json::to_vec_pretty(&report)
@@ -275,7 +297,11 @@ pub fn run(
         artifacts.push(Artifact {
             file_name: format!(
                 "{}.pdf",
-                artifact_base_name(&report.scope, report.source.kind, now.date_naive())
+                crate::naming::artifact_base_name(
+                    &report.scope,
+                    report.source.kind,
+                    now.date_naive()
+                )
             ),
             media_type: "application/pdf",
             bytes,
@@ -309,12 +335,30 @@ pub fn run(
     Ok(summary)
 }
 
+/// Load every input as [`run`] does and summarise scan states, without rendering or storing.
+///
+/// # Errors
+///
+/// Fails if the theme, customer logo, sinks or source cannot be set up, or collection fails.
 pub fn check(cfg: &Config, product: &ProductInfo) -> Result<String, RunError> {
     let inputs = load_inputs(cfg, Utc::now())?;
+    let mut scanned = 0usize;
+    let mut failed = 0usize;
+    let mut not_scanned = 0usize;
+    for image in &inputs.report.images {
+        match image.scan.state {
+            crate::model::ScanState::Ok => scanned += 1,
+            crate::model::ScanState::Failed => failed += 1,
+            crate::model::ScanState::NotScanned => not_scanned += 1,
+        }
+    }
     Ok(format!(
-        "{}: {} images, {} findings; theme: {}; product: {} {}",
+        "{}: {} images ({} scanned, {} failed, {} not scanned), {} findings; theme: {}; product: {} {}",
         inputs.source_description,
         inputs.report.images.len(),
+        scanned,
+        failed,
+        not_scanned,
         inputs.report.findings.len(),
         inputs.theme.product.name,
         product.name,

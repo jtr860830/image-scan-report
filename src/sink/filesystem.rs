@@ -1,13 +1,12 @@
 //! Atomic filesystem artifact storage.
 use super::{Artifact, ReportSink, SinkError};
-use std::{
-    fs,
-    io::Write,
-    path::PathBuf,
-    time::{SystemTime, UNIX_EPOCH},
-};
+use std::fs;
+use std::path::PathBuf;
+use std::time::{SystemTime, UNIX_EPOCH};
 
+/// Sink that writes each artifact to a temporary file and renames it into place.
 pub struct FilesystemSink {
+    /// Output directory from `output[].path`, created on first write.
     pub dir: PathBuf,
 }
 
@@ -17,6 +16,7 @@ impl ReportSink for FilesystemSink {
     }
 
     fn store(&self, artifact: &Artifact) -> Result<(), SinkError> {
+        use std::io::Write;
         let nanos = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .map_err(|error| SinkError::Other(error.to_string()))?

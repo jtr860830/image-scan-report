@@ -1,3 +1,4 @@
+//! Integration checks for http client behavior.
 use httpmock::MockServer;
 use image_scan_report::source::http::{Auth, HttpClient, HttpError, HttpOptions};
 use serde_json::{Value, json};
@@ -12,7 +13,7 @@ fn options() -> HttpOptions {
     }
 }
 fn client() -> HttpClient {
-    HttpClient::new(&options())
+    HttpClient::try_new(&options())
         .unwrap()
         .with_backoff([Duration::ZERO; 2])
 }
@@ -128,21 +129,27 @@ fn gives_up_after_three_transport_failures() {
 fn non_pem_ca_is_config_error() {
     let mut o = options();
     o.ca_file = Some(PathBuf::from("tests/data/tls/not-a-cert.pem"));
-    assert!(matches!(HttpClient::new(&o), Err(HttpError::CaInvalid(_))));
+    assert!(matches!(
+        HttpClient::try_new(&o),
+        Err(HttpError::CaInvalid(_))
+    ));
     o.ca_file = Some(PathBuf::from("tests/data/tls/missing.pem"));
-    assert!(matches!(HttpClient::new(&o), Err(HttpError::CaRead(..))));
+    assert!(matches!(
+        HttpClient::try_new(&o),
+        Err(HttpError::CaRead(..))
+    ));
 }
 #[test]
 fn pem_ca_is_accepted() {
     let mut o = options();
     o.ca_file = Some("tests/data/tls/ca.pem".into());
-    assert!(HttpClient::new(&o).is_ok());
+    assert!(HttpClient::try_new(&o).is_ok());
 }
 #[test]
 fn insecure_skip_verify_builds_client() {
     let mut o = options();
     o.insecure_skip_verify = true;
-    assert!(HttpClient::new(&o).is_ok());
+    assert!(HttpClient::try_new(&o).is_ok());
 }
 #[test]
 fn conflicting_tls_options_rejected() {
@@ -150,7 +157,7 @@ fn conflicting_tls_options_rejected() {
     o.insecure_skip_verify = true;
     o.ca_file = Some("tests/data/tls/ca.pem".into());
     assert!(matches!(
-        HttpClient::new(&o),
+        HttpClient::try_new(&o),
         Err(HttpError::ConflictingTls)
     ));
 }
@@ -210,7 +217,7 @@ fn invalid_ca_converts_to_source_error() {
     // is covered by the live run.
     let mut opts = options();
     opts.ca_file = Some("tests/data/tls/not-a-cert.pem".into());
-    let error = HttpClient::new(&opts).err().unwrap();
+    let error = HttpClient::try_new(&opts).err().unwrap();
     let source_error: image_scan_report::source::SourceError = error.into();
     assert!(matches!(
         source_error,
@@ -222,7 +229,7 @@ fn invalid_ca_converts_to_source_error() {
 fn multi_certificate_pem_is_accepted() {
     let mut o = options();
     o.ca_file = Some("tests/data/tls/bundle.pem".into());
-    assert!(HttpClient::new(&o).is_ok());
+    assert!(HttpClient::try_new(&o).is_ok());
 }
 
 #[test]

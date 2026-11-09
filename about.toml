@@ -1,0 +1,30 @@
+accepted = [
+    "Apache-2.0",
+    "MIT",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Zlib",
+    "Unicode-3.0",
+    "Unicode-DFS-2016",
+    "MPL-2.0",
+    "OFL-1.1",
+    "CC0-1.0",
+    "BSL-1.0",
+    "0BSD",
+    "Unlicense",
+    # webpki-roots ships Mozilla's root bundle under CDLA-Permissive-2.0.
+    "CDLA-Permissive-2.0",
+]
+ignore-dev-dependencies = true
+# Build-only dependencies (e.g. ar_archive_writer under psm) are not shipped in the binary.
+ignore-build-dependencies = true
+targets = ["x86_64-unknown-linux-gnu", "aarch64-unknown-linux-gnu"]
+
+# If generation cannot identify a crate's licence, inspect its upstream licence
+# files before adding a [crate-name.clarify] entry with the verified SPDX
+# expression and [[crate-name.clarify.files]] path and hash from cargo-about.
+
+# The workspace root is the product itself, not a third party.
+[private]
+ignore = true

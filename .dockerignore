@@ -1,0 +1,11 @@
+target
+fixtures
+out
+.git
+.superpowers
+docs
+tests
+deploy
+*.md
+!LICENSE
+!THIRD_PARTY_NOTICES.md

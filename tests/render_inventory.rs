@@ -1,3 +1,4 @@
+//! Integration checks for render inventory behavior.
 use image_scan_report::{
     model::{Language, Report},
     render::{

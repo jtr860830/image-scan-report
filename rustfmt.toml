@@ -1,0 +1,5 @@
+edition = "2024"
+max_width = 100
+newline_style = "Unix"
+# Nightly-only guide options applied by hand: imports_granularity = "Module",
+# hex_literal_case = "Lower", format_macro_matchers = true.

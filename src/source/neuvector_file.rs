@@ -1,10 +1,8 @@
 //! NeuVector scanner JSON reports loaded from a directory.
-use super::{
-    ParseError, ScanSource, SourceError,
-    files::fetch_directory,
-    neuvector::report::{NvVulnerability, compose_reference, finding_from_nv, nv_timestamp},
-};
-use crate::model::*;
+
+use super::neuvector::report::NvVulnerability;
+use super::{ParseError, ScanSource, SourceError};
+use crate::model::{Finding, Image, ScanSet, ScanState, ScanStatus, SourceInfo, SourceKind};
 use chrono::{DateTime, Utc};
 use serde::Deserialize;
 use std::path::{Path, PathBuf};
@@ -72,7 +70,11 @@ fn read_report(
 }
 
 fn map_report(report: NvReport, scanned_at: Option<DateTime<Utc>>) -> (Image, Vec<Finding>) {
-    let reference = compose_reference(&report.registry, &report.repository, &report.tag);
+    let reference = super::neuvector::report::compose_reference(
+        &report.registry,
+        &report.repository,
+        &report.tag,
+    );
     let succeeded = report
         .result
         .as_deref()
@@ -97,7 +99,7 @@ fn map_report(report: NvReport, scanned_at: Option<DateTime<Utc>>) -> (Image, Ve
         .vulnerabilities
         .unwrap_or_default()
         .iter()
-        .map(|v| finding_from_nv(v, &reference))
+        .map(|v| super::neuvector::report::finding_from_nv(v, &reference))
         .collect();
     let image = Image {
         reference,
@@ -113,7 +115,7 @@ fn map_report(report: NvReport, scanned_at: Option<DateTime<Utc>>) -> (Image, Ve
         created_at: report.created_at,
         scan: ScanStatus {
             state: if ok { ScanState::Ok } else { ScanState::Failed },
-            scanned_at: nv_timestamp(report.scanned_timestamp)
+            scanned_at: super::neuvector::report::nv_timestamp(report.scanned_timestamp)
                 .or(report.scanned_at)
                 .or(scanned_at),
             scanner_version: report.scanner_version,
@@ -123,6 +125,14 @@ fn map_report(report: NvReport, scanned_at: Option<DateTime<Utc>>) -> (Image, Ve
     (image, findings)
 }
 
+/// Decode one NeuVector scanner result file into an image and its findings.
+///
+/// Returns `Ok(None)` when the file has neither a `report` nor an `error_message`.
+/// `scanned_at` is the fallback scan time.
+///
+/// # Errors
+///
+/// Fails if the bytes are not JSON of the expected types.
 pub fn parse_neuvector_result(
     bytes: &[u8],
     scanned_at: Option<DateTime<Utc>>,
@@ -130,7 +140,9 @@ pub fn parse_neuvector_result(
     Ok(read_report(bytes, None, None)?.map(|report| map_report(report, scanned_at)))
 }
 
+/// Scan source that reads NeuVector scanner JSON results from a directory tree.
 pub struct NeuvectorFileSource {
+    /// Directory searched recursively for NeuVector results, from `source.path`.
     pub dir: PathBuf,
 }
 
@@ -141,7 +153,7 @@ impl ScanSource for NeuvectorFileSource {
     fn fetch(&self) -> Result<ScanSet, SourceError> {
         let mut db_version = None;
         let mut db_updated_at = None;
-        let fetched = fetch_directory(&self.dir, |path, bytes, scanned_at| {
+        let fetched = super::files::fetch_directory(&self.dir, |path, bytes, scanned_at| {
             Ok(
                 read_report(bytes, Some(path), Some(&self.dir))?.map(|report| {
                     if db_version.is_none() {

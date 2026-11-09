@@ -1,3 +1,4 @@
+//! Integration checks for config behavior.
 static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
 use std::path::Path;
@@ -80,15 +81,17 @@ fn missing_env_names_the_variable() {
 #[test]
 fn example_config_in_repo_loads() {
     let _guard = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    unsafe { std::env::set_var("UPLOAD_TOKEN", "example-token") };
     let result = config::load(Path::new("examples/config.yaml"));
     let nv_result = config::load(Path::new("examples/config-neuvector.yaml"));
+    unsafe { std::env::remove_var("UPLOAD_TOKEN") };
     let config = result.unwrap();
     // Loading does not read source credentials or CA files.
     let neuvector = nv_result.unwrap();
     assert!(matches!(neuvector.source, SourceConfig::Neuvector { .. }));
     assert!(matches!(config.source, SourceConfig::Harbor { .. }));
-    assert_eq!(config.output.len(), 1);
-    assert_eq!(neuvector.output.len(), 1);
+    assert_eq!(config.output.len(), 2);
+    assert_eq!(neuvector.output.len(), 2);
 }
 
 #[test]
@@ -100,6 +103,7 @@ fn validation_accepts_case_insensitive_put_and_post_only() {
         headers: Default::default(),
         mode: HttpMode::Raw,
         ca_file: None,
+        insecure_skip_verify: false,
         timeout_secs: 30,
     }];
     for method in ["put", "PUT", "post", "PoSt", "GET", ""] {
@@ -361,4 +365,82 @@ fn insecure_skip_verify_parses_and_conflicts_with_ca() {
             matches!(cfg.validate(), Err(ConfigError::Invalid(m)) if m.contains("ca_file") && m.contains("insecure_skip_verify"))
         );
     }
+}
+
+#[test]
+fn http_output_validates_method_url_and_tls() {
+    let mut cfg = minimal();
+    for (extra, expected) in [
+        ("method: PATCH", "output.method must be PUT or POST"),
+        ("url: ftp://example.test", "output.url:"),
+        ("url: https://user:secret@example.test", "output.url:"),
+        (
+            "ca_file: ca.pem\n    insecure_skip_verify: true",
+            "output.ca_file and output.insecure_skip_verify cannot be combined",
+        ),
+        (
+            "timeout_secs: 0",
+            "output.timeout_secs must be greater than zero",
+        ),
+    ] {
+        let url = if extra.starts_with("url:") {
+            ""
+        } else {
+            "url: https://example.test\n    "
+        };
+        cfg.output = serde_yaml_ng::from_str(
+            &format!("- type: http\n    {url}{extra}").replace("    ", "  "),
+        )
+        .unwrap();
+        assert!(matches!(cfg.validate(), Err(ConfigError::Invalid(m)) if m.contains(expected)));
+    }
+    cfg.output = serde_yaml_ng::from_str("- type: http\n  url: https://example.test").unwrap();
+    cfg.validate().unwrap();
+    assert!(
+        matches!(cfg.output[0], OutputConfig::Http { ref method, mode: HttpMode::Raw, timeout_secs: 30, insecure_skip_verify: false, .. } if method == "PUT")
+    );
+}
+
+#[test]
+fn http_method_is_normalized_on_load() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("config.yaml");
+    let yaml = include_str!("data/config/trivy-files.yaml");
+    let mut cfg = minimal();
+    // Replace the output section while retaining the valid source and report.
+    let prefix = yaml.split("output:").next().unwrap();
+    std::fs::write(
+        &path,
+        format!(
+            "{prefix}output:\n  - type: http\n    url: https://example.test\n    method: pOsT\n"
+        ),
+    )
+    .unwrap();
+    cfg.output = config::load(&path).unwrap().output;
+    assert!(matches!(&cfg.output[0], OutputConfig::Http { method, .. } if method == "POST"));
+}
+
+#[test]
+fn put_with_json_requires_filename_placeholder() {
+    let mut cfg = minimal();
+    cfg.report.json = true;
+    cfg.output = vec![
+        serde_yaml_ng::from_str(
+            "type: http\nurl: https://reports.example.test/upload\nmethod: put",
+        )
+        .unwrap(),
+    ];
+    assert!(matches!(cfg.validate(), Err(ConfigError::Invalid(message))
+        if message == "output.url: PUT with report.json needs a {filename} placeholder, or every artifact overwrites the same resource"));
+    let OutputConfig::Http { url, .. } = &mut cfg.output[0] else {
+        unreachable!()
+    };
+    url.push_str("/{filename}");
+    cfg.validate().unwrap();
+    let OutputConfig::Http { url, method, .. } = &mut cfg.output[0] else {
+        unreachable!()
+    };
+    *url = "https://reports.example.test/upload".into();
+    *method = "POST".into();
+    cfg.validate().unwrap();
 }

@@ -7,14 +7,46 @@ on:
   schedule:
     - cron: '0 3 * * 1'
 
+permissions:
+  contents: read
+
 jobs:
+  notices:
+    if: github.event_name == 'push' || github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install Rust toolchain
+        run: rustup toolchain install
+      - name: Cache cargo-about
+        id: cargo-about-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cargo/bin/cargo-about
+          key: ${{ runner.os }}-${{ runner.arch }}-cargo-about-0.9.3
+      - name: Install cargo-about
+        if: steps.cargo-about-cache.outputs.cache-hit != 'true'
+        run: cargo install cargo-about --version 0.9.3 --locked --features cli
+      - name: Generate third-party notices
+        run: cargo about generate --config about.toml about.hbs -o /tmp/THIRD_PARTY_NOTICES.md
+      - name: Check third-party notices
+        run: |
+          if ! diff -u THIRD_PARTY_NOTICES.md /tmp/THIRD_PARTY_NOTICES.md; then
+            echo '::error::Third-party notices are stale. Run cargo about generate --config about.toml about.hbs -o THIRD_PARTY_NOTICES.md and commit the result.'
+            exit 1
+          fi
+
   check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: Install Rust toolchain
         run: rustup toolchain install
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       - run: cargo fmt --check
       - run: cargo clippy --all-targets -- -D warnings
       - run: cargo test
@@ -24,8 +56,55 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: Install Rust toolchain
         run: rustup toolchain install
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       - run: cargo test --release --test perf -- --ignored --nocapture --test-threads=1
+
+  container-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: Containerfile
+          load: true
+          tags: judex:ci
+          build-args: |
+            VERSION=ci
+            REVISION=${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Prepare smoke inputs
+        run: |
+          sed -e 's|path: ./fixtures/trivy|path: /fixtures/trivy|' \
+              -e 's|path: ./out|path: /output|' \
+              examples/config-trivy-files.yaml > smoke-config.yaml
+          mkdir -p smoke-out
+          chmod 777 smoke-out
+      - name: Check and render with a read-only root filesystem
+        run: |
+          docker image inspect -f '{{.Config.User}}' judex:ci | grep -qx '65532:65532'
+          docker run --rm --read-only \
+            -v "$PWD/fixtures:/fixtures:ro" \
+            -v "$PWD/smoke-config.yaml:/etc/report/config.yaml:ro" \
+            -v "$PWD/smoke-out:/output" \
+            judex:ci
+          test -n "$(find smoke-out -type f -name '*.pdf' -print -quit)"
+          rm -f smoke-out/*.pdf
+          for command in check run; do
+            docker run --rm --read-only --user 65532:65532 \
+              -v "$PWD/fixtures:/fixtures:ro" \
+              -v "$PWD/smoke-config.yaml:/etc/report/config.yaml:ro" \
+              -v "$PWD/smoke-out:/output" \
+              judex:ci "$command" --config /etc/report/config.yaml
+          done
+          test -n "$(find smoke-out -type f -name '*.pdf' -print -quit)"
+          docker run --rm judex:ci --version | grep '^judex '

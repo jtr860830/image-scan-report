@@ -1,66 +1,134 @@
-//! Shared synchronous HTTP transport for API scan sources.
+//! Synchronous HTTP transport shared by the API scan sources and the HTTP sink.
 use super::SourceError;
-use serde::{Serialize, de::DeserializeOwned};
-use std::{collections::BTreeMap, path::PathBuf, sync::Arc, time::Duration};
-use ureq::tls::{PemItem, RootCerts, TlsConfig, parse_pem};
+use serde::Serialize;
+use serde::de::DeserializeOwned;
+use std::collections::BTreeMap;
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
+use std::time::Duration;
+use ureq::tls::{PemItem, RootCerts, TlsConfig};
 
+/// `User-Agent` sent by default: `image-scan-report/<crate version>`.
 pub const USER_AGENT: &str = concat!("image-scan-report/", env!("CARGO_PKG_VERSION"));
 
+/// Maximum accepted response body size in bytes (512 MiB).
 pub const MAX_RESPONSE_BYTES: u64 = 512 * 1024 * 1024;
 
+/// TLS trust, timeout, and client identification settings for HTTP requests.
 #[derive(Debug, Clone)]
 pub struct HttpOptions {
+    /// PEM bundle that replaces the built-in roots; `None` uses the built-in roots.
     pub ca_file: Option<PathBuf>,
+    /// Whether TLS certificate verification is disabled; conflicts with `ca_file`.
     pub insecure_skip_verify: bool,
+    /// Overall deadline for one request attempt, from connecting to reading the body.
     pub timeout: Duration,
+    /// HTTP User-Agent value sent with each request.
     pub user_agent: String,
 }
 
+impl Default for HttpOptions {
+    fn default() -> Self {
+        Self {
+            ca_file: None,
+            insecure_skip_verify: false,
+            timeout: Duration::from_secs(30),
+            user_agent: USER_AGENT.into(),
+        }
+    }
+}
+
+/// Authentication credentials attached to an HTTP request.
 pub enum Auth {
+    /// Send no `Authorization` header; NeuVector authenticates with `X-Auth-Token` instead.
     None,
-    Basic { username: String, password: String },
+    /// HTTP Basic authentication, as used for Harbor.
+    Basic {
+        /// Account name encoded into the Basic credential.
+        username: String,
+        /// Password encoded into the Basic credential.
+        password: String,
+    },
+    /// Send `Authorization: Bearer <token>`.
     Bearer(String),
 }
 
+/// Failure in TLS setup, request transport, authentication, or response decoding.
 #[derive(thiserror::Error, Debug)]
+#[must_use]
 pub enum HttpError {
+    /// The configured certificate bundle could not be read.
     #[error("cannot read CA file {0}: {1}")]
     CaRead(PathBuf, std::io::Error),
+    /// The configured bundle contains no usable PEM certificate.
     #[error("CA file {0} contains no PEM certificate")]
     CaInvalid(PathBuf),
+    /// Custom roots and disabled certificate verification were both requested.
     #[error("ca_file and insecure_skip_verify cannot be combined")]
     ConflictingTls,
+    /// The server answered 401 or 403.
     #[error("authentication failed for {0}")]
     Unauthorized(String),
+    /// The server answered with another status of 300 or more; redirects are not followed.
     #[error("{0} returned HTTP {1}")]
     Status(String, u16),
+    /// The URL, method, header values or body could not form a valid request.
     #[error("invalid request {0}: {1}")]
     InvalidRequest(String, String),
+    /// The request failed before a usable response was received.
     #[error("request to {0} failed: {1}")]
     Transport(String, String),
+    /// The response body exceeded 512 MiB or was not the expected JSON.
     #[error("invalid response from {0}: {1}")]
     Decode(String, String),
 }
 
+/// Decoded HTTP payload paired with response headers.
 pub struct Response<T> {
+    /// Decoded response body.
     pub body: T,
+    /// Response headers with visible-ASCII values, keyed by lowercase name.
     pub headers: BTreeMap<String, String>,
 }
 
+/// Synchronous HTTP transport with bounded retries and response size.
 pub struct HttpClient {
     agent: ureq::Agent,
     retry_delays: [Duration; 2],
 }
 
+/// Build an HTTP transport with the default `User-Agent` and the given TLS settings.
+///
+/// # Errors
+///
+/// Fails if TLS options conflict or a custom certificate file cannot be read or parsed.
+pub fn client_from_tls(
+    ca_file: Option<&Path>,
+    insecure_skip_verify: bool,
+    timeout: Duration,
+) -> Result<HttpClient, HttpError> {
+    HttpClient::try_new(&HttpOptions {
+        ca_file: ca_file.map(Path::to_owned),
+        insecure_skip_verify,
+        timeout,
+        user_agent: USER_AGENT.into(),
+    })
+}
+
 impl HttpClient {
-    pub fn new(opts: &HttpOptions) -> Result<Self, HttpError> {
+    /// Build an HTTP transport with the requested TLS roots and timeout.
+    ///
+    /// # Errors
+    ///
+    /// Fails if TLS options conflict or a custom certificate file cannot be read or parsed.
+    pub fn try_new(opts: &HttpOptions) -> Result<Self, HttpError> {
         if opts.ca_file.is_some() && opts.insecure_skip_verify {
             return Err(HttpError::ConflictingTls);
         }
         let roots = if let Some(path) = &opts.ca_file {
             let pem = std::fs::read(path).map_err(|e| HttpError::CaRead(path.clone(), e))?;
             let mut certs = Vec::new();
-            for item in parse_pem(&pem) {
+            for item in ureq::tls::parse_pem(&pem) {
                 match item.map_err(|_| HttpError::CaInvalid(path.clone()))? {
                     PemItem::Certificate(cert) => certs.push(cert),
                     _ => continue,
@@ -98,15 +166,69 @@ impl HttpClient {
         self
     }
 
+    /// Upload a body as `content_type`, retrying a PUT up to three attempts; a POST is sent once.
+    ///
+    /// # Errors
+    ///
+    /// Fails if the method is not PUT or POST, the URL or headers are invalid, the request
+    /// fails in transport, the server answers with a status of 300 or more, or a success
+    /// body exceeds [`MAX_RESPONSE_BYTES`].
+    pub fn send_bytes(
+        &self,
+        method: &str,
+        url: &str,
+        headers: &[(&str, &str)],
+        content_type: &str,
+        body: &[u8],
+    ) -> Result<Response<Vec<u8>>, HttpError> {
+        let method = method.to_ascii_uppercase();
+        if !matches!(method.as_str(), "PUT" | "POST") {
+            return Err(HttpError::InvalidRequest(
+                format!("{method} {}", redact_url(url)),
+                "expected PUT or POST".into(),
+            ));
+        }
+        let mut headers: Vec<_> = headers
+            .iter()
+            .copied()
+            .filter(|(k, _)| !k.eq_ignore_ascii_case("content-type"))
+            .collect();
+        headers.push(("Content-Type", content_type));
+        self.request(
+            &method,
+            url,
+            &Auth::None,
+            &headers,
+            Some(body),
+            if method == "POST" { 1 } else { 3 },
+        )
+    }
+
+    /// GET and decode JSON, retrying transport errors and 5xx responses up to three attempts.
+    ///
+    /// # Errors
+    ///
+    /// Fails if the URL or headers are invalid, the last attempt fails in transport, the status
+    /// is 300 or more, the body exceeds 512 MiB, or it is not valid JSON for `T`.
     pub fn get_json<T: DeserializeOwned>(
         &self,
         url: &str,
         auth: &Auth,
         headers: &[(&str, &str)],
     ) -> Result<Response<T>, HttpError> {
-        self.json_response("GET", url, self.request("GET", url, auth, headers, None)?)
+        self.json_response(
+            "GET",
+            url,
+            self.request("GET", url, auth, headers, None, 3)?,
+        )
     }
 
+    /// POST a JSON body and decode the JSON reply, retrying like [`HttpClient::get_json`].
+    ///
+    /// # Errors
+    ///
+    /// Fails if `body` cannot be serialised, or for the same reasons as
+    /// [`HttpClient::get_json`].
     pub fn post_json<B: Serialize, T: DeserializeOwned>(
         &self,
         url: &str,
@@ -114,32 +236,45 @@ impl HttpClient {
         body: &B,
         headers: &[(&str, &str)],
     ) -> Result<Response<T>, HttpError> {
-        let bytes = serde_json::to_vec(body)
-            .map_err(|e| HttpError::InvalidRequest(format!("POST {url}"), e.to_string()))?;
+        let bytes = serde_json::to_vec(body).map_err(|e| {
+            HttpError::InvalidRequest(format!("POST {}", redact_url(url)), e.to_string())
+        })?;
         self.json_response(
             "POST",
             url,
-            self.request("POST", url, auth, headers, Some(&bytes))?,
+            self.request("POST", url, auth, headers, Some(&bytes), 3)?,
         )
     }
 
+    /// Send a DELETE, retrying transport errors and 5xx responses up to three attempts.
+    ///
+    /// # Errors
+    ///
+    /// Fails if the URL or headers are invalid, the last attempt fails in transport, the
+    /// status is 300 or more, or a success body exceeds [`MAX_RESPONSE_BYTES`].
     pub fn delete(
         &self,
         url: &str,
         auth: &Auth,
         headers: &[(&str, &str)],
     ) -> Result<(), HttpError> {
-        self.request("DELETE", url, auth, headers, None)?;
+        self.request("DELETE", url, auth, headers, None, 3)?;
         Ok(())
     }
 
+    /// Send a DELETE once, as used for the best-effort NeuVector logout.
+    ///
+    /// # Errors
+    ///
+    /// Fails if the URL or headers are invalid, the request fails in transport, the status
+    /// is 300 or more, or a success body exceeds [`MAX_RESPONSE_BYTES`].
     pub fn delete_once(
         &self,
         url: &str,
         auth: &Auth,
         headers: &[(&str, &str)],
     ) -> Result<(), HttpError> {
-        self.request("DELETE_ONCE", url, auth, headers, None)?;
+        self.request("DELETE", url, auth, headers, None, 1)?;
         Ok(())
     }
 
@@ -149,7 +284,7 @@ impl HttpClient {
         url: &str,
         response: Response<Vec<u8>>,
     ) -> Result<Response<T>, HttpError> {
-        let context = format!("{method} {url}");
+        let context = format!("{method} {}", redact_url(url));
         let headers = response.headers;
         let body = serde_json::from_slice(&response.body).map_err(|e| {
             HttpError::Decode(
@@ -177,15 +312,14 @@ impl HttpClient {
         auth: &Auth,
         headers: &[(&str, &str)],
         body: Option<&[u8]>,
+        attempts: usize,
     ) -> Result<Response<Vec<u8>>, HttpError> {
-        let once = method == "DELETE_ONCE";
-        let method = if once { "DELETE" } else { method };
         let uri: ureq::http::Uri = url.parse().map_err(|e: ureq::http::uri::InvalidUri| {
-            HttpError::InvalidRequest(format!("{method} {url}"), e.to_string())
+            HttpError::InvalidRequest(format!("{method} {}", redact_url(url)), e.to_string())
         })?;
         if !matches!(uri.scheme_str(), Some("http" | "https")) || uri.authority().is_none() {
             return Err(HttpError::InvalidRequest(
-                format!("{method} {url}"),
+                format!("{method} {}", redact_url(url)),
                 "expected an absolute HTTP(S) URL".into(),
             ));
         }
@@ -197,9 +331,9 @@ impl HttpClient {
             )),
             Auth::Bearer(token) => Some(format!("Bearer {token}")),
         };
-        let context = format!("{method} {url}");
-        for attempt in 0..3 {
-            tracing::debug!(method, url);
+        let context = format!("{method} {}", redact_url(url));
+        for attempt in 0..attempts {
+            tracing::debug!(method, url = redact_url(url));
             let mut request = ureq::http::Request::builder().method(method).uri(url);
             if let Some(value) = &authorization {
                 let mut value = ureq::http::HeaderValue::from_str(value)
@@ -217,7 +351,11 @@ impl HttpClient {
                 }
                 request = request.header(*key, value);
             }
-            if body.is_some() {
+            if body.is_some()
+                && !headers
+                    .iter()
+                    .any(|(k, _)| k.eq_ignore_ascii_case("content-type"))
+            {
                 request = request.header("Content-Type", "application/json");
             }
             let request = request
@@ -265,12 +403,12 @@ impl HttpClient {
                 &result,
                 Err(HttpError::Transport(..) | HttpError::Status(_, 500..=599))
             );
-            if once || !retry || attempt == 2 {
+            if !retry || attempt + 1 == attempts {
                 return result;
             }
             std::thread::sleep(self.retry_delays[attempt]);
         }
-        unreachable!("three attempts always return a result")
+        unreachable!("request attempts always return a result")
     }
 }
 
@@ -303,7 +441,8 @@ impl From<HttpError> for SourceError {
     }
 }
 
-/// Encode one URL path segment.
+/// Percent-encode every byte except ASCII letters, digits and `-._~`.
+#[must_use]
 pub fn encode_segment(s: &str) -> String {
     s.bytes()
         .map(|b| {
@@ -316,14 +455,19 @@ pub fn encode_segment(s: &str) -> String {
         .collect()
 }
 
-/// Extract the URL authority, including an explicit port.
+/// Extract the URL authority, including an explicit port; invalid URLs yield an empty string.
+#[must_use]
 pub fn url_authority(url: &str) -> String {
     url.parse::<ureq::http::Uri>()
         .ok()
         .and_then(|u| u.authority().map(|a| a.as_str().to_owned()))
         .unwrap_or_default()
 }
-/// Authentication errors abort a source; other errors describe a failed row.
+/// Turn a per-image HTTP error into a diagnostic message, propagating authentication failures.
+///
+/// # Errors
+///
+/// Returns the error unchanged if it is [`HttpError::Unauthorized`].
 pub fn row_failure(error: HttpError) -> Result<String, HttpError> {
     match error {
         error @ HttpError::Unauthorized(_) => Err(error),
@@ -352,13 +496,13 @@ mod tests {
     #[test]
     fn insecure_tls_flag_is_applied() {
         for insecure_skip_verify in [false, true] {
-            let client = HttpClient::new(&HttpOptions {
+            let client = HttpClient::try_new(&HttpOptions {
                 ca_file: None,
                 insecure_skip_verify,
                 timeout: Duration::from_secs(1),
                 user_agent: format!("image-scan-report/{}", env!("CARGO_PKG_VERSION")),
             })
-            .unwrap();
+            .expect("valid test TLS options");
             assert_eq!(
                 client.retry_delays,
                 [Duration::from_secs(1), Duration::from_secs(2)]
@@ -385,5 +529,58 @@ mod url_tests {
         );
         assert_eq!(url_authority("https://example.test/"), "example.test");
         assert_eq!(url_authority(""), "");
+    }
+}
+
+/// Build a transport for `role` (`source` or `output`), warning if verification is disabled.
+///
+/// # Errors
+///
+/// Fails with [`crate::config::ConfigError::Invalid`], prefixed by `role`, if TLS options
+/// conflict or the CA file cannot be read or holds no certificate.
+pub fn tls_client(
+    role: &str,
+    url: &str,
+    ca_file: Option<&Path>,
+    timeout_secs: u64,
+    insecure_skip_verify: bool,
+) -> Result<crate::source::http::HttpClient, crate::config::ConfigError> {
+    let client = crate::source::http::client_from_tls(
+        ca_file,
+        insecure_skip_verify,
+        std::time::Duration::from_secs(timeout_secs),
+    )
+    .map_err(|e| crate::config::ConfigError::Invalid(format!("{role}.ca_file: {e}")))?;
+    if insecure_skip_verify {
+        tracing::warn!(
+            "{} {}: TLS certificate verification is disabled",
+            role,
+            redact_url(url)
+        );
+    }
+    Ok(client)
+}
+
+/// Drop the query and fragment, which may carry signatures or tokens, from a logged URL.
+#[must_use]
+pub fn redact_url(url: &str) -> String {
+    match url::Url::parse(url) {
+        Ok(mut parsed) => {
+            parsed.set_query(None);
+            parsed.set_fragment(None);
+            parsed.to_string()
+        }
+        Err(_) => url.split(['?', '#']).next().unwrap_or_default().to_owned(),
+    }
+}
+#[cfg(test)]
+mod redaction_tests {
+    #[test]
+    fn redact_url_removes_secrets() {
+        assert_eq!(
+            super::redact_url("https://h/p?X-Amz-Signature=abc#f"),
+            "https://h/p"
+        );
+        assert_eq!(super::redact_url("invalid?secret#fragment"), "invalid");
     }
 }

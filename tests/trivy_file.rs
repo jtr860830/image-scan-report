@@ -1,3 +1,4 @@
+//! Integration checks for trivy file behavior.
 use chrono::Datelike;
 use image_scan_report::model::{ScanState, SeverityBasis};
 use image_scan_report::source::{

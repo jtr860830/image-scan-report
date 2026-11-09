@@ -49,6 +49,7 @@
   "status_other": "Other",
   "inventory_lede": "{count} unique vulnerabilities.",
   "inventory_affected": "Affected Images",
+  "image_meta_tags": "Tags",
   "image_meta_digest": "Digest",
   "image_meta_platform": "Platform",
   "image_meta_os": "Operating System",

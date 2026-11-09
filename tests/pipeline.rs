@@ -1,3 +1,4 @@
+//! Integration checks for pipeline behavior.
 #[path = "support/pdf.rs"]
 mod pdf;
 #[path = "support/reduced_fixtures.rs"]
@@ -76,7 +77,7 @@ fn check_reports_counts() {
     assert_eq!(
         check(&cfg, &product()).unwrap(),
         format!(
-            "Trivy (files): {}: 11 images, {} findings; theme: judex; product: judex 0.1.0",
+            "Trivy (files): {}: 11 images (11 scanned, 0 failed, 0 not scanned), {} findings; theme: judex; product: judex 0.1.0",
             fixtures().display(),
             summary.findings
         )
@@ -178,7 +179,7 @@ fn theme_path_errors_exit_2() {
 }
 
 #[test]
-fn check_rejects_http_output_before_fetch() {
+fn bad_http_ca_rejected_before_fetch() {
     let dir = tempfile::tempdir().unwrap();
     let mut cfg = config(dir.path(), dir.path());
     cfg.output = vec![image_scan_report::config::OutputConfig::Http {
@@ -186,7 +187,8 @@ fn check_rejects_http_output_before_fetch() {
         method: "POST".into(),
         headers: Default::default(),
         mode: image_scan_report::config::HttpMode::Raw,
-        ca_file: None,
+        ca_file: Some("tests/data/tls/not-a-cert.pem".into()),
+        insecure_skip_verify: false,
         timeout_secs: 30,
     }];
     assert!(matches!(check(&cfg, &product()), Err(RunError::Config(_))));
@@ -209,6 +211,7 @@ fn theme_errors_precede_bad_sinks() {
         headers: Default::default(),
         mode: image_scan_report::config::HttpMode::Raw,
         ca_file: None,
+        insecure_skip_verify: false,
         timeout_secs: 30,
     }];
     for err in [
@@ -416,5 +419,115 @@ fn run_api_mock(kind: &str, url: &str, images: Option<usize>) {
             }
             assert_eq!(report.images.len(), summary.images);
         }
+    }
+}
+
+fn upload_output(url: &str) -> image_scan_report::config::OutputConfig {
+    serde_yaml_ng::from_str(&format!(
+        "type: http\nurl: {url}\nheaders:\n  Authorization: Bearer pipeline-secret"
+    ))
+    .unwrap()
+}
+#[test]
+fn one_failed_sink_keeps_exit_zero_and_hides_headers() {
+    let server = httpmock::MockServer::start();
+    let m = server.mock(|w, t| {
+        w.any_request();
+        t.status(403);
+    });
+    let dir = tempfile::tempdir().unwrap();
+    let mut cfg = config(&fixtures(), dir.path());
+    cfg.output.push(upload_output(&server.url("/upload")));
+    let summary = run(&cfg, now(), &product()).unwrap();
+    assert_eq!(summary.failed_sinks.len(), 1);
+    assert!(!summary.failed_sinks[0].contains("Bearer"));
+    assert_eq!(summary.stored.len(), 1);
+    use image_scan_report::sink::ReportSink;
+    let direct = image_scan_report::sink::http::HttpSink::new(
+        server.url("/upload"),
+        "PUT".into(),
+        vec![("Authorization".into(), "Bearer pipeline-secret".into())],
+        image_scan_report::config::HttpMode::Raw,
+        image_scan_report::source::http::client_from_tls(
+            None,
+            false,
+            std::time::Duration::from_secs(1),
+        )
+        .unwrap(),
+    );
+    let error = direct
+        .store(&image_scan_report::sink::Artifact {
+            file_name: "test.pdf".into(),
+            media_type: "application/pdf",
+            bytes: vec![],
+        })
+        .unwrap_err();
+    assert!(!error.to_string().contains("pipeline-secret"));
+    m.assert_calls(2);
+}
+#[test]
+fn all_sinks_failed_exits_5() {
+    let server = httpmock::MockServer::start();
+    let m = server.mock(|w, t| {
+        w.any_request();
+        t.status(500);
+    });
+    let dir = tempfile::tempdir().unwrap();
+    let mut cfg = config(&fixtures(), dir.path());
+    cfg.output = vec![upload_output(&server.url("/upload"))];
+    let e = run(&cfg, now(), &product()).unwrap_err();
+    assert_eq!(e.exit_code(), 5);
+    assert!(matches!(e, RunError::AllSinksFailed(_)));
+    assert!(!e.to_string().contains("Bearer"));
+    m.assert_calls(3);
+}
+#[test]
+fn unset_header_variable_is_config_error() {
+    let server = httpmock::MockServer::start();
+    let m = server.mock(|w, t| {
+        w.any_request();
+        t.status(200);
+    });
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("config.yaml");
+    std::fs::write(&path, format!("source:\n  type: harbor\n  url: {}\n  username: reader\n  password_env: UNUSED_PASSWORD\nreport:\n  language: en\n  organization: Test\noutput:\n  - type: http\n    url: {}\n    headers:\n      X-Token: \"${{JUDEX_UNSET_UPLOAD_VAR}}\"\n", server.base_url(), server.url("/upload"))).unwrap();
+    let result = image_scan_report::config::load(&path).map_err(RunError::from);
+    assert!(
+        matches!(result, Err(RunError::Config(image_scan_report::config::ConfigError::MissingEnv(n))) if n == "JUDEX_UNSET_UPLOAD_VAR")
+    );
+    m.assert_calls(0);
+}
+#[test]
+fn json_artifact_goes_to_http_sink_too() {
+    let server = httpmock::MockServer::start();
+    let input = reduced_fixtures::input();
+    let dir = tempfile::tempdir().unwrap();
+    let mut cfg = config(input.path(), dir.path());
+    cfg.report.pdf = true;
+    cfg.output = vec![upload_output(&server.url("/upload/{filename}"))];
+    let base = artifact_base_name(
+        input.path().file_name().unwrap().to_str().unwrap(),
+        SourceKind::TrivyFiles,
+        now().date_naive(),
+    );
+    let mocks: Vec<_> = [("pdf", "application/pdf"), ("json", "application/json")]
+        .into_iter()
+        .map(|(ext, ct)| {
+            server.mock(|w, t| {
+                w.method("PUT")
+                    .path(format!("/upload/{base}.{ext}"))
+                    .header(
+                        "Content-Disposition",
+                        format!("attachment; filename=\"{base}.{ext}\""),
+                    )
+                    .header("Content-Type", ct);
+                t.status(201);
+            })
+        })
+        .collect();
+    let summary = run(&cfg, now(), &product()).unwrap();
+    assert_eq!(summary.stored.len(), 2);
+    for m in mocks {
+        m.assert_calls(1);
     }
 }

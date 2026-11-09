@@ -1,3 +1,5 @@
+//! Report rendering: display-ready data, bundled strings, theme and fonts, compiled with
+//! embedded Typst templates into a PDF.
 pub mod fonts;
 
 pub mod model;
@@ -8,7 +10,17 @@ pub mod theme;
 
 pub mod engine;
 
-/// Render a report using bundled translations, templates, and fonts.
+/// Render `report` to PDF bytes with the bundled strings for its language and `theme`.
+///
+/// # Errors
+///
+/// Fails if the template input cannot be serialised, compilation or PDF export fails, or
+/// the generation time is outside Typst's date range.
+///
+/// # Panics
+///
+/// Panics if a bundled locale file is not a JSON object of strings, which would be a build
+/// defect rather than a caller error.
 pub fn render_pdf(
     report: &crate::model::Report,
     opts: &model::RenderOptions,

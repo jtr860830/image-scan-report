@@ -1,26 +1,33 @@
 //! NeuVector controller registry scan source.
-use super::{
-    ScanSource, SourceError,
-    files::dedupe_images_by_reference,
-    http::{Auth, HttpClient, HttpError, encode_segment, row_failure, url_authority},
-    neuvector::{
-        api::*,
-        report::{compose_reference, finding_from_nv, nv_timestamp},
-    },
+use super::http::{Auth, HttpClient, HttpError};
+use super::neuvector::api::{
+    AuthRequest, AuthResponse, Credentials, ImageReport, ImageSummary, RegistryImages,
+    RegistrySummary,
 };
-use crate::model::*;
+use super::{ScanSource, SourceError};
+use crate::model::{Image, ScanSet, ScanState, ScanStatus, SourceInfo, SourceKind};
 use chrono::{DateTime, Utc};
 
+/// Connection settings for [`NeuvectorSource::from_config`], apart from the password.
 pub struct NeuvectorParams {
+    /// NeuVector controller API base URL.
     pub url: String,
+    /// Name of the NeuVector registry configuration to report on.
     pub registry: String,
+    /// Account name sent to `POST /v1/auth`.
     pub username: String,
 }
+/// NeuVector registry input with session authentication and image report retrieval.
 pub struct NeuvectorSource {
+    /// Controller API base URL with trailing slashes removed.
     pub base_url: String,
+    /// Name of the NeuVector registry configuration to report on.
     pub registry: String,
+    /// Account name sent to `POST /v1/auth`.
     pub username: String,
+    /// Password sent to `POST /v1/auth`.
     password: String,
+    /// HTTP transport used for every request.
     pub client: HttpClient,
     host: String,
 }
@@ -44,6 +51,7 @@ fn timestamp(value: Option<&str>) -> Option<DateTime<Utc>> {
         .and_then(|s| DateTime::parse_from_rfc3339(s).ok())
         .map(|t| t.with_timezone(&Utc))
 }
+/// Map NeuVector's `status` and `result` to a scan state, with the scan time and version.
 pub fn scan_status(image: &ImageSummary) -> ScanStatus {
     let status = image.status.as_deref().unwrap_or_default();
     let result = image.result.as_deref().unwrap_or_default();
@@ -68,14 +76,15 @@ pub fn scan_status(image: &ImageSummary) -> ScanStatus {
         state,
         error,
         scanned_at: timestamp(image.scanned_at.as_deref())
-            .or_else(|| nv_timestamp(image.scanned_timestamp)),
+            .or_else(|| super::neuvector::report::nv_timestamp(image.scanned_timestamp)),
         scanner_version: image.scanner_version.clone(),
     }
 }
 impl NeuvectorSource {
+    /// Build a scanner source from connection settings and a resolved password.
     pub fn from_config(cfg: &NeuvectorParams, client: HttpClient, password: String) -> Self {
         Self {
-            host: url_authority(&cfg.url),
+            host: super::http::url_authority(&cfg.url),
             base_url: cfg.url.trim_end_matches('/').into(),
             registry: cfg.registry.clone(),
             username: cfg.username.clone(),
@@ -120,7 +129,7 @@ impl ScanSource for NeuvectorSource {
         let path = format!(
             "{}/v1/scan/registry/{}",
             self.base_url,
-            encode_segment(&self.registry)
+            super::http::encode_segment(&self.registry)
         );
         let summary = match self
             .client
@@ -145,18 +154,28 @@ impl ScanSource for NeuvectorSource {
             if let Some(v) = &entry.scanner_version {
                 *versions.entry(v.clone()).or_default() += 1;
             }
-            let reference = compose_reference(&summary.registry, &entry.repository, &entry.tag);
+            let reference = super::neuvector::report::compose_reference(
+                &summary.registry,
+                &entry.repository,
+                &entry.tag,
+            );
             let mut scan = scan_status(&entry);
             let mut findings = Vec::new();
             if scan.state == ScanState::Ok {
                 match self.client.get_json::<ImageReport>(
-                    &format!("{path}/image/{}", encode_segment(&entry.image_id)),
+                    &format!(
+                        "{path}/image/{}",
+                        super::http::encode_segment(&entry.image_id)
+                    ),
                     &Auth::None,
                     &headers,
                 ) {
                     Ok(r) => match r.body.report.and_then(|r| r.vulnerabilities) {
                         Some(v) => {
-                            findings = v.iter().map(|v| finding_from_nv(v, &reference)).collect()
+                            findings = v
+                                .iter()
+                                .map(|v| super::neuvector::report::finding_from_nv(v, &reference))
+                                .collect()
                         }
                         None => {
                             scan.state = ScanState::Failed;
@@ -165,7 +184,7 @@ impl ScanSource for NeuvectorSource {
                         }
                     },
                     Err(e) => {
-                        let e = row_failure(e)?;
+                        let e = super::http::row_failure(e)?;
                         tracing::warn!(image=reference,%e,"NeuVector image report failed");
                         scan.state = ScanState::Failed;
                         scan.error = Some(e.to_string());
@@ -191,7 +210,7 @@ impl ScanSource for NeuvectorSource {
             ));
         }
         let scope = format!("{}/{}", self.host, self.registry);
-        let (images, findings) = dedupe_images_by_reference(rows);
+        let (images, findings) = super::files::dedupe_images_by_reference(rows);
         if images.is_empty() {
             return Err(SourceError::NoImages(scope));
         }

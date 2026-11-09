@@ -1,12 +1,12 @@
 //! Embedded Typst compilation and deterministic PDF export.
-use super::{fonts, model::RenderData, theme::Logo};
-use chrono::{DateTime, Datelike, Timelike, Utc};
+use super::fonts;
+use super::model::RenderData;
+use super::theme::Logo;
+use chrono::{DateTime, Utc};
 use std::sync::Once;
-use typst::{
-    diag::SourceDiagnostic,
-    foundations::{Datetime, Smart},
-};
-use typst_as_lib::{TypstAsLibError, TypstEngine, conversions::IntoSource};
+use typst::diag::SourceDiagnostic;
+use typst::foundations::{Datetime, Smart};
+use typst_as_lib::{TypstAsLibError, TypstEngine};
 use typst_layout::PagedDocument;
 use typst_pdf::{PdfOptions, Timestamp};
 
@@ -43,16 +43,22 @@ const SOURCES: &[(&str, &str)] = &[
     ),
 ];
 
+/// Failure to serialise template input, compile templates, or encode rendered output.
 #[derive(thiserror::Error, Debug)]
+#[must_use]
 pub enum RenderError {
+    /// Typst compilation failed; the message lists `file:line: message` diagnostics.
     #[error("template compilation failed:\n{0}")]
     Compile(String),
+    /// PDF export failed after compilation.
     #[error("PDF export failed: {0}")]
     Pdf(String),
+    /// Serialising the template input, converting the timestamp, or a preview request failed.
     #[error("{0}")]
     Data(String),
 }
 
+/// Typst renderer holding the embedded template sources.
 pub struct Renderer {
     sources: Vec<(&'static str, String)>,
 }
@@ -62,6 +68,8 @@ impl Default for Renderer {
     }
 }
 impl Renderer {
+    /// Load the embedded templates and, once per process, try to limit the global rayon pool
+    /// to one thread.
     pub fn new() -> Self {
         static POOL: Once = Once::new();
         POOL.call_once(|| {
@@ -95,6 +103,7 @@ impl Renderer {
     }
 
     fn diagnostics(&self, diagnostics: &[SourceDiagnostic]) -> String {
+        use typst_as_lib::conversions::IntoSource;
         diagnostics
             .iter()
             .map(|diagnostic| {
@@ -142,8 +151,8 @@ impl Renderer {
             files.push((&logo.file_name, &logo.bytes));
         }
         let customer_name = customer_logo.map(Logo::report_file_name);
-        if let Some(logo) = customer_logo {
-            files.push((customer_name.as_deref().unwrap(), &logo.bytes));
+        if let (Some(logo), Some(name)) = (customer_logo, customer_name.as_deref()) {
+            files.push((name, &logo.bytes));
         }
         let main = self
             .sources
@@ -171,6 +180,13 @@ impl Renderer {
             })
     }
 
+    /// Compile the templates with `data` and the logos, and export a PDF stamped with
+    /// `generated_at`.
+    ///
+    /// # Errors
+    ///
+    /// Fails if `data` cannot be serialised, compilation fails, `generated_at` is outside
+    /// Typst's date range, or PDF export fails.
     pub fn render_pdf(
         &self,
         data: &RenderData,
@@ -178,6 +194,8 @@ impl Renderer {
         customer_logo: Option<&Logo>,
         generated_at: DateTime<Utc>,
     ) -> Result<Vec<u8>, RenderError> {
+        use chrono::{Datelike, Timelike};
+
         let doc = self.compile(data, logo, customer_logo)?;
         let date = Datetime::from_ymd_hms(
             generated_at.year(),
@@ -205,7 +223,12 @@ impl Renderer {
         .map_err(|diagnostics| RenderError::Pdf(self.diagnostics(&diagnostics)))
     }
 
-    /// Render a one-based page number at the requested pixels per inch.
+    /// Render one page, numbered from one, as PNG at `ppi` pixels per inch.
+    ///
+    /// # Errors
+    ///
+    /// Fails if `ppi` is not finite and positive, compilation fails, `page` is out of range, or
+    /// PNG encoding fails.
     #[cfg(feature = "preview")]
     pub fn render_png(
         &self,

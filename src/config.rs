@@ -7,105 +7,170 @@ use serde::Deserialize;
 
 use crate::model::{Language, Severity};
 
+/// Parsed configuration file; [`load`] validates it before returning it.
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
+    /// Theme override; when omitted, the embedded default theme is used.
     #[serde(default)]
     pub theme: ThemeConfig,
+    /// Scan source to collect from.
     pub source: SourceConfig,
+    /// Report content, language and enabled formats.
     pub report: ReportConfig,
+    /// Artifact destinations, each receiving every artifact; `validate` rejects an empty list.
     pub output: Vec<OutputConfig>,
 }
 
+/// Scan source selected by the YAML `type` key (`trivy-files`, `neuvector-files`, `harbor`,
+/// `neuvector`).
 #[derive(Debug, Deserialize)]
 #[serde(tag = "type", rename_all = "kebab-case", deny_unknown_fields)]
 pub enum SourceConfig {
+    /// Read Trivy JSON reports from a directory tree.
     TrivyFiles {
+        /// Directory searched recursively for Trivy `*.json` reports.
         path: PathBuf,
     },
+    /// Read NeuVector scanner JSON results from a directory tree.
     NeuvectorFiles {
+        /// Directory searched recursively for NeuVector scanner `*.json` results.
         path: PathBuf,
     },
+    /// Collect scan data through the Harbor v2 API.
     Harbor {
+        /// Harbor base URL; `validate` requires `http` or `https` without embedded credentials.
         url: String,
+        /// Harbor project to report on; `None` walks every project the account can list.
         project: Option<String>,
+        /// Harbor account name, sent with HTTP Basic authentication.
         username: String,
+        /// Name of the environment variable holding the Harbor password, read when connecting.
         password_env: String,
+        /// PEM bundle that replaces the built-in roots; cannot be combined with
+        /// `insecure_skip_verify`.
         ca_file: Option<PathBuf>,
+        /// Timeout for each HTTP request in seconds; defaults to 30 and must be greater than zero.
         #[serde(default = "default_timeout")]
         timeout_secs: u64,
+        /// Whether to skip TLS certificate verification, with a warning; defaults to `false`.
         #[serde(default)]
         insecure_skip_verify: bool,
     },
+    /// Collect scan data through the NeuVector controller REST API.
     Neuvector {
+        /// NeuVector controller API base URL; `validate` requires `http` or `https` without
+        /// embedded credentials.
         url: String,
+        /// Name of the NeuVector registry configuration to report on.
         registry: String,
+        /// NeuVector account name, sent in the login request.
         username: String,
+        /// Name of the environment variable holding the NeuVector password, read when connecting.
         password_env: String,
+        /// PEM bundle that replaces the built-in roots; cannot be combined with
+        /// `insecure_skip_verify`.
         ca_file: Option<PathBuf>,
+        /// Timeout for each HTTP request in seconds; defaults to 30 and must be greater than zero.
         #[serde(default = "default_timeout")]
         timeout_secs: u64,
+        /// Whether to skip TLS certificate verification, with a warning; defaults to `false`.
         #[serde(default)]
         insecure_skip_verify: bool,
     },
 }
 
+/// Content limits, language, branding and artifact formats of the report.
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ReportConfig {
+    /// Bands whose findings show their description in the image tables; defaults to critical
+    /// and high.
     #[serde(default = "default_describe_severities")]
     pub describe_severities: Vec<Severity>,
+    /// Characters kept from each description before `…` is appended; defaults to 600, minimum 50.
     #[serde(default = "default_description_chars")]
     pub description_chars: usize,
+    /// Remediation groups shown as cards before the rest move to a table; defaults to 30.
     #[serde(default = "default_remediation_cards")]
     pub remediation_cards: usize,
+    /// Report language, `en` or `zh-TW`, selecting the bundled strings.
     pub language: Language,
+    /// Organisation name printed on the cover; must not be blank.
     pub organization: String,
+    /// Customer logo (`.png` or `.svg`) printed on the cover; `None` prints no customer logo.
     pub logo: Option<PathBuf>,
+    /// Successful scans older than this many days are listed as stale; defaults to 30.
     #[serde(default = "default_stale")]
     pub stale_after_days: u32,
+    /// Whether to also store the normalised report as a JSON artifact; defaults to `false`.
     #[serde(default)]
     pub json: bool,
+    /// Whether to render the PDF artifact; defaults to `true`.
     #[serde(default = "default_pdf")]
     pub pdf: bool,
 }
 
+/// Artifact destination selected by the YAML `type` key (`filesystem` or `http`).
 #[derive(Debug, Deserialize)]
 #[serde(tag = "type", rename_all = "kebab-case", deny_unknown_fields)]
 pub enum OutputConfig {
+    /// Write artifacts atomically into a local directory.
     Filesystem {
+        /// Directory that receives the artifacts, created if missing.
         path: PathBuf,
     },
+    /// Upload each artifact to an HTTP endpoint.
     Http {
+        /// Upload URL; `{filename}` is replaced by the encoded artifact name. `validate` requires
+        /// `http` or `https` with a host and no credentials.
         url: String,
+        /// Upload method, `PUT` (default) or `POST` in any case; `load` uppercases it.
         #[serde(default = "default_put")]
         method: String,
+        /// Extra request headers; `load` expands `${VAR}` references in their values.
         #[serde(default)]
         headers: BTreeMap<String, String>,
+        /// Body encoding of each upload; defaults to `raw`.
         #[serde(default)]
         mode: HttpMode,
+        /// PEM bundle that replaces the built-in roots; cannot be combined with
+        /// `insecure_skip_verify`.
         ca_file: Option<PathBuf>,
+        /// Whether to skip TLS certificate verification, with a warning; defaults to `false`.
+        #[serde(default)]
+        insecure_skip_verify: bool,
+        /// Timeout for each HTTP request in seconds; defaults to 30 and must be greater than zero.
         #[serde(default = "default_timeout")]
         timeout_secs: u64,
     },
 }
 
-#[derive(Debug, Default, Deserialize, PartialEq, Eq)]
+/// HTTP artifact encoding, either raw bytes or multipart form data.
+#[derive(Debug, Clone, Copy, Default, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum HttpMode {
+    /// Send the artifact bytes as the body, with a `Content-Disposition` header.
     #[default]
     Raw,
+    /// Send a `multipart/form-data` body carrying the artifact in the `file` field.
     Multipart,
 }
 
+/// Failure to read, decode, or validate the configuration or the inputs it names.
 #[derive(thiserror::Error, Debug)]
+#[must_use]
 pub enum ConfigError {
+    /// The configuration file could not be read.
     #[error("cannot read {0}: {1}")]
     Read(PathBuf, std::io::Error),
+    /// The YAML could not be decoded into [`Config`].
     #[error("invalid configuration: {0}")]
     Parse(String),
+    /// A referenced environment variable is unset or not valid Unicode.
     #[error("environment variable {0} is not set")]
     MissingEnv(String),
+    /// A value failed validation, or the theme, logo or TLS setup it names is unusable.
     #[error("{0}")]
     Invalid(String),
 }
@@ -138,8 +203,14 @@ fn default_timeout() -> u64 {
     30
 }
 
-/// Read and validate YAML, then expand HTTP header values.
+/// Read and validate YAML, then expand environment references in HTTP headers.
+///
 /// Source passwords are read only when a source connects.
+///
+/// # Errors
+///
+/// Fails if the file cannot be read or decoded, [`Config::validate`] rejects it, or a header
+/// references an unset environment variable.
 pub fn load(path: &Path) -> Result<Config, ConfigError> {
     let yaml =
         std::fs::read_to_string(path).map_err(|error| ConfigError::Read(path.to_owned(), error))?;
@@ -147,7 +218,11 @@ pub fn load(path: &Path) -> Result<Config, ConfigError> {
         serde_yaml_ng::from_str(&yaml).map_err(|error| ConfigError::Parse(error.to_string()))?;
     config.validate()?;
     for output in &mut config.output {
-        if let OutputConfig::Http { headers, .. } = output {
+        if let OutputConfig::Http {
+            headers, method, ..
+        } = output
+        {
+            *method = method.to_ascii_uppercase();
             for value in headers.values_mut() {
                 *value = resolve_env(value)?;
             }
@@ -157,7 +232,12 @@ pub fn load(path: &Path) -> Result<Config, ConfigError> {
 }
 
 /// Replace valid ASCII environment placeholders in one pass.
+///
 /// Malformed placeholders and replacement values remain literal.
+///
+/// # Errors
+///
+/// Fails if a valid placeholder references an absent environment variable.
 pub fn resolve_env(value: &str) -> Result<String, ConfigError> {
     let mut result = String::with_capacity(value.len());
     let mut rest = value;
@@ -185,11 +265,24 @@ pub fn resolve_env(value: &str) -> Result<String, ConfigError> {
 }
 
 /// Read a named secret without expanding its contents.
+///
+/// # Errors
+///
+/// Fails if the environment variable is absent or its value is not Unicode.
 pub fn secret_from_env(name: &str) -> Result<String, ConfigError> {
     std::env::var(name).map_err(|_| ConfigError::MissingEnv(name.to_owned()))
 }
 
 impl Config {
+    /// Check the constraints that deserialisation cannot express.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ConfigError::Invalid`] if a source or HTTP output URL is not a credential-free
+    /// `http` or `https` URL, `ca_file` is combined with `insecure_skip_verify`, a timeout is
+    /// zero, `description_chars` is below 50, `output` is empty, neither `pdf` nor `json` is
+    /// enabled, an output method is not PUT or POST, a PUT output lacks `{filename}` while
+    /// `json` is enabled, or `organization` is blank.
     pub fn validate(&self) -> Result<(), ConfigError> {
         if let SourceConfig::Harbor {
             url,
@@ -243,13 +336,49 @@ impl Config {
             ));
         }
         for output in &self.output {
-            if let OutputConfig::Http { method, .. } = output
-                && !method.eq_ignore_ascii_case("PUT")
-                && !method.eq_ignore_ascii_case("POST")
+            if let OutputConfig::Http {
+                method,
+                url,
+                ca_file,
+                insecure_skip_verify,
+                timeout_secs,
+                ..
+            } = output
             {
-                return Err(ConfigError::Invalid(
-                    "HTTP method must be PUT or POST".into(),
-                ));
+                if !method.eq_ignore_ascii_case("PUT") && !method.eq_ignore_ascii_case("POST") {
+                    return Err(ConfigError::Invalid(
+                        "output.method must be PUT or POST".into(),
+                    ));
+                }
+                if method.eq_ignore_ascii_case("PUT")
+                    && self.report.json
+                    && !url.contains("{filename}")
+                {
+                    return Err(ConfigError::Invalid(
+                        "output.url: PUT with report.json needs a {filename} placeholder, or every artifact overwrites the same resource".into(),
+                    ));
+                }
+                let parsed = url::Url::parse(url)
+                    .map_err(|e| ConfigError::Invalid(format!("output.url: {e}")))?;
+                if !matches!(parsed.scheme(), "http" | "https")
+                    || parsed.host_str().is_none()
+                    || !parsed.username().is_empty()
+                    || parsed.password().is_some()
+                {
+                    return Err(ConfigError::Invalid(
+                        "output.url: expected HTTP(S) URL without userinfo".into(),
+                    ));
+                }
+                if ca_file.is_some() && *insecure_skip_verify {
+                    return Err(ConfigError::Invalid(
+                        "output.ca_file and output.insecure_skip_verify cannot be combined".into(),
+                    ));
+                }
+                if *timeout_secs == 0 {
+                    return Err(ConfigError::Invalid(
+                        "output.timeout_secs must be greater than zero".into(),
+                    ));
+                }
             }
         }
         if self.report.organization.trim().is_empty() {
@@ -261,8 +390,11 @@ impl Config {
     }
 }
 
+/// Optional theme directory that replaces the embedded report theme.
 #[derive(Deserialize, Debug, Clone, PartialEq, Default)]
 #[serde(deny_unknown_fields)]
 pub struct ThemeConfig {
+    /// Directory holding `theme.toml` and an optional `logo.png` or `logo.svg`; `None` uses the
+    /// embedded default theme.
     pub path: Option<PathBuf>,
 }

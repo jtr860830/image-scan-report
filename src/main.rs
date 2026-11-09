@@ -1,4 +1,4 @@
-use clap::Parser;
+//! Command-line entry point for scan report generation.
 use image_scan_report::cli::{self, Cli};
 use std::process::ExitCode;
 use tracing_subscriber::EnvFilter;
@@ -7,6 +7,7 @@ const PRODUCT_NAME: &str = "judex";
 const PRODUCT_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 fn main() -> ExitCode {
+    use clap::{CommandFactory, FromArgMatches};
     tracing_subscriber::fmt()
         .with_env_filter(log_filter(std::env::var("RUST_LOG").ok().as_deref()))
         .with_writer(std::io::stderr)
@@ -15,7 +16,12 @@ fn main() -> ExitCode {
     // Not `fn main() -> Result<..>`: that form always exits with status 1 and
     // prints the error with `Debug`, while this program promises distinct exit
     // codes (2 config, 3 source, 4 render, 5 sinks) and a `Display` message.
-    match dispatch(Cli::parse().command) {
+    let matches = Cli::command()
+        .name(PRODUCT_NAME)
+        .version(PRODUCT_VERSION)
+        .get_matches();
+    let cli = Cli::from_arg_matches(&matches).unwrap_or_else(|e| e.exit());
+    match dispatch(cli.command) {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {
             eprintln!("error: {e}");
@@ -59,11 +65,20 @@ fn dispatch(command: cli::Command) -> Result<(), image_scan_report::pipeline::Ru
 }
 
 fn log_filter(env: Option<&str>) -> EnvFilter {
-    // ureq_proto trace dumps request bodies and credentials, including login tokens.
-    EnvFilter::try_new(env.unwrap_or("info"))
+    // ureq_proto's trace output dumps request heads and bodies, including
+    // credentials and login tokens, so it stays off whatever RUST_LOG says.
+    // ureq itself is capped at debug (its debug log is allow-listed), but
+    // only when the operator asked for trace: a directive always raises as
+    // well as lowers, and the default run must stay quiet.
+    let env = env.unwrap_or("info");
+    let filter = EnvFilter::try_new(env)
         .unwrap_or_else(|_| EnvFilter::new("info"))
-        .add_directive("ureq_proto=off".parse().unwrap())
-        .add_directive("ureq=debug".parse().unwrap())
+        .add_directive("ureq_proto=off".parse().expect("static directive"));
+    if env.contains("trace") {
+        filter.add_directive("ureq=debug".parse().expect("static directive"))
+    } else {
+        filter
+    }
 }
 
 #[cfg(test)]
@@ -73,5 +88,14 @@ mod logging_tests {
         let filter = super::log_filter(Some("trace")).to_string();
         assert!(filter.contains("ureq_proto=off"));
         assert!(filter.contains("ureq=debug"));
+    }
+
+    #[test]
+    fn default_level_does_not_raise_ureq_to_debug() {
+        for env in [None, Some("info"), Some("image_scan_report=debug")] {
+            let filter = super::log_filter(env).to_string();
+            assert!(filter.contains("ureq_proto=off"), "{env:?}");
+            assert!(!filter.contains("ureq=debug"), "{env:?}");
+        }
     }
 }

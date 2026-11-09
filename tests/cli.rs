@@ -1,3 +1,4 @@
+//! Integration checks for cli behavior.
 #[path = "support/reduced_fixtures.rs"]
 mod reduced_fixtures;
 use assert_cmd::cargo::cargo_bin_cmd;
@@ -8,7 +9,11 @@ fn version_prints_product_name_and_semver() {
     assert!(out.status.success());
     let s = String::from_utf8(out.stdout).unwrap();
     assert!(s.starts_with("judex "));
-    assert_eq!(s.trim().split(' ').nth(1).unwrap().split('.').count(), 3);
+    // The version is the crate's own, whatever shape it has (0.1.0, 1.0.0-rc.1, ...).
+    assert_eq!(
+        s.trim().split(' ').nth(1).unwrap(),
+        env!("CARGO_PKG_VERSION")
+    );
 }
 
 fn write_config(dir: &std::path::Path) -> std::path::PathBuf {
@@ -183,9 +188,9 @@ fn run_default_config_produces_pdf() {
 mod harbor_mock;
 
 #[test]
-fn check_against_mock_harbor_reports_counts() {
+fn check_prints_scan_state_counts() {
     use image_scan_report::source::ScanSource;
-    let (server, source) = harbor_mock::harbor_mock_subset();
+    let (server, source) = harbor_mock::harbor_mock_subset_running();
     let expected = source.fetch().unwrap();
     let dir = tempfile::tempdir().unwrap();
     let path = write_config(dir.path());
@@ -205,9 +210,38 @@ fn check_against_mock_harbor_reports_counts() {
         String::from_utf8_lossy(&out.stderr)
     );
     assert!(String::from_utf8_lossy(&out.stdout).contains(&format!(
-        "Harbor {}: demo: {} images, {} findings;",
+        "Harbor {}: demo: {} images (2 scanned, 0 failed, 1 not scanned), {} findings;",
         server.address(),
         expected.images.len(),
         expected.findings.len()
     )));
+}
+
+#[test]
+fn version_flag_prints_product_and_version() {
+    for flag in ["--version", "-V", "version"] {
+        let out = cargo_bin_cmd!("judex").arg(flag).output().unwrap();
+        assert!(out.status.success());
+        assert_eq!(
+            String::from_utf8(out.stdout).unwrap(),
+            format!("judex {}\n", env!("CARGO_PKG_VERSION"))
+        );
+    }
+}
+
+#[test]
+fn default_config_path_is_etc_report() {
+    let temp = tempfile::tempdir().unwrap();
+    let output = temp.path().join("unused.json");
+    assert!(!std::path::Path::new("/etc/report/config.yaml").exists());
+    for command in ["run", "check", "render-data"] {
+        let mut cmd = cargo_bin_cmd!("judex");
+        cmd.env_remove("HOME").arg(command);
+        if command == "render-data" {
+            cmd.arg("--out").arg(&output);
+        }
+        let out = cmd.output().unwrap();
+        assert_eq!(out.status.code(), Some(2));
+        assert!(String::from_utf8_lossy(&out.stderr).contains("/etc/report/config.yaml"));
+    }
 }

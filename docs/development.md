@@ -17,6 +17,27 @@ capture procedure are documented in [fixtures/README.md](../fixtures/README.md).
 Do not hand-edit captured fixtures; recapture them. Synthetic edge cases live in
 `tests/data/`. No real failed-scan capture exists yet.
 
+## Third-party notices
+
+Install the pinned generator and regenerate notices from the repository root:
+
+```sh
+cargo install cargo-about --version 0.9.3 --locked --features cli
+cargo about generate --config about.toml about.hbs -o THIRD_PARTY_NOTICES.md
+```
+
+A dependency bump requires running
+`cargo about generate --config about.toml about.hbs -o THIRD_PARTY_NOTICES.md`
+(the regeneration command reported by CI) and committing the result. CI generates
+its comparison with the exact command
+`cargo about generate --config about.toml about.hbs -o /tmp/THIRD_PARTY_NOTICES.md`.
+
+Commit the generated `THIRD_PARTY_NOTICES.md` whenever dependencies, `about.toml`,
+or `about.hbs` change. The CI `notices` job regenerates it and fails when the
+committed file is stale. Rust licence notices come from cargo-about; the font
+attributions and typesetting note are static text in `about.hbs`. Update the
+font section there when changing the bundled fonts.
+
 ## Snapshots
 
 The `insta` development dependency checks the normalised report JSON shape in
@@ -43,6 +64,9 @@ as a repository tool.
 | `src/model/` | Normalised reports, images, findings and severity enum |
 | `src/severity.rs` | Shared CVSS score selection and severity classification |
 | `src/source/mod.rs` | ScanSource trait and source/parse errors |
+| `src/source/http.rs` | Shared HTTP transport, TLS, retries and URL redaction |
+| `src/source/harbor/` | Harbor API fetching and report mapping |
+| `src/source/neuvector_api.rs` | NeuVector controller API source |
 | `src/source/files.rs` | Recursive file discovery, timestamps and deduplication |
 | `src/source/trivy_file.rs` | Trivy JSON parsing and file source |
 | `src/source/neuvector_file.rs` | NeuVector standalone JSON mapping and file source |
@@ -50,11 +74,14 @@ as a repository tool.
 | `src/views.rs` | Pure derived counts, vulnerability/remediation groups and image summaries |
 | `src/sink/mod.rs` | Artifact, ReportSink trait and sink construction |
 | `src/sink/filesystem.rs` | Directory creation and atomic file replacement |
+| `src/sink/http.rs` | Raw and multipart HTTP artifact uploads |
+| `src/render/` | Embedded Typst engine, fonts, theme, strings and render model |
 | `src/naming.rs` | Scope slugs and dated artifact names |
 | `src/pipeline.rs` | Source construction, report assembly, PDF/JSON generation, render data, storage and exit codes |
 
 The pipeline writes PDF through the embedded Typst renderer and serialises the
-normalised model directly for JSON. API sources use the shared HTTP transport; HTTP upload remains future work.
+normalised model directly for JSON. API sources use the shared HTTP transport; the HTTP sink uploads artifacts via PUT or POST in raw or multipart mode,
+with configurable headers, TLS settings and retries.
 
 ## Rendering and templates
 
@@ -75,12 +102,8 @@ nginx-1.21.0.json and busybox-1.37.json into temporary directories using
 
 ## Renaming
 
-The product name lives in three places: `Cargo.toml` `[package] name`, the binary
-name, and `PRODUCT_NAME` in `src/main.rs`. Cargo currently derives the binary name
-from the package name (there is no explicit `[[bin]]` override). Renaming judex
-touches exactly these three naming points, plus the literal in `tests/cli.rs` and
-README prose. The library crate stays named `image_scan_report` across product renames.
-Keep the CLI's version text and executable assertions aligned.
+Follow the [release and rename procedure](release.md). The library crate stays
+named `image_scan_report` across product renames.
 
 ## Golden and performance regression checks
 
@@ -110,11 +133,36 @@ compiled, using a single test run:
 /usr/bin/time -l cargo test --offline --release --test perf -- --ignored --nocapture --test-threads=1 fifty
 ```
 
-The 50,000-finding target (52,416 rows) rendered in **14.9 seconds**, producing
-**3,703 pages**. Peak RSS, from `/usr/bin/time -l`'s maximum resident set size,
-was **5.1 GB (5,090,951,168 bytes)**. Extrapolating from this single measurement, memory grows roughly 100 MB per 1,000
-findings with the full template, so a container running the largest realistic
-reports needs about 5 GiB; size the container accordingly. The CI perf job runs the tests one at a time; the 50k peak of 5.1 GB fits the 7 GB runner.
+### Rendering performance (measured 2026-11-08, release build, Apple Silicon, median of three)
+
+| Findings | Pages | Wall time | Peak RSS |
+|---|---|---|---|
+| 30,576 | 2,227 | 8.4 s | 2.89 GB |
+| 52,416 | 3,728 | 11.8 s | 4.39 GB |
+
+Measured with the default release profile. The release profile shipped since
+plan 4 (`lto = "thin"`, `codegen-units = 1`, `strip = true`) renders the same
+52,416 findings in **10.9 s** with a **4.13 GB** peak — about 7 % faster and 6 %
+smaller; the rule of thumb below keeps the more conservative numbers.
+
+Rule of thumb from the two points: **about 0.8 GB plus 70 MB per 1,000 findings**
+(the earlier "100 MB per 1,000" was an extrapolation from one point). A 20,000-finding
+report therefore peaks near 2.2 GB; the Kubernetes examples request 1 GiB and limit
+4 GiB, which covers roughly 45,000 findings. The CI perf job keeps a generous
+150 s budget because GitHub runners are several times slower than this machine.
+
+Four template experiments from the plan-2 deferred list were measured against this
+baseline with the same protocol; none met the keep rule (≥ 5 % time or memory,
+golden text and preview PNGs unchanged), so the templates are as plan 2 left them:
+
+| Experiment | Time | Peak RSS | Output | Verdict |
+|---|---|---|---|---|
+| A — one table-level `stroke` closure instead of six `table.cell` wrappers per row | +18 % | ±0 | unchanged | rejected (the per-cell closure is dearer than the wrappers) |
+| B — flat chip with a ● glyph instead of a nested `circle` | within noise | ±0 | ● enters the extracted text; 9 previews differ | rejected |
+| C + D — `hyphenate: false` once per table; zero-width breaks only in identifiers over 20 characters | ±0 | −3 % | 3,300 pages instead of 3,728 and a changed golden text; previews unchanged | rejected under the rule — the page drop means lines wrap differently in the synthetic data, which the 11-image previews cannot show, so it is unsafe to take blind |
+
+Peak RSS in the table comes from `/usr/bin/time -l`; the `peak_rss_mb=` line the perf
+test prints is authoritative on Linux (`VmHWM`) but only a point sample on macOS.
 
 The complete 11-image, 4,368-finding English report produced by
 `cargo run --offline -- run --config examples/config-trivy-files.yaml` decreased
@@ -159,3 +207,26 @@ Harbor reports one row per platform child, so the same registry yields 12 and
 20 images respectively. With `RUST_LOG=trace` neither run printed the Basic
 credentials or the NeuVector token. The sequential Harbor fetch is the slow part of a run;
 concurrent requests are a later optimisation.
+
+## Code style
+
+The project follows [Google's Rust Style Guide](https://google.github.io/styleguide/rustguide.html),
+which defers to the official [Rust Style Guide](https://doc.rust-lang.org/style-guide/)
+and [Rust API Guidelines](https://rust-lang.github.io/api-guidelines/).
+
+- Use stable rustfmt options: edition 2024, width 100, and Unix newlines.
+- Apply the nightly-only options by hand: `imports_granularity = "Module"`,
+  `hex_literal_case = "Lower"`, and `format_macro_matchers = true`.
+- Document public APIs; `missing_docs` is enabled and warnings fail Clippy checks.
+- Name fallible constructors `try_new`; keep infallible constructors named `new`.
+- Import items from one module per `use` statement. Avoid glob imports except inline
+  test `use super::*` and non-leaf module re-exports.
+- Scope traits to the function that needs them when they have only one use site,
+  and qualify free-function calls with their module.
+- Prefer `expect` with context over `unwrap`, use pattern matching for optional
+  values, and document panic cases.
+- Mark error types and pure result-producing helpers `#[must_use]`.
+
+Of these rules, CI enforces formatting (`cargo fmt --check`) and Clippy with `-D warnings`,
+which includes `missing_docs`; import scoping, `try_new` naming, `#[must_use]` and the
+nightly-only rustfmt options are checked only in review.

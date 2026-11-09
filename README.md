@@ -1,10 +1,54 @@
 # judex
 
+[![CI](https://github.com/jtr860830/image-scan-report/actions/workflows/ci.yml/badge.svg)](https://github.com/jtr860830/image-scan-report/actions/workflows/ci.yml)
+[![Latest release](https://img.shields.io/github/v/release/jtr860830/image-scan-report?include_prereleases)](https://github.com/jtr860830/image-scan-report/releases)
+
 judex turns existing container-image vulnerability scans into audit reports.
 It normalises Trivy and NeuVector scanner JSON and results from the Harbor and NeuVector APIs into a shared model without scanning images itself.
 
 Sources: Trivy and NeuVector scanner files, the Harbor API and the NeuVector controller API.
-Outputs: PDF and JSON to the filesystem.
+Outputs: PDF and JSON to filesystem directories and HTTP endpoints.
+
+## Install
+
+Download the native Linux tarball for x86_64 or aarch64 and `SHA256SUMS` from
+[releases](https://github.com/jtr860830/image-scan-report/releases). Verify it with
+`sha256sum -c SHA256SUMS --ignore-missing`, extract it, and put `judex` on your PATH.
+The container image is `ghcr.io/jtr860830/judex:<ver>`. See the
+[release guide](docs/release.md) for assets and air-gap bundles.
+
+### First run from the tarball
+
+```sh
+tar -xzf judex-vX.Y.Z-<target>.tar.gz
+cd judex-vX.Y.Z-<target>
+cp examples/config.yaml ./config.yaml
+# Edit config.yaml for your source, credentials and output.
+./judex check --config ./config.yaml
+./judex run --config ./config.yaml
+```
+
+Use `RUST_LOG=debug` for diagnostics; even `trace` never prints credentials.
+
+### Container installation
+
+Use `ghcr.io/jtr860830/judex:<ver>` with a release tag, a config whose filesystem
+output points to `/output`, and a writable `./out` directory:
+
+```sh
+podman run --rm --read-only --security-opt no-new-privileges -v ./config.yaml:/etc/report/config.yaml:ro,Z -v ./out:/output:Z -e HARBOR_PASSWORD ghcr.io/jtr860830/judex:<ver>
+```
+
+For air-gapped hosts, transfer the image with `podman save` and `podman load`.
+See [container installation](docs/container.md) for the wrapper script, mounts,
+permissions, secrets, local builds, and air-gap commands.
+
+Sizing: about 0.8 GB plus 70 MB per 1,000 findings; the Kubernetes examples request 1 GiB and limit 4 GiB. See [container sizing](docs/container.md).
+
+## Kubernetes
+
+See the [Kubernetes deployment examples](deploy/k8s/README.md) for a weekly
+CronJob, a one-off Job, secrets, CA certificates, and report retrieval.
 
 ## Quick start
 
@@ -24,8 +68,8 @@ and writes PDF and JSON to `./out`, creating the directory if needed. Relative p
 resolve from the working directory, not the configuration file's directory.
 See [fixture provenance](fixtures/README.md) for how the scanner inputs were captured.
 
-`version` prints `judex 0.1.0`. `check` fetches and parses the source and prints
-`Trivy (files): ./fixtures/trivy: 11 images, 4368 findings; theme: judex; product: judex 0.1.0`; it validates output configuration and the theme without
+`--version` (or `-V`) and `version` print `judex 0.1.0`. `check` fetches and parses the source and prints
+`Trivy (files): ./fixtures/trivy: 11 images (11 scanned, 0 failed, 0 not scanned), 4368 findings; theme: judex; product: judex 0.1.0`; it validates output configuration and the theme without
 writing artifacts. `run` prints `Report: 11 images, 4368 findings`, followed by
 one destination and filename per stored artifact. Counts depend on the inputs.
 The example produces `out/trivy-trivy-files-YYYY-MM-DD.pdf` and a matching JSON file, using the UTC run
@@ -34,6 +78,10 @@ file-source scope is the input directory's final component. Repeating a run on
 the same date atomically overwrites the same filename.
 
 ## Configuration reference
+
+The default `--config` path for `run`, `check`, and `render-data` is
+`/etc/report/config.yaml`. The `check` counts show scanned, failed, and not scanned
+images before the findings count.
 
 Configuration is YAML with required `source`, `report`, and `output` sections.
 Unknown keys are rejected. “Required” below means there is no default;
@@ -81,8 +129,7 @@ exit 3; any other per-artifact failure becomes a Failed row. Connection or disco
 Mount the appliance's exported CA certificate as a PEM bundle and set `ca_file`
 to its path. Invalid or unreadable CA files fail with exit code 2. As a last
 resort for appliances whose CA cannot be exported, remove `ca_file` and set
-`insecure_skip_verify: true`. This disables certificate verification and prints
-`source <authority>: TLS certificate verification is disabled` once per check/run.
+`insecure_skip_verify: true`. This disables certificate verification and prints a warning with the redacted URL: `source https://host/path: TLS certificate verification is disabled` once per check/run.
 The two settings cannot be combined.
 
 The default trust store is the bundled Mozilla root set. The OS store is not
@@ -161,10 +208,34 @@ theme:
 | `headers` | Map of string header names to string values; HTTP only | `{}` |
 | `mode` | `raw` or `multipart`; HTTP only | `raw` |
 | `ca_file` | Optional certificate file path; HTTP only | `null` |
-| `timeout_secs` | Unsigned 64-bit integer; HTTP only | `30` |
+| `timeout_secs` | Positive timeout in seconds; HTTP only | `30` |
+| `insecure_skip_verify` | Disable TLS verification; cannot combine with `ca_file` | `false` |
 
-HTTP outputs are accepted by the parser but rejected by both `check` and `run`
-with an unsupported-output error. Both validate outputs before fetching the source.
+HTTP outputs upload each artifact separately. The URL may contain literal `{filename}`, replaced with each artifact’s percent-encoded filename. PUT requires `{filename}` when `report.json: true` so artifacts have distinct destinations; POST may omit it. `check` and `run` validate outputs before fetching the source. URLs must use HTTP(S) without embedded credentials.
+Raw mode sends the artifact bytes with its media type and
+`Content-Disposition: attachment; filename="<name>"`:
+
+```sh
+curl -X PUT -H 'Content-Type: application/pdf' -H 'Content-Disposition: attachment; filename="report.pdf"' --data-binary @report.pdf https://reports.example.com/upload
+```
+
+Multipart mode sends one form-data part named `file`, including filename and media type:
+
+```sh
+curl -X POST -F 'file=@report.pdf;type=application/pdf' https://reports.example.com/upload
+```
+
+HTTP outputs do not follow 3xx responses. `timeout_secs` covers the whole upload; large PDFs may need a larger value.
+
+PUT is idempotent: transport errors and HTTP 5xx responses retry twice (after 1 and 2 seconds),
+resending the body. POST uploads are sent once; choose a POST endpoint that tolerates a missing upload rather than a duplicated one. HTTP 4xx responses fail immediately. Partial output success
+exits zero; exit 5 means every artifact write failed.
+Mount the endpoint's exported CA certificate as a PEM bundle and set `ca_file`
+to its path. Invalid or unreadable CA files fail with exit code 2. As a last
+resort for endpoints whose CA cannot be exported, remove `ca_file` and set
+`insecure_skip_verify: true`. This disables certificate verification and prints a warning with the redacted URL: `output https://host/path: TLS certificate verification is disabled` once per check/run.
+The two settings cannot be combined.
+
 Header values expand `${VAR}` placeholders when configuration is loaded; an unset
 variable fails with its name. Valid names use ASCII letters or underscore first,
 then letters, digits or underscores. Expansion is one pass, malformed placeholders
@@ -176,7 +247,7 @@ strings do not receive this substitution. Keep credentials in environment variab
 | Code | Meaning |
 | --- | --- |
 | `0` | Success (including partial output success) |
-| `2` | Configuration or CLI argument error; includes unsupported outputs (HTTP upload arrives in a later release) |
+| `2` | Configuration or CLI argument error |
 | `3` | Source failure, including no usable input reports |
 | `4` | Rendering / JSON serialisation failure |
 | `5` | Every artifact write failed |
@@ -204,5 +275,9 @@ the template root with the filename recorded in the data.
 
 See [development notes](docs/development.md) for checks, snapshots and module layout.
 Licensed under [Apache-2.0](LICENSE).
+Regenerate third-party notices with `cargo about generate --config about.toml about.hbs -o THIRD_PARTY_NOTICES.md` using cargo-about 0.9.3; see [development notes](docs/development.md#third-party-notices).
 
 Set `report.logo` to a local PNG or SVG file to place the customer logo on the cover. Theme logos appear beside the product credit in the appendix.
+
+Native binaries require glibc >= 2.39 (built on ubuntu-24.04). Use the container
+image on hosts with older glibc.

@@ -1,12 +1,14 @@
 //! Trivy JSON reports loaded from a directory.
-use super::{ParseError, ScanSource, SourceError, files::fetch_directory};
-use crate::{
-    model::*,
-    severity::{CvssSourceScores, ScoreInput, classify, cvss_from_map},
+
+use super::{ParseError, ScanSource, SourceError};
+use crate::model::{
+    Finding, FixStatus, Image, ScanSet, ScanState, ScanStatus, SourceInfo, SourceKind,
 };
+use crate::severity::{CvssSourceScores, ScoreInput};
 use chrono::{DateTime, Utc};
 use serde::Deserialize;
-use std::{collections::BTreeMap, path::PathBuf};
+use std::collections::BTreeMap;
+use std::path::PathBuf;
 
 #[derive(Default, Deserialize)]
 struct Report {
@@ -82,7 +84,9 @@ struct Vulnerability {
     #[serde(default, rename = "PublishedDate")]
     published_date: Option<DateTime<Utc>>,
 }
+/// Scan source that reads Trivy JSON reports from a directory tree.
 pub struct TrivyFileSource {
+    /// Directory searched recursively for Trivy reports, from `source.path`.
     pub dir: PathBuf,
 }
 impl ScanSource for TrivyFileSource {
@@ -90,7 +94,7 @@ impl ScanSource for TrivyFileSource {
         format!("Trivy (files): {}", self.dir.display())
     }
     fn fetch(&self) -> Result<ScanSet, SourceError> {
-        let fetched = fetch_directory(&self.dir, |_, bytes, scanned_at| {
+        let fetched = super::files::fetch_directory(&self.dir, |_, bytes, scanned_at| {
             parse_trivy_report(bytes, scanned_at)
         })?;
         Ok(fetched.into_scan_set(SourceInfo {
@@ -103,6 +107,16 @@ impl ScanSource for TrivyFileSource {
         }))
     }
 }
+/// Decode one Trivy report into an image and the findings of its `os-pkgs` and `lang-pkgs`
+/// results.
+///
+/// Returns `Ok(None)` for JSON without `SchemaVersion`, which is not a Trivy report.
+/// `scanned_at` is used as the scan time when the report has no `CreatedAt`.
+///
+/// # Errors
+///
+/// Fails if the bytes are not JSON of the expected types or `ArtifactName` is missing or
+/// empty.
 pub fn parse_trivy_report(
     bytes: &[u8],
     scanned_at: Option<DateTime<Utc>>,
@@ -162,8 +176,8 @@ pub fn parse_trivy_report(
             continue;
         }
         for v in result.vulnerabilities.unwrap_or_default() {
-            let cvss = cvss_from_map(&v.cvss);
-            let c = classify(&ScoreInput {
+            let cvss = crate::severity::cvss_from_map(&v.cvss);
+            let c = crate::severity::classify(&ScoreInput {
                 cvss: &cvss,
                 scanner_label: v.severity.as_deref(),
             });

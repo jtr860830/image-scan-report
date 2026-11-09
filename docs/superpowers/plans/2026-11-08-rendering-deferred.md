@@ -10,12 +10,13 @@ Decided by the maintainer on 2026-11-08: defaults kept (descriptions for Critica
 
 - Measured: 50 000 findings → 14.9 s, 3 703 pages, peak RSS 5.1 GB (release, single run). About 100 MB per 1 000 findings with the full template vs 40 MB in the plain-table spike.
 - Experiments, in order: table-level stroke function instead of six `table.cell` wrappers per row; flatten `chip` to one box with a glyph dot; `hyphenate: false` once per table; insert zero-width breaks only in identifiers longer than ~20 chars. Re-measure 50k after each.
+- **Done 2026-11-08 (plan 4, Task 1):** all four measured and rejected — see the "Rendering performance" table in `docs/development.md`. Re-measured baseline: 52,416 findings → 11.8 s, 3,728 pages, 4.39 GB; rule of thumb 0.8 GB + 70 MB per 1,000 findings. Open lead for later: C + D cut the synthetic 50k report from 3,728 to 3,300 pages at equal speed; find out which wraps changed before adopting it.
 
 ## Deferred minor findings
 
 - T1: font_book() does not assert each file yields a face; Noto copyright holder and subset note missing from notices/README; Typst version missing in notices; README mentions a manifest not in the repo.
 - T2: empty strings are not placeholdered (Some("") prints blank); inventory score uses score_v3 only (views-level); unfixable_by_status/fix_status emit snake_case keys that Task 3 strings must map; failed_images includes NotScanned (intended).
-- T3: zh-TW fact_fixable reorder ("{fixable} 個弱點（{percent}%）已有修補版本"), fact_high_or_worse add "等級弱點", appendix_rule_text smoother wording, image_meta_digest "Digest"; en plurals at count 1 (template concern), basis_none / limit_recomputed wording; limit_registry_scope duplicates appendix_scope_text; forbidden-term test could add 数据库/生成/配置/软件/网络/支持.
+- T3: ~~zh-TW fact_fixable reorder ("{fixable} 個弱點（{percent}%）已有修補版本"), fact_high_or_worse add "等級弱點"~~ done (plan 4, Task 3), appendix_rule_text smoother wording, ~~image_meta_digest "Digest"~~ done (plan 4, Task 3); en plurals at count 1 (template concern), basis_none / limit_recomputed wording; limit_registry_scope duplicates appendix_scope_text; forbidden-term test could add 数据库/生成/配置/软件/网络/支持.
 - T4: logo file-name case handling undocumented; PNG-wins-over-SVG not asserted; UnsupportedLogo gives no reason and the wrapped message repeats "theme"; Parse tests do not assert the path; colour list in validate duplicates the struct.
 - T5: engine rebuilt per render (fonts re-parsed); num assumes integers; determinism only checked within one process.
 - T5: move `muted` into lib/theme.typ so header/footer/chapters share it; logo-in-preview test asserts only a PNG signature.
