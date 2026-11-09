@@ -35,7 +35,7 @@ The container image is `ghcr.io/jtr860830/judex:<ver>`. See the
 ```sh
 tar -xzf judex-vX.Y.Z-<target>.tar.gz
 cd judex-vX.Y.Z-<target>
-cp deploy/examples/config.yaml ./config.yaml
+cp examples/config.yaml ./config.yaml
 # Edit config.yaml for your source, credentials and output.
 ./judex check --config ./config.yaml
 ./judex run --config ./config.yaml
